@@ -285,9 +285,10 @@ if ( $vendor -match "msvc" )
 }
 #endregion Configuration
 
-$path_project = Join-Path $path_root 'project'
+$path_project = Join-Path $path_root    'project'
 $path_build   = Join-Path $path_project 'build'
 $path_deps    = Join-Path $path_project 'dependencies'
+$path_gen     = Join-Path $path_project 'gen'
 
 $update_deps = Join-Path $PSScriptRoot 'update_deps.ps1'
 
@@ -300,14 +301,39 @@ if ( (Test-Path $path_deps) -eq $false ) {
 }
 
 $includes = @(
+	$path_gen,
 	$path_project,
 	$path_deps
 )
 
-$unit       = Join-Path $path_project 'sanity.cpp'
-$executable = Join-Path $path_build   'sanity.exe'
+$compiler_args = @(
+	($flag_define + 'GEN_TIME')
+)
+
+#region Handmade Generate
+$unit       = Join-Path $path_gen   'gen_handmade.cpp'
+$executable = Join-Path $path_build 'gen_handmade.exe'
+
+build-simple $includes $compiler_args $unit $executable
+write-host "Compiled Handmade Generate`n"
+
+& $executable
+
+if ( $false ) {
+	Remove-Item (Get-ChildItem -Path $path_build -Recurse -Force)
+}
+#endregion Handmade Generate
+
+#region Handmade Runtime
+
+$unit       = Join-Path $path_project 'handmade_win32.cpp'
+$executable = Join-Path $path_build   'handmade_win32.exe'
 
 $compile_args = @(
 )
 
 build-simple $includes $compiler_args $unit $executable
+write-host "Compiled Handmade Runtime`n"
+#endregion Handmade Runtime
+
+Pop-Location
