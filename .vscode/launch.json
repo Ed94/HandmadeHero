@@ -10,7 +10,7 @@
 			"name" : "Debug handmade win32 msvc",
 			"program": "${workspaceFolder}/build/handmade_win32.exe",
 			"args": [],
-			"cwd": "${workspaceFolder}/project",
+			"cwd": "${workspaceFolder}/data",
 			"visualizerFile": "${workspaceFolder}/scripts/handmade.natvis"
 		}
 	]

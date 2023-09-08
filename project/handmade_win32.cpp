@@ -7,5 +7,7 @@ int CALLBACK WinMain(
 	int       nShowCmd
 )
 {
+	MessageBox( 0, L"First message!", L"Handmade Hero", MB_OK | MB_ICONINFORMATION );
+
 	return 0;
 }

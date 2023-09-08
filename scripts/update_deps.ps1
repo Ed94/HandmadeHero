@@ -19,13 +19,13 @@ if (-not (Test-Path $path_temp)) {
 	New-Item -ItemType Directory -Path $path_temp
 }
 
-#pragma region gencpp
+#region gencpp
 Invoke-WebRequest -Uri $url -OutFile $destinationZip
 Expand-Archive    -Path $destinationZip                  -DestinationPath $path_temp
 Move-Item         -Path (Join-Path $path_temp "gen.hpp") -Destination     $path_deps -Force
-#pragma endregion gencpp
+#endregion gencpp
 
-#pragma region windows modular headers
+#region windows modular headers
 $repo = 'https://github.com/Leandros/WindowsHModular.git'
 
 Push-Location $path_temp
@@ -37,6 +37,6 @@ if ( -not(test-path $path_deps_windows)) {
 Copy-Item -Recurse .\WindowsHModular\include\win32\* $path_deps_windows
 Remove-Item (Get-ChildItem -Path $path_deps_windows -Exclude '*.h' -Recurse -Force)
 Pop-Location
-#pragma endregion windows modular headers
+#endregion windows modular headers
 
 Remove-Item $path_temp -Recurse -Force

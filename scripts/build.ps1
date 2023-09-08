@@ -47,6 +47,11 @@ function run-compiler
 {
 	param( $compiler, $unit, $compiler_args )
 
+	$compiler_args += @(
+		($flag_define + 'UNICODE'),
+		($flag_define + '_UNICODE')
+	)
+
 	write-host "`Compiling $unit"
 	write-host "Compiler config:"
 	$compiler_args | ForEach-Object {
@@ -330,12 +335,15 @@ if ( $false ) {
 
 #region Handmade Runtime
 
+$lib_user32 = 'User32.lib'
+
 $unit       = Join-Path $path_project 'handmade_win32.cpp'
 $executable = Join-Path $path_build   'handmade_win32.exe'
 
 $compiler_args = @()
 
 $linker_args = @(
+	$lib_user32,
 	$flag_link_win_subsystem_windows
 )
 
