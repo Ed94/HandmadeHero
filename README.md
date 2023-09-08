@@ -1,8 +1,8 @@
 # HandmadeHero
 
-Any code I do for this series will be here.
+Any code I do for this series will be here.  
 
-
+***(Only original hand-written code will be here, no code from the series itself)***
 
 ## Scripts
 

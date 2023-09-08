@@ -28,7 +28,8 @@
 		"functional": "cpp",
 		"vector": "cpp",
 		"list": "cpp",
-		"xhash": "cpp"
+		"xhash": "cpp",
+		// "*.md.html":"markdown"
 	},
 	"C_Cpp.intelliSenseEngineFallback": "disabled",
 	"C_Cpp.errorSquiggles": "disabled", // This doesn't work well with how the headers are included.
