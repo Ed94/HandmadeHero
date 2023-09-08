@@ -11,6 +11,7 @@ int gen_main()
 	gen::init();
 	log_fmt("Generating code for Handmade Hero\n");
 
+	log_fmt("Generaton finished for Handmade Hero\n");
 	gen::deinit();
 	return 0;
 }

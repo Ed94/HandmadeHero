@@ -26,6 +26,6 @@ Invoke-WebRequest -Uri $url -OutFile $destinationZip
 Expand-Archive -Path $destinationZip -DestinationPath $path_temp
 
 # Move gen.hpp to the project directory
-Move-Item -Path (join-path $path_temp "gen.hpp") -Destination $path_dependencies
+Move-Item -Path (join-path $path_temp "gen.hpp") -Destination $path_dependencies -Force
 
 Remove-Item $path_temp -Recurse

@@ -318,6 +318,7 @@ build-simple $includes $compiler_args $unit $executable
 write-host "Compiled Handmade Generate`n"
 
 & $executable
+write-host "`n"
 
 if ( $false ) {
 	Remove-Item (Get-ChildItem -Path $path_build -Recurse -Force)
