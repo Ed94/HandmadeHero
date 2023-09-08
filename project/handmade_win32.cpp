@@ -1,8 +1,11 @@
-#include <stdio.h>
+#include "win32.h"
 
-int main()
+int CALLBACK WinMain(
+	HINSTANCE hInstance,
+	HINSTANCE hPrevInstance,
+	LPSTR     lpCmdLine,
+	int       nShowCmd
+)
 {
-	puts("Handmade Hero!");
-
 	return 0;
 }

@@ -149,13 +149,13 @@ if ( $vendor -match "clang" )
 
 	function build-simple
 	{
-		param( $includes, $unit, $executable )
+		param( [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$executable )
 		Write-Host "build-simple: clang"
 
 		$object = $executable -replace '\.exe', '.obj'
 		$pdb    = $executable -replace '\.exe', '.pdb'
 
-		$compiler_args = @(
+		$compiler_args += @(
 			$flag_no_color_diagnostics,
 			$flag_target_arch, $target_arch,
 			$flag_wall,
@@ -179,8 +179,7 @@ if ( $vendor -match "clang" )
 		$compiler_args += $flag_compile, $unit
 		run-compiler $compiler $unit $compiler_args
 
-		$linker_args = @(
-			$flag_link_win_subsystem_console,
+		$linker_args += @(
 			$flag_link_win_machine_64,
 			$( $flag_link_win_path_output + $executable )
 		)
@@ -206,37 +205,37 @@ if ( $vendor -match "clang" )
 if ( $vendor -match "msvc" )
 {
 	# https://learn.microsoft.com/en-us/cpp/build/reference/compiler-options-listed-by-category?view=msvc-170
-	$flag_compile			      = '/c'
-	$flag_debug                   = '/Zi'
-	$flag_define		          = '/D'
-	$flag_include                 = '/I'
-	$flag_full_src_path           = '/FC'
-	$flag_nologo                  = '/nologo'
-	$flag_dll 				      = '/LD'
-	$flag_dll_debug 			  = '/LDd'
-	$flag_linker 		          = '/link'
-	$flag_link_debug 			  = '/DEBUG'
-	$flag_link_pdb 				  = '/PDB:'
-	$flag_link_machine_32         = '/MACHINE:X86'
-	$flag_link_machine_64         = '/MACHINE:X64'
-	$flag_link_path_output 	      = '/OUT:'
-	$flag_link_rt_dll             = '/MD'
-	$flag_link_rt_dll_debug       = '/MDd'
-	$flag_link_rt_static          = '/MT'
-	$flag_link_rt_static_debug    = '/MTd'
-	$flag_link_subsystem_console  = '/SUBSYSTEM:CONSOLE'
-	$flag_link_subsystem_windows  = '/SUBSYSTEM:WINDOWS'
-	$flag_no_optimization		  = '/Od'
-	$flag_out_name                = '/OUT:'
-	$flag_path_interm             = '/Fo'
-	$flag_path_debug              = '/Fd'
-	$flag_path_output             = '/Fe'
-	$flag_preprocess_conform      = '/Zc:preprocessor'
+	$flag_compile			         = '/c'
+	$flag_debug                      = '/Zi'
+	$flag_define		             = '/D'
+	$flag_include                    = '/I'
+	$flag_full_src_path              = '/FC'
+	$flag_nologo                     = '/nologo'
+	$flag_dll 				         = '/LD'
+	$flag_dll_debug 			     = '/LDd'
+	$flag_linker 		             = '/link'
+	$flag_link_win_debug 	         = '/DEBUG'
+	$flag_link_win_pdb 		         = '/PDB:'
+	$flag_link_win_machine_32        = '/MACHINE:X86'
+	$flag_link_win_machine_64        = '/MACHINE:X64'
+	$flag_link_win_path_output       = '/OUT:'
+	$flag_link_win_rt_dll            = '/MD'
+	$flag_link_win_rt_dll_debug      = '/MDd'
+	$flag_link_win_rt_static         = '/MT'
+	$flag_link_win_rt_static_debug   = '/MTd'
+	$flag_link_win_subsystem_console = '/SUBSYSTEM:CONSOLE'
+	$flag_link_win_subsystem_windows = '/SUBSYSTEM:WINDOWS'
+	$flag_no_optimization		     = '/Od'
+	$flag_out_name                   = '/OUT:'
+	$flag_path_interm                = '/Fo'
+	$flag_path_debug                 = '/Fd'
+	$flag_path_output                = '/Fe'
+	$flag_preprocess_conform         = '/Zc:preprocessor'
 
 	# This works because this project uses a single unit to build
 	function build-simple
 	{
-		param( [array]$includes, [array]$compiler_args, [string]$unit, [string]$executable )
+		param( [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$executable )
 		Write-Host "build-simple: msvc"
 
 		$object = $executable -replace '\.exe', '.obj'
@@ -245,33 +244,32 @@ if ( $vendor -match "msvc" )
 		$compiler_args += @(
 			$flag_nologo,
 			$flag_preprocess_conform,
-			$flag_debug,
 			$flag_full_src_path,
 			( $flag_path_interm + $path_build + '\' ),
 			( $flag_path_output + $path_build + '\' )
 		)
 		if ( $release -eq $false ) {
+			$compiler_args += $flag_debug
 			$compiler_args += ( $flag_define + 'Build_Debug' )
 			$compiler_args += ( $flag_path_debug + $path_build + '\' )
-			$compiler_args += $flag_link_rt_static_debug
+			$compiler_args += $flag_link_win_rt_static_debug
 			$compiler_args += $flag_no_optimization
 		}
 		else {
-			$compiler_args += $flag_link_rt_static
+			$compiler_args += $flag_link_win_rt_static
 		}
 		$compiler_args += $includes | ForEach-Object { $flag_include + $_ }
 		$compiler_args += $flag_compile, $unit
 		run-compiler $compiler $unit $compiler_args
 
-		$linker_args = @(
+		$linker_args += @(
 			$flag_nologo,
-			$flag_link_machine_64,
-			$flag_link_subsystem_console,
-			( $flag_link_path_output + $executable )
+			$flag_link_win_machine_64,
+			( $flag_link_win_path_output + $executable )
 		)
 		if ( $release -eq $false ) {
-			$linker_args += $flag_link_debug
-			$linker_args += $flag_link_pdb + $pdb
+			$linker_args += $flag_link_win_debug
+			$linker_args += $flag_link_win_pdb + $pdb
 		}
 		else {
 		}
@@ -285,10 +283,11 @@ if ( $vendor -match "msvc" )
 }
 #endregion Configuration
 
-$path_project = Join-Path $path_root    'project'
-$path_build   = Join-Path $path_root    'build'
-$path_deps    = Join-Path $path_project 'dependencies'
-$path_gen     = Join-Path $path_project 'gen'
+$path_project  = Join-Path $path_root    'project'
+$path_build    = Join-Path $path_root    'build'
+$path_deps     = Join-Path $path_project 'dependencies'
+$path_gen      = Join-Path $path_project 'gen'
+$path_platform = Join-Path $path_project 'platform'
 
 $update_deps = Join-Path $PSScriptRoot 'update_deps.ps1'
 
@@ -301,20 +300,25 @@ if ( (Test-Path $path_deps) -eq $false ) {
 }
 
 $includes = @(
-	$path_gen,
 	$path_project,
-	$path_deps
+	$path_gen,
+	$path_deps,
+	$path_platform
 )
 
-$compiler_args = @(
-	($flag_define + 'GEN_TIME')
+$compiler_args = @()
+$compiler_args += ( $flag_define + 'GEN_TIME' )
+
+$linker_args = @(
+	$flag_link_win_subsystem_console
 )
 
 #region Handmade Generate
-$unit       = Join-Path $path_gen   'gen_handmade.cpp'
-$executable = Join-Path $path_build 'gen_handmade.exe'
+$unit       = Join-Path $path_gen   'handmade_gen.cpp'
+$executable = Join-Path $path_build 'handmade_gen.exe'
 
-build-simple $includes $compiler_args $unit $executable
+build-simple $includes $compiler_args $linker_args $unit $executable
+write-host
 
 & $executable
 write-host
@@ -329,10 +333,13 @@ if ( $false ) {
 $unit       = Join-Path $path_project 'handmade_win32.cpp'
 $executable = Join-Path $path_build   'handmade_win32.exe'
 
-$compile_args = @(
+$compiler_args = @()
+
+$linker_args = @(
+	$flag_link_win_subsystem_windows
 )
 
-build-simple $includes $compiler_args $unit $executable
+build-simple $includes $compiler_args $linker_args $unit $executable
 #endregion Handmade Runtime
 
 Pop-Location
