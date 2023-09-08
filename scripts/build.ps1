@@ -286,7 +286,7 @@ if ( $vendor -match "msvc" )
 #endregion Configuration
 
 $path_project = Join-Path $path_root    'project'
-$path_build   = Join-Path $path_project 'build'
+$path_build   = Join-Path $path_root    'build'
 $path_deps    = Join-Path $path_project 'dependencies'
 $path_gen     = Join-Path $path_project 'gen'
 
@@ -315,10 +315,9 @@ $unit       = Join-Path $path_gen   'gen_handmade.cpp'
 $executable = Join-Path $path_build 'gen_handmade.exe'
 
 build-simple $includes $compiler_args $unit $executable
-write-host "Compiled Handmade Generate`n"
 
 & $executable
-write-host "`n"
+write-host
 
 if ( $false ) {
 	Remove-Item (Get-ChildItem -Path $path_build -Recurse -Force)
@@ -334,7 +333,6 @@ $compile_args = @(
 )
 
 build-simple $includes $compiler_args $unit $executable
-write-host "Compiled Handmade Runtime`n"
 #endregion Handmade Runtime
 
 Pop-Location

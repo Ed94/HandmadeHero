@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<N10X>
+	<Workspace>
+		<IncludeFilter>*.*,</IncludeFilter>
+		<ExcludeFilter>*.obj,*.lib,*.pch,*.dll,*.pdb,.vs,Debug,Release,x64,obj,*.user,Intermediate,</ExcludeFilter>
+		<SyncFiles>true</SyncFiles>
+		<Recursive>true</Recursive>
+		<ShowEmptyFolders>true</ShowEmptyFolders>
+		<IsVirtual>false</IsVirtual>
+		<IsFolder>false</IsFolder>
+		<BuildCommand>pwsh $(WorkspaceDirectory)/scripts/build.ps1 msvc</BuildCommand>
+		<RebuildCommand>pwsh $(WorkspaceDirectory)/scripts/clean; $(WorkspaceDirectory)scripts/build msvc</RebuildCommand>
+		<BuildFileCommand></BuildFileCommand>
+		<CleanCommand>pwsh $(WorkspaceDirectory)/scripts/clean.ps1</CleanCommand>
+		<BuildWorkingDirectory></BuildWorkingDirectory>
+		<CancelBuild></CancelBuild>
+		<RunCommand>$(WorkspaceDirectory)/projects/build/handmade_win32.exe</RunCommand>
+		<RunCommandWorkingDirectory>$(WorkspaceDirectory)/projects</RunCommandWorkingDirectory>
+		<DebugCommand>$(WorkspaceDirectory)/projects/build/handmade_win32.exe</DebugCommand>
+		<ExePathCommand>$(WorkspaceDirectory)/projects/build/handmade_win32.exe</ExePathCommand>
+		<DebugSln></DebugSln>
+		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>
+		<Configurations>
+			<Configuration>Debug</Configuration>
+			<Configuration>Release</Configuration>
+		</Configurations>
+		<Platforms>
+			<Platform>x64</Platform>
+		</Platforms>
+		<AdditionalIncludePaths>
+			<AdditionalIncludePath>C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.34.31933\include</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\VS\include</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\include\10.0.22621.0\ucrt</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.22621.0\\um</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.22621.0\\shared</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.22621.0\\winrt</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.22621.0\\cppwinrt</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um</AdditionalIncludePath>
+		</AdditionalIncludePaths>
+		<Defines>
+			<Define>GEN_TIME</Define>
+		</Defines>
+		<ConfigProperties>
+			<ConfigAndPlatform>
+				<Name>Debug:x64</Name>
+				<Defines></Defines>
+				<ForceIncludes></ForceIncludes>
+			</ConfigAndPlatform>
+			<Config>
+				<Name>Debug</Name>
+				<Defines></Defines>
+			</Config>
+			<Platform>
+				<Name>x64</Name>
+				<Defines></Defines>
+			</Platform>
+		</ConfigProperties>
+		<Children></Children>
+	</Workspace>
+</N10X>

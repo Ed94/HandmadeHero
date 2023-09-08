@@ -1,0 +1,35 @@
+{
+    "configurations": [
+        {
+            "name": "Win32 msvc",
+            "includePath": [
+                "${workspaceFolder}/project/**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "GEN_TIME",
+            ],
+            "windowsSdkVersion": "10.0.22621.0",
+            "compilerPath": "cl.exe",
+            "intelliSenseMode": "msvc-x64",
+        },
+        {
+            "name": "Win32 clang",
+            "includePath": [
+                "${workspaceFolder}/project/**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "GEN_TIME",
+            ],
+            "windowsSdkVersion": "10.0.22621.0",
+            "compilerPath": "clang.exe",
+            "intelliSenseMode": "clang-x64",
+        }
+    ],
+    "version": 4
+}

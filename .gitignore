@@ -17,4 +17,5 @@ bld/
 [Ll]og/
 [Ll]ogs/
 vc140.pdb
-project/build
+
+build

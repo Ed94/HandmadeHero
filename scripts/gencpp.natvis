@@ -1,0 +1,682 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+	<Type Name="gen::AllocatorInfo">
+		<DisplayString>Data:{Data} Proc:{Proc}</DisplayString>
+	</Type>
+
+	<Type Name="gen::Pool">
+		<DisplayString>NumBlocks: {NumBlocks} TotalSize: {TotalSize}</DisplayString>
+		<Expand>
+			<LinkedListItems>
+				<Size>NumBlocks</Size>
+				<HeadPointer>FreeList</HeadPointer>
+				<NextPointer>FreeList</NextPointer>
+				<ValueNode>PhysicalStart</ValueNode>
+			</LinkedListItems>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::Array&lt;*&gt;">
+		<DisplayString>Num:{((Header*)((char*)Data - sizeof(Header)))->Num},
+			Capacity:{((Header*)((char*)Data - sizeof(Header)))->Capacity}</DisplayString>
+		<Expand>
+			<Synthetic Name="Header">
+				<DisplayString>{(Header*)((char*)Data - sizeof(Header))}</DisplayString>
+				<Expand>
+					<Item Name="Allocator">((Header*)((char*)Data - sizeof(Header)))->Allocator</Item>
+					<Item Name="Capacity">((Header*)((char*)Data - sizeof(Header)))->Capacity</Item>
+					<Item Name="Num">((Header*)((char*)Data - sizeof(Header)))->Num</Item>
+				</Expand>
+			</Synthetic>
+			<ArrayItems>
+				<Size>((Header*)((char*)Data - sizeof(Header)))->Capacity</Size>
+				<ValuePointer>Data</ValuePointer>
+			</ArrayItems>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::StrC">
+		<DisplayString>Len:{Len} Ptr:{Ptr, [Len]s}</DisplayString>
+	</Type>
+
+	<Type Name="gen::String">
+		<DisplayString Condition="Data == nullptr">null</DisplayString>
+		<DisplayString>{Data,na}</DisplayString>
+		<Expand>
+			<Synthetic Name="Header">
+				<DisplayString>{(Header*)((char*)Data - sizeof(Header))}</DisplayString>
+				<Expand>
+					<Item Name="Allocator">((Header*)((char*)Data - sizeof(Header)))->Allocator</Item>
+					<Item Name="Capacity">((Header*)((char*)Data - sizeof(Header)))->Capacity</Item>
+					<Item Name="Length">((Header*)((char*)Data - sizeof(Header)))->Length</Item>
+				</Expand>
+			</Synthetic>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::String::Header">
+		<DisplayString>Length: {Length}, Capacity: {Capacity}</DisplayString>
+		<Expand>
+			<Item Name="Allocator">Allocator</Item>
+			<Item Name="Length">Length</Item>
+			<Item Name="Capacity">Capacity</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST">
+		<DisplayString Condition="this != nullptr">{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Content">Content</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+			<Item Name="NumEntries">NumEntries</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::Code">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} Type: {ast->Type}</DisplayString>
+		<Expand HideRawView="false">
+			<Item Name="Content">ast->Content</Item>
+			<Item Name="Body">ast->Body</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="ModuleFlags" Condition="ast->ModuleFlags != ModuleFlag::Invalid">
+				ast->ModuleFlags</Item>
+			<Item Name="ArrSpecs" Condition="ast->ArrSpecs[0] &lt; 18">ast->ArrSpecs</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+			<Item Name="NumEntries">ast->NumEntries</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Body">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Front">Front</Item>
+			<Item Name="Back">Back</Item>
+			<Item Name="NumEntries">NumEntries</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Attributes">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Content">Content</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Comment">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Content">Content</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Class">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Attributes">Attributes</Item>
+			<Item Name="ParentType">ParentType</Item>
+			<Item Name="ParentAccess">ParentAccess</Item>
+			<Item Name="Body">Body</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Enum">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Attributes">Attributes</Item>
+			<Item Name="UnderlyingType">UnderlyingType</Item>
+			<Item Name="Body">Body</Item>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Exec">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Body">Body</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Extern">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Body">Body</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Include">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Content">Content</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Friend">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Declaration">Declaration</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Fn">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Attributes">Attributes</Item>
+			<Item Name="Specs">Specs</Item>
+			<Item Name="ReturnType">ReturnType</Item>
+			<Item Name="Params">Params</Item>
+			<Item Name="Body">Body</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Module">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_NS">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+			<Item Name="Body">Body</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Operator">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Attributes">Attributes</Item>
+			<Item Name="Specs">Specs</Item>
+			<Item Name="ReturnType">ReturnType</Item>
+			<Item Name="Op">Op</Item>
+			<Item Name="Params">Params</Item>
+			<Item Name="Body">Body</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_OpCast">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Specs">Specs</Item>
+			<Item Name="ValueType">ValueType</Item>
+			<Item Name="Body">Body</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Param">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ValueType">ValueType</Item>
+			<Item Name="Value">Value</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Last">Last</Item>
+			<Item Name="Next">Next</Item>
+			<Item Name="NumEntries">NumEntries</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Specifiers">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Specs">Specs</Item>
+			<Item Name="NumEntries">NumEntries</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Struct">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Attributes">Attributes</Item>
+			<Item Name="ParentType">ParentType</Item>
+			<Item Name="ParentAccess">ParentAccess</Item>
+			<Item Name="Body">Body</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Template">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Declaration">Declaration</Item>
+			<Item Name="Params">Params</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Type">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Attributes">Attributes</Item>
+			<Item Name="Specs">Specs</Item>
+			<Item Name="ArrExpr">ArrExpr</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Typedef">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Attributes">Attributes</Item>
+			<Item Name="UnderlyingType">UnderlyingType</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Union">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Attributes">Attributes</Item>
+			<Item Name="Body">Body</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Using">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Attributes">Attributes</Item>
+			<Item Name="UnderlyingType">UnderlyingType</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="ParentAccess">ParentAccess</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_UsingNamespace">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="Name">Name</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::AST_Var">
+		<DisplayString>{Name} Type: {Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ModuleFlags</Item>
+			<Item Name="Attributes">Attributes</Item>
+			<Item Name="Specs">Specs</Item>
+			<Item Name="ValueType">ValueType</Item>
+			<Item Name="Value">Value</Item>
+			<Item Name="Parent">Parent</Item>
+			<Item Name="Prev">Prev</Item>
+			<Item Name="Next">Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeBody">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Front">ast->Front</Item>
+			<Item Name="Back">ast->Back</Item>
+			<Item Name="NumEntries">ast->NumEntries</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeAttributes">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="Content">ast->Content</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeComment">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="Content">ast->Content</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeClass">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Attributes">ast->Attributes</Item>
+			<Item Name="ParentType">ast->ParentType</Item>
+			<Item Name="ParentAccess">ast->ParentAccess</Item>
+			<Item Name="Body">ast->Body</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeExec">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="Body">ast->Body</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Name">ast->Name</Item>
+			<Item Name="Type">ast->Type</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeEnum">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Attributes">ast->Attributes</Item>
+			<Item Name="UnderlyingType">ast->UnderlyingType</Item>
+			<Item Name="Body">ast->Body</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+			<Item Name="Parent">ast->Parent</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeInclude">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="Content">ast->Content</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeFriend">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="Declaration">ast->Declaration</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeFn">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Attributes">ast->Attributes</Item>
+			<Item Name="Specs">ast->Specs</Item>
+			<Item Name="ReturnType">ast->ReturnType</Item>
+			<Item Name="Params">ast->Params</Item>
+			<Item Name="Body">ast->Body</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeModule">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeNS">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Body">ast->Body</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeOperator">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Attributes">ast->Attributes</Item>
+			<Item Name="Specs">ast->Specs</Item>
+			<Item Name="ReturnType">ast->ReturnType</Item>
+			<Item Name="Op">ast->Op</Item>
+			<Item Name="Params">ast->Params</Item>
+			<Item Name="Body">ast->Body</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeOpCast">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ValueType">ast->ValueType</Item>
+			<Item Name="Body">ast->Body</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeParam">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ValueType">ast->ValueType</Item>
+			<Item Name="Value">ast->Value</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Last">ast->Last</Item>
+			<Item Name="Next">ast->Next</Item>
+			<Item Name="NumEntries">ast->NumEntries</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeSpecifiers">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="Specs">ast->Specs</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+			<Item Name="NumEntries">ast->NumEntries</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeStruct">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Attributes">ast->Attributes</Item>
+			<Item Name="ParentType">ast->ParentType</Item>
+			<Item Name="ParentAccess">ast->ParentAccess</Item>
+			<Item Name="Body">ast->Body</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeTemplate">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Params">ast->Params</Item>
+			<Item Name="Declaration">ast->Declaration</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeType">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="Attributes">ast->Attributes</Item>
+			<Item Name="Specs">ast->Specs</Item>
+			<Item Name="ArrExpr">ast->ArrExpr</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeTypedef">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Attributes">ast->Attributes</Item>
+			<Item Name="UnderlyingType">ast->UnderlyingType</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeUnion">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Attributes">ast->Attributes</Item>
+			<Item Name="Body">ast->Body</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeUsing">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Attributes">ast->Attributes</Item>
+			<Item Name="UnderlyingType">ast->UnderlyingType</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeUsingNamespace">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Name">ast->Name</Item>
+			<Item Name="Type">ast->Type</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::CodeVar">
+		<DisplayString Condition="ast == nullptr">Null</DisplayString>
+		<DisplayString Condition="ast != nullptr">{ast->Name} {ast->Type}</DisplayString>
+		<Expand>
+			<Item Name="ModuleFlags">ast->ModuleFlags</Item>
+			<Item Name="Attributes">ast->Attributes</Item>
+			<Item Name="Specs">ast->Specs</Item>
+			<Item Name="ValueType">ast->ValueType</Item>
+			<Item Name="Value">ast->Value</Item>
+			<Item Name="Parent">ast->Parent</Item>
+			<Item Name="Prev">ast->Prev</Item>
+			<Item Name="Next">ast->Next</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="gen::Parser::Token">
+		<DisplayString>Length:{Length} Text:{Text, [Length]s} Type:{Type}</DisplayString>
+	</Type>
+
+	<Type Name="gen::Parser::TokArray">
+		<DisplayString>Current[ { Arr[Idx] } ] Idx:{ Idx }</DisplayString>
+	</Type>
+
+</AutoVisualizer>

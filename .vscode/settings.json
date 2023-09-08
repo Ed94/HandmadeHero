@@ -1,0 +1,41 @@
+{
+	"files.associations": {
+		"*.rmd": "markdown",
+		"array": "cpp",
+		"compare": "cpp",
+		"type_traits": "cpp",
+		"utility": "cpp",
+		"xtr1common": "cpp",
+		"xutility": "cpp",
+		"initializer_list": "cpp",
+		"table.h": "c",
+		"iterator": "cpp",
+		"memory": "cpp",
+		"exception": "cpp",
+		"optional": "cpp",
+		"tuple": "cpp",
+		"xmemory": "cpp",
+		"algorithm": "cpp",
+		"limits": "cpp",
+		"concepts": "cpp",
+		"*.rh": "cpp",
+		"chrono": "cpp",
+		"string": "cpp",
+		"filesystem": "cpp",
+		"format": "cpp",
+		"ratio": "cpp",
+		"xstring": "cpp",
+		"functional": "cpp",
+		"vector": "cpp",
+		"list": "cpp",
+		"xhash": "cpp"
+	},
+	"C_Cpp.intelliSenseEngineFallback": "disabled",
+	"C_Cpp.errorSquiggles": "disabled", // This doesn't work well with how the headers are included.
+	"C_Cpp.default.compilerPath": "cl.exe",
+	"C_Cpp.exclusionPolicy": "checkFilesAndFolders",
+	"C_Cpp.files.exclude": {
+		"**/.vscode": true,
+		"**/.vs": true,
+	}
+}
