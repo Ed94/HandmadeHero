@@ -9,9 +9,6 @@ Push-Location $path_root
 #region Arguments
        $vendor       = $null
        $release      = $null
-[bool] $bootstrap    = $false
-[bool] $singleheader = $false
-[bool] $test         = $false
 
 [array] $vendors = @( "clang", "msvc" )
 
