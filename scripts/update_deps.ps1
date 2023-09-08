@@ -12,10 +12,10 @@ $path_temp 	       = join-path $path_dependencies "temp"
 $url            = "https://github.com/Ed94/gencpp/releases/download/latest/gencpp_singleheader.zip"
 $destinationZip = join-path $path_temp "gencpp_singleheader.zip"
 
-if ( Test-Path $path_dependencies -eq $false ) {
+if ( (Test-Path $path_dependencies) -eq $false ) {
 	New-Item -ItemType Directory -Path $path_dependencies
 }
-if ( Test-Path $path_temp -eq $false ) {
+if ( (Test-Path $path_temp) -eq $false ) {
 	New-Item -ItemType Directory -Path $path_temp
 }
 
