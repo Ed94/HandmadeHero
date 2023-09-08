@@ -1,0 +1,21 @@
+root = true
+
+[*.refactor]
+indent_style = space
+indent_size  = 4
+
+[*.md]
+indent_style = space
+indent_size  = 4
+
+[*.{h, c, hpp, cpp}]
+indent_style = tab
+indent_size  = 4
+
+[*.{ps1, psm1}]
+indent_style = tab
+indent_size  = 4
+
+[*.{natvis, natstepfilter}]
+indent_style = tab
+indent_size  = 4
