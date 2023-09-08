@@ -1,6 +1,3 @@
-# For now this just grabs gencpp
-# Possibly the only thing it will ever grab
-
 clear-host
 $path_root = git rev-parse --show-toplevel
 
@@ -27,5 +24,21 @@ Expand-Archive -Path $destinationZip -DestinationPath $path_temp
 
 # Move gen.hpp to the project directory
 Move-Item -Path (join-path $path_temp "gen.hpp") -Destination $path_dependencies -Force
+
+
+# if ( Test-Path $path_platform_windows )
+# {
+# 	Remove-Item (Get-ChildItem -Path $path_platform_windows -Recurse -Force)
+# }
+
+Push-Location $path_temp
+$path_repo_content = 'include/win32/'
+
+& git clone --no-checkout https://github.com/Leandros/WindowsHModular.git 
+& git sparse-checkout init --cone
+& git sparse-checkout set $path_repo_content
+
+Copy-Item -Recurse ( './' + $path_repo_content + '*') $path_platform_windows
+Pop-Location $path_temp
 
 Remove-Item $path_temp -Recurse
