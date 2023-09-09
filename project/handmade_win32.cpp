@@ -13,11 +13,66 @@
 #include "types.h"
 
 #include "win32.h"
-// using namespace win32;
+NS_WIN32_BEGIN
 
-// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nc-winuser-wndproc
-// https://learn.microsoft.com/en-us/windows/win32/winmsg/about-messages-and-message-queues#system-defined-messages
-LRESULT CALLBACK MainWindowCallback(
+// TODO(Ed) : This is a global for now.
+global bool       Running;
+
+global BITMAPINFO ScreenBitmapInfo;
+global void*      ScreenBitmapMemory; // Lets use directly mess with the "pixel's memory buffer"
+global HBITMAP    ScreenBitmapHandle;
+global HDC        ScreenDeviceContext;
+
+internal void
+resize_dib_section( u32 width, u32 height )
+{
+	// TODO(Ed) : Bulletproof memory handling here for the bitmap memory
+
+	// TODO(Ed) : Free DIB section
+
+	if ( ScreenBitmapHandle )
+	{
+		DeleteObject( ScreenBitmapHandle );
+	}
+	if ( ! ScreenDeviceContext )
+	{
+		ScreenDeviceContext = CreateCompatibleDC( 0 );
+	}
+
+	constexpr BITMAPINFOHEADER& header = ScreenBitmapInfo.bmiHeader;
+	header.biSize          = sizeof( header );
+	header.biWidth         = width;
+	header.biHeight        = height;
+	header.biPlanes        = 1;
+	header.biBitCount      = 32; // Need 24, but want 32 ( alignment )
+	header.biCompression   = BI_RGB_Uncompressed;
+	header.biSizeImage     = 0;
+	header.biXPelsPerMeter = 0;
+	header.biYPelsPerMeter = 0;
+	header.biClrUsed	   = 0;
+	header.biClrImportant  = 0;
+	ScreenBitmapHandle = CreateDIBSection( ScreenDeviceContext, & ScreenBitmapInfo
+		, DIB_ColorTable_RGB, & ScreenBitmapMemory
+		// Ignoring these last two
+		, 0, 0 );
+
+	// ReleaseContext( 0, ScreenDeviceContext );
+}
+
+internal void
+update_window( HDC device_context
+	, u32 x, u32 y
+	, u32 width, u32 height )
+{
+	StretchDIBits( device_context
+		, x, y, width, height
+		, x, y, width, height
+		, ScreenBitmapMemory, & ScreenBitmapInfo
+		, DIB_ColorTable_RGB, RO_Source_To_Dest );
+}
+
+LRESULT CALLBACK
+main_window_callback(
 	HWND   handle,
 	UINT   system_messages,
 	WPARAM w_param,
@@ -26,7 +81,6 @@ LRESULT CALLBACK MainWindowCallback(
 {
 	LRESULT result;
 
-	// https://learn.microsoft.com/en-us/windows/win32/winmsg/window-notifications
 	switch ( system_messages )
 	{
 		case WM_ACTIVATEAPP:
@@ -37,13 +91,15 @@ LRESULT CALLBACK MainWindowCallback(
 
 		case WM_CLOSE:
 		{
-			OutputDebugStringA( "WM_CLOSE\n" );
+			// TODO(Ed) : Handle with a message to the user
+			Running = false;
 		}
 		break;
 
 		case WM_DESTROY:
 		{
-			OutputDebugStringA( "WM_DESTROY\n" );
+			// TODO(Ed) : Handle with as an error and recreate the window
+			Running = false;
 		}
 		break;
 
@@ -52,21 +108,15 @@ LRESULT CALLBACK MainWindowCallback(
 			PAINTSTRUCT info;
 			HDC device_context = BeginPaint( handle, & info );
 
+
 			u32 x 	   = info.rcPaint.left;
 			u32 y 	   = info.rcPaint.top;
 			u32 height = info.rcPaint.bottom - info.rcPaint.top;
 			u32 width  = info.rcPaint.right  - info.rcPaint.left;
 
-			global DWORD operation = RO_Whiteness;
-
-			PatBlt( device_context
+			update_window( handle
 				, x, y
-				, width, height
-				, operation );
-
-			operation == RO_Whiteness ?
-				operation = RO_Blackness
-			:	operation = RO_Whiteness;
+				, width, height );
 
 			EndPaint( handle, & info );
 		}
@@ -74,6 +124,13 @@ LRESULT CALLBACK MainWindowCallback(
 
 		case WM_SIZE:
 		{
+			RECT client_rect;
+			GetClientRect( handle, & client_rect );
+
+			u32 width  = client_rect.right  - client_rect.left;
+			u32 height = client_rect.bottom - client_rect.top;
+
+			resize_dib_section( width, height );
 			OutputDebugStringA( "WM_SIZE\n" );
 		}
 		break;
@@ -87,23 +144,22 @@ LRESULT CALLBACK MainWindowCallback(
 
 	return result;
 }
+NS_WIN32_END
 
-int CALLBACK WinMain(
+int CALLBACK
+WinMain(
 	HINSTANCE instance,
 	HINSTANCE prev_instance,
 	LPSTR     commandline,
 	int       show_command
 )
 {
-	// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messagebox
-	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
+	using namespace win32;
+	MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
-	// https://en.wikibooks.org/wiki/Windows_Programming/Window_Creation
-	// https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-wndclassa
 	WNDCLASS window_class {};
-		// window_class.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
 		window_class.style = CS_Own_Device_Context | CS_Horizontal_Redraw | CS_Vertical_Redraw;
-		window_class.lpfnWndProc = MainWindowCallback;
+		window_class.lpfnWndProc = main_window_callback;
 		// window_class.cbClsExtra  = ;
 		// window_class.cbWndExtra  = ;
 		window_class.hInstance   = instance;
@@ -115,13 +171,10 @@ int CALLBACK WinMain(
 
 	if ( RegisterClassW( &window_class ) )
 	{
-		// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createwindowexa
-		// https://learn.microsoft.com/en-us/windows/win32/winmsg/window-styles
 		HWND window_handle = CreateWindowExW(
 			0,
 			window_class.lpszClassName,
 			L"Handmade Hero",
-			// WS_OVERLAPPEDWINDOW | WS_VISIBLE,
 			WS_Overlapped_Window | WS_Initially_Visible,
 			CW_USEDEFAULT, CW_USEDEFAULT, // x, y
 			CW_USEDEFAULT, CW_USEDEFAULT, // width, height
@@ -131,36 +184,27 @@ int CALLBACK WinMain(
 
 		if ( window_handle )
 		{
-			// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow
-			// ShowWindow( window_handle, show_command );
+			Running = true;
 
-			// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-updatewindow
-			// UpdateWindow( window_handle );
-
-			// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmessage
 			MSG message;
-			for (;;)
+			while( Running )
 			{
 				BOOL msg_result = GetMessage( & message, 0, 0, 0 );
 				if ( msg_result > 0 )
 				{
-					// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-translatemessage
 					TranslateMessage( & message );
-
-					// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-dispatchmessage
 					DispatchMessage( & message );
-					// break;
 				}
 				else
 				{
-					// TODO (Ed) : Logging
+					// TODO(Ed) : Logging
 					break;
 				}
 			}
 		}
 		else
 		{
-			// TODO (Ed) : Logging
+			// TODO(Ed) : Logging
 		}
 	}
 	else

@@ -12,7 +12,7 @@ int gen_main()
 	log_fmt("Generating code for Handmade Hero\n");
 
 	log_fmt("Generaton finished for Handmade Hero\n");
-	gen::deinit();
+	// gen::deinit();
 	return 0;
 }
 #endif
