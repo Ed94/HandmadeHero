@@ -2,173 +2,39 @@
 Alternative header for windows.h
 */
 
-// #include <windows.h>
-#include "windows/windows_base.h"
-#include "windows/window.h"
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <xinput.h>
 
-#include "windows/file.h"
-#include "windows/io.h"
+// #include "windows/windows_base.h"
+// #include "windows/window.h"
+
+// #include "windows/file.h"
+// #include "windows/io.h"
 
 // #ifdef Build_Debug
-#	include "windows/dbghelp.h"
+// #	include "windows/dbghelp.h"
 // #endif
 
 #if Build_DLL
-#	define WIN_LIBRARY_API_START extern "C" __declspec(dllexport)
-#	define WIN_LIBRARY_API_END
+#	define WIN_LIB_API extern "C" __declspec(dllexport)
 #else
-#	define WIN_LIBRARY_API_START extern "C" {
-#	define WIN_LIBRARY_API_END }
+#	define WIN_LIB_API extern "C"
 #endif
 
-#ifndef CONST
-#	define CONST const
+// #ifndef CONST
+// #	define CONST const
+// #endif
+
+// SAL BS
+#ifndef _In_
+#	define _In_
 #endif
 
 #define NS_WIN32_BEGIN namespace win32 {
 #define NS_WIN32_END }
 
 NS_WIN32_BEGIN
-WIN_LIBRARY_API_START
-
-#pragma region Gdi32
-
-#define _SAL_nop_impl_                      X
-#define _Deref_post2_impl_(p1,p2)
-#define _SAL2_Source_(Name, args, annotes) _SA_annotes3(SAL_name, #Name, "", "2") _Group_(annotes _SAL_nop_impl_)
-#define _Outptr_result_bytebuffer_(size)   _SAL2_Source_(_Outptr_result_bytebuffer_, (size), _Out_impl_ _Deref_post2_impl_(__notnull_impl_notref, __bytecap_impl(size)))
-
-DECLARE_HANDLE(HBITMAP);
-
-typedef struct tagBITMAPINFOHEADER{
-        DWORD      biSize;
-        LONG       biWidth;
-        LONG       biHeight;
-        WORD       biPlanes;
-        WORD       biBitCount;
-        DWORD      biCompression;
-        DWORD      biSizeImage;
-        LONG       biXPelsPerMeter;
-        LONG       biYPelsPerMeter;
-        DWORD      biClrUsed;
-        DWORD      biClrImportant;
-} BITMAPINFOHEADER, *LPBITMAPINFOHEADER, *PBITMAPINFOHEADER;
-
-typedef struct tagRGBQUAD {
-        BYTE    rgbBlue;
-        BYTE    rgbGreen;
-        BYTE    rgbRed;
-        BYTE    rgbReserved;
-} RGBQUAD;
-
-typedef struct tagBITMAPINFO {
-    BITMAPINFOHEADER    bmiHeader;
-    RGBQUAD             bmiColors[1];
-} BITMAPINFO, *LPBITMAPINFO, *PBITMAPINFO;
-
-#define GDI_DIBSIZE(bi) ((bi).biHeight < 0 ? (-1)*(GDI__DIBSIZE(bi)) : GDI__DIBSIZE(bi))
-
-HDC WINAPI CreateCompatibleDC( HDC hdc);
-
-HBITMAP WINAPI
-CreateDIBSection(
-    HDC               hdc,
-    CONST BITMAPINFO *pbmi,
-    UINT              usage,
-    _When_((pbmi->bmiHeader.biBitCount != 0), _Outptr_result_bytebuffer_(_Inexpressible_(GDI_DIBSIZE((pbmi->bmiHeader)))))
-    _When_((pbmi->bmiHeader.biBitCount == 0), _Outptr_result_bytebuffer_((pbmi->bmiHeader).biSizeImage))
-    VOID            **ppvBits,
-    HANDLE            hSection,
-    DWORD             offset
-);
-
-typedef HANDLE HGDIOBJ;
-BOOL WINAPI DeleteObject( HGDIOBJ ho);
-
-int WINAPI StretchDIBits( HDC hdc
-	, int xDest, int yDest, int DestWidth, int DestHeight
-	, int xSrc,  int ySrc,  int SrcWidth,  int SrcHeight,
-    CONST VOID* lpBits, CONST BITMAPINFO* lpbmi
-	, UINT iUsage, DWORD rop );
-
-typedef struct tagPAINTSTRUCT {
-    HDC         hdc;
-    BOOL        fErase;
-    RECT        rcPaint;
-    BOOL        fRestore;
-    BOOL        fIncUpdate;
-    BYTE        rgbReserved[32];
-} PAINTSTRUCT, *PPAINTSTRUCT, *NPPAINTSTRUCT, *LPPAINTSTRUCT;
-
-HDC WINAPI
-BeginPaint( HWND hWnd, LPPAINTSTRUCT lpPaint );
-
-BOOL WINAPI
-EndPaint( HWND hWnd, CONST PAINTSTRUCT *lpPaint );
-
-BOOL WINAPI
-PatBlt( HDC hdc
-	, int x, int y
-	, int w, int h
-	, DWORD rop );
-#pragma endregion Gdi32
-
-#ifdef UNICODE
-	constexpr auto CreateWindowEx = CreateWindowExW;
-#else
-	constexpr auto CreateWindowEx = CreateWindowExA;
-#endif // !UNICODE
-
-#ifdef UNICODE
-	constexpr auto DefWindowProc = DefWindowProcW;
-#else
-	constexpr auto DefWindowProc = DefWindowProcA;
-#endif // !UNICODE
-
-#ifdef UNICODE
-	constexpr auto DispatchMessage = DispatchMessageW;
-#else
-	constexpr auto DispatchMessage = DispatchMessageA;
-#endif // !UNICODE
-
-#pragma region WinUser
-
-HDC WINAPI GetDC( HWND hWnd );
-
-BOOL WINAPI
-GetMessageA(
-    LPMSG lpMsg,
-    HWND hWnd,
-    UINT wMsgFilterMin,
-    UINT wMsgFilterMax);
-BOOL WINAPI
-GetMessageW(
-    LPMSG lpMsg,
-    HWND hWnd,
-    UINT wMsgFilterMin,
-    UINT wMsgFilterMax);
-#ifdef UNICODE
-	constexpr auto GetMessage = GetMessageW;
-#else
-	constexpr auto GetMessage = GetMessageA;
-#endif // !UNICODE
-
-#ifdef UNICODE
-	constexpr auto MessageBox = MessageBoxW;
-#else
-	constexpr auto MessageBox = MessageBoxA;
-#endif // !UNICODE
-
-#ifdef UNICODE
-	constexpr auto RegisterClass = RegisterClassW;
-#else
-	constexpr auto RegisterClass = RegisterClassA;
-#endif // !UNICODE
-#pragma endregion WinUser
-
-// Class Style Constants
-// https://learn.microsoft.com/en-us/windows/win32/winmsg/about-window-classes
-// https://learn.microsoft.com/en-us/windows/win32/winmsg/window-class-styles
 
 enum BI : DWORD
 {
@@ -199,14 +65,14 @@ enum MB : UINT
 
 enum Mem : DWORD
 {
-	MEM_Commit_Zeroed = 0x00001000,
-	MEM_Reserve	      = 0x00002000,
-	MEM_Release 	  = 0x00008000,
+	MEM_Commit_Zeroed = MEM_COMMIT,
+	MEM_Reserve	      = MEM_RESERVE,
+	MEM_Release 	  = MEM_RELEASE,
 };
 
 enum Page : DWORD
 {
-	Page_Read_Write = 0x04,
+	Page_Read_Write = PAGE_READWRITE,
 };
 
 enum PM : UINT
@@ -229,9 +95,51 @@ enum WS : UINT
 	WS_Initially_Visible = WS_VISIBLE,
 };
 
-WIN_LIBRARY_API_END
-NS_WIN32_END
+enum XI_State : DWORD
+{
+	XI_PluggedIn = ERROR_SUCCESS,
+};
 
+#pragma region XInput
+WIN_LIB_API DWORD WINAPI XInputGetState
+(
+	DWORD         dwUserIndex,  // Index of the gamer associated with the device
+	XINPUT_STATE* pState        // Receives the current state
+) WIN_NOEXCEPT;
+
+WIN_LIB_API DWORD WINAPI XInputSetState
+(
+	DWORD             dwUserIndex,  // Index of the gamer associated with the device
+	XINPUT_VIBRATION* pVibration    // The vibration information to send to the controller
+) WIN_NOEXCEPT;
+
+DWORD WINAPI xinput_get_state_stub( DWORD dwUserIndex, XINPUT_STATE* pVibration ) {
+	OutputDebugStringA( "xinput_get_state stubbed!\n");
+	return 0;
+}
+
+DWORD WINAPI xinput_set_state_stub( DWORD dwUserIndex, XINPUT_VIBRATION* pVibration ) {
+	OutputDebugStringA( "xinput_set_state stubbed!\n");
+	return 0;
+}
+
+using XInputGetStateFn = DWORD WINAPI( DWORD dwUserIndex, XINPUT_STATE* pVibration );
+using XInputSetStateFn = DWORD WINAPI( DWORD dwUserIndex, XINPUT_VIBRATION* pVibration );
+
+global XInputGetStateFn* xinput_get_state = xinput_get_state_stub;
+global XInputSetStateFn* xinput_set_state = xinput_set_state_stub;
+
+internal void
+xinput_load_library_bindings()
+{
+	HMODULE xinput_lib = LoadLibraryA( XINPUT_DLL_A );
+
+	xinput_get_state = rcast( XInputGetStateFn*, GetProcAddress( xinput_lib, "XInputGetState" ));
+	xinput_set_state = rcast( XInputSetStateFn*, GetProcAddress( xinput_lib, "XInputSetState" ));
+}
+#pragma endregion XInput
+
+NS_WIN32_END
 #undef _SAL_nop_impl_
 #undef _SAL2_Source_
 #undef _Deref_post2_impl_

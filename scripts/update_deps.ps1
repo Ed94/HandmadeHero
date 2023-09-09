@@ -25,20 +25,4 @@ Expand-Archive    -Path $destinationZip                  -DestinationPath $path_
 Move-Item         -Path (Join-Path $path_temp "gen.hpp") -Destination     $path_deps -Force
 #endregion gencpp
 
-#region windows modular headers
-if ($false) {
-	$repo = 'https://github.com/Leandros/WindowsHModular.git'
-
-	Push-Location $path_temp
-	if ( -not(test-path $path_deps_windows)) {
-		New-Item -ItemType Directory -Path $path_deps_windows
-	}
-
-	& git clone $repo
-	Copy-Item -Recurse .\WindowsHModular\include\win32\* $path_deps_windows
-	Remove-Item (Get-ChildItem -Path $path_deps_windows -Exclude '*.h' -Recurse -Force)
-	Pop-Location
-}
-#endregion windows modular headers
-
 Remove-Item $path_temp -Recurse -Force

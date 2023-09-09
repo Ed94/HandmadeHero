@@ -307,7 +307,6 @@ $includes = @(
 	$path_deps,
 	$path_platform
 )
-
 $compiler_args = @()
 $compiler_args += ( $flag_define + 'GEN_TIME' )
 
@@ -333,9 +332,15 @@ if ( $false ) {
 #endregion Handmade Generate
 
 #region Handmade Runtime
-
-$lib_user32 = 'User32.lib'
+$includes = @(
+	$path_project,
+	$path_gen,
+	$path_deps,
+	$path_platform
+)
 $lib_gdi32  = 'Gdi32.lib'
+$lib_xinput = 'Xinput.lib'
+$lib_user32 = 'User32.lib'
 
 $unit       = Join-Path $path_project 'handmade_win32.cpp'
 $executable = Join-Path $path_build   'handmade_win32.exe'
@@ -344,6 +349,7 @@ $compiler_args = @()
 
 $linker_args = @(
 	$lib_gdi32,
+	# $lib_xinput,
 	$lib_user32,
 	$flag_link_win_subsystem_windows
 )

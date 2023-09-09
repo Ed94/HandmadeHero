@@ -15,6 +15,7 @@
 #include <stdio.h>
 
 #include "win32.h"
+
 NS_WIN32_BEGIN
 
 // TODO(Ed) : This is a global for now.
@@ -51,7 +52,7 @@ WinDimensions get_window_dimensions( HWND window_handle )
 }
 
 internal void
-render_weird_graident(OffscreenBuffer buffer, u32 x_offset, u32 y_offset )
+render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
 {
 	// TODO(Ed): See if with optimizer if buffer should be passed by value.
 
@@ -62,14 +63,14 @@ render_weird_graident(OffscreenBuffer buffer, u32 x_offset, u32 y_offset )
 		u8 Alpha;
 	};
 
-	u8* row   = rcast( u8*, buffer.Memory);
+	u8* row   = rcast( u8*, buffer->Memory);
 	local_persist float wildcard = 0;
-	for ( u32 y = 0; y < buffer.Height; ++ y )
+	for ( u32 y = 0; y < buffer->Height; ++ y )
 	{
 		// u8* pixel = rcast(u8*, row);
 		// Pixel* pixel = rcast( Pixel*, row );
 		u32* pixel = rcast(u32*, row);
-		for ( u32 x = 0; x < buffer.Width; ++ x )
+		for ( u32 x = 0; x < buffer->Width; ++ x )
 		{
 			/* Pixel in memory:
 			-----------------------------------------------
@@ -79,7 +80,7 @@ render_weird_graident(OffscreenBuffer buffer, u32 x_offset, u32 y_offset )
  				x86-64 : Little Endian Arch
 				0x XX BB GG RR
 			*/
-		#if 1
+		#if 0
 			u8 blue  = scast(u8, x + x_offset * u8(wildcard) % 256);
 			u8 green = scast(u8, y + y_offset - u8(wildcard) % 128);
 			u8 red   = scast(u8, wildcard) % 256 - x * 0.4f;
@@ -92,7 +93,7 @@ render_weird_graident(OffscreenBuffer buffer, u32 x_offset, u32 y_offset )
 			*pixel++ = (red << 16) | (green << 8) | blue;
 		}
 		wildcard += 0.5375f;
-		row += buffer.Pitch;
+		row += buffer->Pitch;
 	}
 }
 
@@ -135,7 +136,7 @@ resize_dib_section( OffscreenBuffer* buffer, u32 width, u32 height )
 }
 
 internal void
-display_buffer_in_window( HDC device_context, u32 window_width, u32 window_height, OffscreenBuffer buffer
+display_buffer_in_window( HDC device_context, u32 window_width, u32 window_height, OffscreenBuffer* buffer
 	, u32 x, u32 y
 	, u32 width, u32 height )
 {
@@ -146,12 +147,12 @@ display_buffer_in_window( HDC device_context, u32 window_width, u32 window_heigh
 		, x, y, width, height
 	#endif
 		, 0, 0, window_width, window_height
-		, 0, 0, buffer.Width, buffer.Height
-		, buffer.Memory, & buffer.Info
+		, 0, 0, buffer->Width, buffer->Height
+		, buffer->Memory, & buffer->Info
 		, DIB_ColorTable_RGB, RO_Source_To_Dest );
 }
 
-LRESULT CALLBACK
+internal LRESULT CALLBACK
 main_window_callback(
 	HWND   handle,
 	UINT   system_messages,
@@ -183,6 +184,81 @@ main_window_callback(
 		}
 		break;
 
+		case WM_SYSKEYDOWN:
+		case WM_SYSKEYUP:
+		case WM_KEYDOWN:
+		case WM_KEYUP:
+		{
+			u32  vk_code  = w_param;
+			bool is_down  = (l_param >> 31) == 0;
+			bool was_down = (l_param >> 30) != 0;
+
+			switch ( vk_code )
+			{
+				case 'Q':
+				{
+					OutputDebugStringA( "Q\n" );
+				}
+				break;
+				case 'E':
+				{
+					OutputDebugStringA( "E\n" );
+				}
+				break;
+				case 'W':
+				{
+					OutputDebugStringA( "W\n" );
+				}
+				break;
+				case 'A':
+				{
+					OutputDebugStringA( "A\n" );
+				}
+				break;
+				case 'S':
+				{
+					OutputDebugStringA( "S\n" );
+				}
+				break;
+				case 'D':
+				{
+					OutputDebugStringA( "D\n" );
+				}
+				break;
+				case VK_ESCAPE:
+				{
+					OutputDebugStringA( "Escape\n" );
+				}
+				break;
+				case VK_UP:
+				{
+					OutputDebugStringA( "Up\n" );
+				}
+				break;
+				case VK_DOWN:
+				{
+					OutputDebugStringA( "Down\n" );
+				}
+				break;
+				case VK_LEFT:
+				{
+					OutputDebugStringA( "Left\n" );
+				}
+				break;
+				case VK_RIGHT:
+				{
+					OutputDebugStringA( "Right\n" );
+				}
+				break;
+				case VK_SPACE:
+				{
+					OutputDebugStringA( "Space\n" );
+				}
+				break;
+			}
+		}
+		break;
+
 		case WM_PAINT:
 		{
 			PAINTSTRUCT info;
@@ -194,7 +270,7 @@ main_window_callback(
 
 			WinDimensions dimensions = get_window_dimensions( handle );
 
-			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, BackBuffer
+			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &BackBuffer
 				, x, y
 				, width, height );
 			EndPaint( handle, & info );
@@ -225,6 +301,8 @@ WinMain(
 )
 {
 	using namespace win32;
+	xinput_load_library_bindings();
+
 	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
 	WNDCLASS window_class {};
@@ -264,6 +342,24 @@ WinMain(
 			u32 x_offset = 0;
 			u32 y_offset = 0;
 
+			// Controller State
+			u8 dpad_up        = false;
+			u8 dpad_down      = false;
+			u8 dpad_left      = false;
+			u8 dpad_right     = false;
+			u8 start          = false;
+			u8 back           = false;
+			u8 left_shoulder  = false;
+			u8 right_shoulder = false;
+			u8 btn_a_button   = false;
+			u8 btn_b_button   = false;
+			u8 btn_x_button   = false;
+			u8 btn_y_button   = false;
+			u16 left_stick_x  = 0;
+			u16 left_stick_y  = 0;
+			u16 right_stick_x = 0;
+			u16 right_stick_y = 0;
+
 			while( Running )
 			{
 				if ( PeekMessageW( & msg_info, 0, 0, 0, PM_Remove_Messages_From_Queue ) )
@@ -278,16 +374,65 @@ WinMain(
 					DispatchMessage( & msg_info );
 				}
 
-				render_weird_graident( BackBuffer, x_offset, y_offset );
+				// TODO(Ed) : Should we poll this more frequently?
+				for ( DWORD controller_index = 0; controller_index < XUSER_MAX_COUNT; ++ controller_index )
+				{
+					XINPUT_STATE controller_state;
+					if ( xinput_get_state( controller_index, & controller_state ) == XI_PluggedIn )
+					{
+						XINPUT_GAMEPAD* pad = & controller_state.Gamepad;
+
+						dpad_up        = pad->wButtons & XINPUT_GAMEPAD_DPAD_UP;
+						dpad_down      = pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN;
+						dpad_left      = pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT;
+						dpad_right     = pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT;
+						start          = pad->wButtons & XINPUT_GAMEPAD_START;
+						back           = pad->wButtons & XINPUT_GAMEPAD_BACK;
+						left_shoulder  = pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER;
+						right_shoulder = pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER;
+						btn_a_button   = pad->wButtons & XINPUT_GAMEPAD_A;
+						btn_b_button   = pad->wButtons & XINPUT_GAMEPAD_B;
+						btn_x_button   = pad->wButtons & XINPUT_GAMEPAD_X;
+						btn_y_button   = pad->wButtons & XINPUT_GAMEPAD_Y;
+
+						left_stick_x  = pad->sThumbLX;
+						left_stick_y  = pad->sThumbLY;
+						right_stick_x = pad->sThumbRX;
+						right_stick_y = pad->sThumbRY;
+					}
+					else
+					{
+						// NOTE: Controller is not available
+					}
+				}
+
+				x_offset += dpad_right;
+				x_offset -= dpad_left;
+				y_offset += dpad_up;
+				y_offset -= dpad_down;
+				// x_offset += left_stick_x;
+				// y_offset += left_stick_y;
+
+				if ( start )
+				{
+					XINPUT_VIBRATION vibration;
+					vibration.wLeftMotorSpeed  = 30000;
+					xinput_set_state( 0, & vibration );
+				}
+				else
+				{
+					XINPUT_VIBRATION vibration;
+					vibration.wLeftMotorSpeed  = 0;
+					xinput_set_state( 0, & vibration );
+				}
+
+				render_weird_graident( &BackBuffer, x_offset, y_offset );
 
 				WinDimensions dimensions     = get_window_dimensions( window_handle );
 				HDC           device_context = GetDC( window_handle );
-				display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, BackBuffer
+				display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &BackBuffer
 					, 0, 0
 					, dimensions.Width, dimensions.Height );
-
-				++ x_offset;
-				++ y_offset;
 			}
 		}
 		else
