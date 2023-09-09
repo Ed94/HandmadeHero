@@ -165,9 +165,7 @@ if ( $vendor -match "clang" )
 			$flag_target_arch, $target_arch,
 			$flag_wall,
 			$flag_preprocess_non_intergrated,
-			( $flag_define + 'GEN_TIME' ),
-			( $flag_path_output + $object ),
-			( $flag_include + $includes )
+			( $flag_path_output + $object )
 		)
 		if ( $release -eq $false ) {
 			$compiler_args += ( $flag_define + 'Build_Debug' )
@@ -178,8 +176,7 @@ if ( $vendor -match "clang" )
 		$warning_ignores | ForEach-Object {
 			$compiler_args += $flag_warning + $_
 		}
-
-		# $compiler_args += $flag_preprocess
+		$compiler_args += $includes | ForEach-Object { $flag_include + $_ }
 
 		$compiler_args += $flag_compile, $unit
 		run-compiler $compiler $unit $compiler_args

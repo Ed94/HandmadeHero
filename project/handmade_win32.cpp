@@ -18,18 +18,43 @@
 NS_WIN32_BEGIN
 
 // TODO(Ed) : This is a global for now.
-global bool       Running;
+global bool Running;
 
-global BITMAPINFO ScreenBitmapInfo;
-global void*      ScreenBitmapMemory; // Lets use directly mess with the "pixel's memory buffer"
-global u32        BitmapWidth;
-global u32        BitmapHeight;
 
-constexpr u32 	  BytesPerPixel = 4;
+struct OffscreenBuffer
+{
+	BITMAPINFO Info;
+	void*      Memory; // Lets use directly mess with the "pixel's memory buffer"
+	u32        Width;
+	u32        Height;
+	u32        Pitch;
+	u32        BytesPerPixel;
+};
+
+struct WinDimensions
+{
+	u32 Width;
+	u32 Height;
+};
+
+global OffscreenBuffer BackBuffer;
+global WinDimensions   WindowDimensions;
+
+WinDimensions get_window_dimensions( HWND window_handle )
+{
+	RECT client_rect;
+	GetClientRect( window_handle, & client_rect );
+	WinDimensions result;
+	result.Width  = client_rect.right  - client_rect.left;
+	result.Height = client_rect.bottom - client_rect.top;
+	return result;
+}
 
 internal void
-render_weird_graident( u32 x_offset, u32 y_offset )
+render_weird_graident(OffscreenBuffer buffer, u32 x_offset, u32 y_offset )
 {
+	// TODO(Ed): See if with optimizer if buffer should be passed by value.
+
 	struct Pixel {
 		u8 Blue;
 		u8 Green;
@@ -37,15 +62,14 @@ render_weird_graident( u32 x_offset, u32 y_offset )
 		u8 Alpha;
 	};
 
-	u32 pitch = BitmapWidth * BytesPerPixel;
-	u8* row   = rcast( u8*, ScreenBitmapMemory);
+	u8* row   = rcast( u8*, buffer.Memory);
 	local_persist float wildcard = 0;
-	for ( u32 y = 0; y < BitmapHeight; ++ y )
+	for ( u32 y = 0; y < buffer.Height; ++ y )
 	{
 		// u8* pixel = rcast(u8*, row);
 		// Pixel* pixel = rcast( Pixel*, row );
 		u32* pixel = rcast(u32*, row);
-		for ( u32 x = 0; x < BitmapWidth; ++ x )
+		for ( u32 x = 0; x < buffer.Width; ++ x )
 		{
 			/* Pixel in memory:
 			-----------------------------------------------
@@ -55,103 +79,76 @@ render_weird_graident( u32 x_offset, u32 y_offset )
  				x86-64 : Little Endian Arch
 				0x XX BB GG RR
 			*/
-			// pixel[0] = scast(u8, x + x_offset);
-			// pixel[1] = scast(u8, y + y_offset);
-			// pixel[2] = 0;
-			// pixel[3] = 0;
-
-			// pixel->Blue  = scast(u8, x + x_offset * u8(wildcard) % 256);
-			// pixel->Green = scast(u8, y + y_offset - u8(wildcard) % 128);
-			// pixel->Red   = scast(u8, wildcard) % 256 - x * 0.1f;
-			// pixel->Alpha = 0;
-
-			// ++pixel;
-			// pixel += BytesPerPixel;
-
+		#if 1
 			u8 blue  = scast(u8, x + x_offset * u8(wildcard) % 256);
 			u8 green = scast(u8, y + y_offset - u8(wildcard) % 128);
 			u8 red   = scast(u8, wildcard) % 256 - x * 0.4f;
+		#else
+			u8 blue  = scast(u8, x + x_offset);
+			u8 green = scast(u8, y + y_offset);
+			u8 red   = 0;
+		#endif
 
 			*pixel++ = (red << 16) | (green << 8) | blue;
 		}
-		// wildcard += 0.001f;
-		wildcard += .25f * 0.5;
-		row += pitch;
+		wildcard += 0.5375f;
+		row += buffer.Pitch;
 	}
 }
 
 internal void
-resize_dib_section( u32 width, u32 height )
+resize_dib_section( OffscreenBuffer* buffer, u32 width, u32 height )
 {
 	// TODO(Ed) : Bulletproof memory handling here for the bitmap memory
-
-	// TODO(Ed) : Free DIB section
-
-	if ( ScreenBitmapMemory )
+	if ( buffer->Memory )
 	{
-		VirtualFree( ScreenBitmapMemory, 0, MEM_RELEASE );
+		VirtualFree( buffer->Memory, 0, MEM_RELEASE );
 	}
 
-	BitmapWidth  = width;
-	BitmapHeight = height;
+	buffer->Width         = width;
+	buffer->Height        = height;
+	buffer->BytesPerPixel = 4;
+	buffer->Pitch         = buffer->Width * buffer->BytesPerPixel;
 
 	// Negative means top-down in the context of the biHeight
 #	define Top_Down -
-	constexpr BITMAPINFOHEADER&
-	header = ScreenBitmapInfo.bmiHeader;
-	ScreenBitmapInfo.bmiHeader.biSize          = sizeof( BITMAPINFOHEADER );
-	ScreenBitmapInfo.bmiHeader.biWidth         = BitmapWidth;
-	ScreenBitmapInfo.bmiHeader.biHeight        = Top_Down BitmapHeight;
-	ScreenBitmapInfo.bmiHeader.biPlanes        = 1;
-	ScreenBitmapInfo.bmiHeader.biBitCount      = 32; // Need 24, but want 32 ( alignment )
-	ScreenBitmapInfo.bmiHeader.biCompression   = BI_RGB_Uncompressed;
-	// ScreenBitmapInfo.bmiHeader.biSizeImage     = 0;
-	// ScreenBitmapInfo.bmiHeader.biXPelsPerMeter = 0;
-	// ScreenBitmapInfo.bmiHeader.biYPelsPerMeter = 0;
-	// ScreenBitmapInfo.bmiHeader.biClrUsed	   = 0;
-	// ScreenBitmapInfo.bmiHeader.biClrImportant  = 0;
+	BITMAPINFOHEADER&
+	header = buffer->Info.bmiHeader;
+	header.biSize        = sizeof( buffer->Info.bmiHeader );
+	header.biWidth       = buffer->Width;
+	header.biHeight      = Top_Down buffer->Height;
+	header.biPlanes      = 1;
+	header.biBitCount    = 32; // Need 24, but want 32 ( alignment )
+	header.biCompression = BI_RGB_Uncompressed;
+	// header.biSizeImage     = 0;
+	// header.biXPelsPerMeter = 0;
+	// header.biYPelsPerMeter = 0;
+	// header.biClrUsed	   = 0;
+	// header.biClrImportant  = 0;
 #	undef Top_Down
-#if 0
-	ScreenBitmapHandle = CreateDIBSection( ScreenDeviceContext, & ScreenBitmapInfo
-		, DIB_ColorTable_RGB, & ScreenBitmapMemory
-		// Ignoring these last two
-		, 0, 0 );
-#endif
-
-	// ReleaseContext( 0, ScreenDeviceContext );
 
 	// We want to "touch" a pixel on every 4-byte boundary
-	u32 BitmapMemorySize = (BitmapWidth * BitmapHeight) * BytesPerPixel;
-	ScreenBitmapMemory = VirtualAlloc( NULL, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE );
+	u32 BitmapMemorySize = (buffer->Width * buffer->Height) * buffer->BytesPerPixel;
+	buffer->Memory = VirtualAlloc( NULL, BitmapMemorySize, MEM_Commit_Zeroed, Page_Read_Write );
 
 	// TODO(Ed) : Clear to black
 }
 
 internal void
-update_window( HDC device_context, RECT* WindowRect
+display_buffer_in_window( HDC device_context, u32 window_width, u32 window_height, OffscreenBuffer buffer
 	, u32 x, u32 y
 	, u32 width, u32 height )
 {
-#if 0
-	BitBlt( device_context
-		, x, y, width, height
-		, ScreenDeviceContext
-		, x, y, RO_Source_To_Dest
-	);
-#else
-	u32 window_width  = WindowRect->right  - WindowRect->left;
-	u32 window_height = WindowRect->bottom - WindowRect->top;
-
+	// TODO(Ed) : Aspect ratio correction
 	StretchDIBits( device_context
 	#if 0
 		, x, y, width, height
 		, x, y, width, height
 	#endif
-		, 0, 0, BitmapWidth, BitmapHeight
 		, 0, 0, window_width, window_height
-		, ScreenBitmapMemory, & ScreenBitmapInfo
+		, 0, 0, buffer.Width, buffer.Height
+		, buffer.Memory, & buffer.Info
 		, DIB_ColorTable_RGB, RO_Source_To_Dest );
-#endif
 }
 
 LRESULT CALLBACK
@@ -195,10 +192,9 @@ main_window_callback(
 			u32 width  = info.rcPaint.right  - info.rcPaint.left;
 			u32 height = info.rcPaint.bottom - info.rcPaint.top;
 
-			RECT client_rect;
-			GetClientRect( handle, & client_rect );
+			WinDimensions dimensions = get_window_dimensions( handle );
 
-			update_window( device_context, & client_rect
+			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, BackBuffer
 				, x, y
 				, width, height );
 			EndPaint( handle, & info );
@@ -207,13 +203,6 @@ main_window_callback(
 
 		case WM_SIZE:
 		{
-			RECT client_rect;
-			GetClientRect( handle, & client_rect );
-
-			u32 width  = client_rect.right  - client_rect.left;
-			u32 height = client_rect.bottom - client_rect.top;
-
-			resize_dib_section( width, height );
 		}
 		break;
 
@@ -239,7 +228,7 @@ WinMain(
 	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
 	WNDCLASS window_class {};
-		window_class.style = CS_Own_Device_Context | CS_Horizontal_Redraw | CS_Vertical_Redraw;
+		window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
 		window_class.lpfnWndProc = main_window_callback;
 		// window_class.cbClsExtra  = ;
 		// window_class.cbWndExtra  = ;
@@ -267,6 +256,9 @@ WinMain(
 		{
 			Running = true;
 
+			WinDimensions dimensions = get_window_dimensions( window_handle );
+			resize_dib_section( &BackBuffer, 1280, 720 );
+
 			MSG  msg_info;
 
 			u32 x_offset = 0;
@@ -286,14 +278,13 @@ WinMain(
 					DispatchMessage( & msg_info );
 				}
 
-				render_weird_graident( x_offset, y_offset );
+				render_weird_graident( BackBuffer, x_offset, y_offset );
 
-				RECT window_rect;
-				GetClientRect( window_handle, & window_rect );
-				HDC device_context = GetDC( window_handle );
-				u32 window_width  = window_rect.right  - window_rect.left;
-				u32 window_height = window_rect.bottom - window_rect.top;
-				update_window( device_context, & window_rect, 0, 0, window_width, window_height );
+				WinDimensions dimensions     = get_window_dimensions( window_handle );
+				HDC           device_context = GetDC( window_handle );
+				display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, BackBuffer
+					, 0, 0
+					, dimensions.Width, dimensions.Height );
 
 				++ x_offset;
 				++ y_offset;

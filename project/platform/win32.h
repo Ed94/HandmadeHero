@@ -199,9 +199,9 @@ enum MB : UINT
 
 enum Mem : DWORD
 {
-	Mem_Commit_Zeroed = 0x00001000,
-	Mem_Reserve	      = 0x00002000,
-	Mem_Release 	  = 0x00008000,
+	MEM_Commit_Zeroed = 0x00001000,
+	MEM_Reserve	      = 0x00002000,
+	MEM_Release 	  = 0x00008000,
 };
 
 enum Page : DWORD
