@@ -10,6 +10,7 @@
                 "UNICODE",
                 "_UNICODE",
                 "GEN_TIME",
+                "Build_Debug",
             ],
             "windowsSdkVersion": "10.0.22621.0",
             "compilerPath": "cl.exe",

@@ -38,6 +38,8 @@
 			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um</AdditionalIncludePath>
 		</AdditionalIncludePaths>
 		<Defines>
+			<Define>UNICODE</Define>
+			<Define>_UNICODE</Define>
 			<Define>GEN_TIME</Define>
 		</Defines>
 		<ConfigProperties>

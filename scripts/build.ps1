@@ -319,23 +319,26 @@ $linker_args = @(
 )
 
 #region Handmade Generate
-$unit       = Join-Path $path_gen   'handmade_gen.cpp'
-$executable = Join-Path $path_build 'handmade_gen.exe'
-
-build-simple $includes $compiler_args $linker_args $unit $executable
-write-host
-
-& $executable
-write-host
-
 if ( $false ) {
-	Remove-Item (Get-ChildItem -Path $path_build -Recurse -Force)
+	$unit       = Join-Path $path_gen   'handmade_gen.cpp'
+	$executable = Join-Path $path_build 'handmade_gen.exe'
+
+	build-simple $includes $compiler_args $linker_args $unit $executable
+	write-host
+
+	& $executable
+	write-host
+
+	if ( $false ) {
+		Remove-Item (Get-ChildItem -Path $path_build -Recurse -Force)
+	}
 }
 #endregion Handmade Generate
 
 #region Handmade Runtime
 
 $lib_user32 = 'User32.lib'
+$lib_gdi32  = 'Gdi32.lib'
 
 $unit       = Join-Path $path_project 'handmade_win32.cpp'
 $executable = Join-Path $path_build   'handmade_win32.exe'
@@ -343,6 +346,7 @@ $executable = Join-Path $path_build   'handmade_win32.exe'
 $compiler_args = @()
 
 $linker_args = @(
+	$lib_gdi32,
 	$lib_user32,
 	$flag_link_win_subsystem_windows
 )
