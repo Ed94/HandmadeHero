@@ -2,8 +2,12 @@
 Alternative header for windows.h
 */
 
+// #include <windows.h>
 #include "windows/windows_base.h"
 #include "windows/window.h"
+
+#include "windows/file.h"
+#include "windows/io.h"
 
 // #ifdef Build_Debug
 #	include "windows/dbghelp.h"
@@ -127,8 +131,9 @@ PatBlt( HDC hdc
 	constexpr auto DispatchMessage = DispatchMessageA;
 #endif // !UNICODE
 
-#pragma region Message Function Templates
-// From WinUser.h, modular headers lib doesn't have.
+#pragma region WinUser
+
+HDC WINAPI GetDC( HWND hWnd );
 
 BOOL WINAPI
 GetMessageA(
@@ -159,7 +164,7 @@ GetMessageW(
 #else
 	constexpr auto RegisterClass = RegisterClassA;
 #endif // !UNICODE
-#pragma endregion Message Function Templates
+#pragma endregion WinUser
 
 // Class Style Constants
 // https://learn.microsoft.com/en-us/windows/win32/winmsg/about-window-classes
@@ -192,12 +197,21 @@ enum MB : UINT
 	MB_Icon_Information = MB_ICONINFORMATION,
 };
 
-#define WM_ACTIVATEAPP 0x001C
-
-enum WS : UINT
+enum Mem : DWORD
 {
-	WS_Overlapped_Window = WS_OVERLAPPEDWINDOW,
-	WS_Initially_Visible = WS_VISIBLE,
+	Mem_Commit_Zeroed = 0x00001000,
+	Mem_Reserve	      = 0x00002000,
+	Mem_Release 	  = 0x00008000,
+};
+
+enum Page : DWORD
+{
+	Page_Read_Write = 0x04,
+};
+
+enum PM : UINT
+{
+	PM_Remove_Messages_From_Queue = PM_REMOVE,
 };
 
 enum RasterOps : DWORD
@@ -205,6 +219,14 @@ enum RasterOps : DWORD
 	RO_Source_To_Dest = (DWORD)0x00CC0020,
 	RO_Blackness      = (DWORD)0x00000042,
 	RO_Whiteness      = (DWORD)0x00FF0062,
+};
+
+#define WM_ACTIVATEAPP 0x001C
+
+enum WS : UINT
+{
+	WS_Overlapped_Window = WS_OVERLAPPEDWINDOW,
+	WS_Initially_Visible = WS_VISIBLE,
 };
 
 WIN_LIBRARY_API_END

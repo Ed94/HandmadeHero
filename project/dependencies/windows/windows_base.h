@@ -214,6 +214,8 @@ typedef double              LONGLONG;
 typedef double              ULONGLONG;
 #endif
 
+#define DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
+
 typedef void                VOID;
 typedef void *              PVOID;
 typedef void *              LPVOID;
@@ -225,16 +227,14 @@ typedef LONG *              LPLONG;
 typedef DWORD *             PDWORD;
 
 typedef LPVOID              HANDLE;
-typedef HANDLE              HINSTANCE;
-typedef HANDLE              HWND;
+DECLARE_HANDLE(HINSTANCE);
+DECLARE_HANDLE(HWND);
 typedef HINSTANCE           HMODULE;
-typedef HANDLE              HDC;
-typedef HANDLE              HGLRC;
-typedef HANDLE              HMENU;
+DECLARE_HANDLE(HDC);
+DECLARE_HANDLE(HGLRC);
+DECLARE_HANDLE(HMENU);
 typedef HANDLE *            PHANDLE;
 typedef HANDLE *            LPHANDLE;
-
-#define DECLARE_HANDLE(name) struct name##__{int unused;}; typedef struct name##__ *name
 
 typedef WCHAR *             PWSTR;
 typedef BYTE *              LPBYTE;
