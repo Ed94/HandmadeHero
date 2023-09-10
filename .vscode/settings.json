@@ -31,7 +31,9 @@
 		"xhash": "cpp",
 		"shared_mutex": "cpp",
 		"mutex": "cpp",
-		"system_error": "cpp"
+		"system_error": "cpp",
+		"ios": "cpp",
+		"xiosbase": "cpp"
 	},
 	"C_Cpp.intelliSenseEngineFallback": "disabled",
 	"C_Cpp.errorSquiggles": "enabled",

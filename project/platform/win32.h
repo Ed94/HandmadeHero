@@ -52,6 +52,11 @@ enum CS : UINT
 	CS_Vertical_Redraw    = CS_VREDRAW,
 };
 
+enum CW : s32
+{
+	CW_Use_Default = CW_USEDEFAULT,
+};
+
 enum DIB : UINT
 {
 	DIB_ColorTable_RGB     = 0,

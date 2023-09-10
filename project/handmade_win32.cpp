@@ -70,11 +70,13 @@ struct WinDimensions
 global OffscreenBuffer BackBuffer;
 global WinDimensions   WindowDimensions;
 
+global LPDIRECTSOUNDBUFFER DS_SecondaryBuffer;
+global s32                 DS_SecondaryBufferSize;
+
 HRESULT WINAPI
 DirectSoundCreate(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
 
 using DirectSoundCreateFn = HRESULT WINAPI (LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
-
 global DirectSoundCreateFn* direct_sound_create;
 
 
@@ -91,7 +93,7 @@ init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
 
 	// Get direct sound object
 	direct_sound_create = rcast( DirectSoundCreateFn*, GetProcAddress( sound_library, "DirectSoundCreate" ));
-	if ( ! ensure(direct_sound_create, "Failed to get direct_sound_create_procedure" ) )
+	if ( ! ensure( direct_sound_create, "Failed to get direct_sound_create_procedure" ) )
 	{
 		// TOOD : Diagnostic
 		return;
@@ -102,7 +104,6 @@ init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
 	{
 		// TODO : Diagnostic
 	}
-
 	if ( ! SUCCEEDED( direct_sound->SetCooperativeLevel(window_handle, DSSCL_PRIORITY) ) )
 	{
 		// TODO : Diagnostic
@@ -133,33 +134,22 @@ init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
 		{
 			// TODO : Diagnostic
 		}
-
-		// Format is finally set!
 	}
 
-	LPDIRECTSOUNDBUFFER secondary_buffer;
+	DSBUFFERDESC
+	buffer_description { sizeof(buffer_description) };
+	buffer_description.dwFlags       = 0;
+	buffer_description.dwBufferBytes = buffer_size;
+	buffer_description.lpwfxFormat   = & wave_format;
+
+	if ( ! SUCCEEDED( direct_sound->CreateSoundBuffer( & buffer_description, & DS_SecondaryBuffer, 0 ) ))
 	{
-		DSBUFFERDESC
-		buffer_description { sizeof(buffer_description) };
-		buffer_description.dwFlags       = 0;
-		buffer_description.dwBufferBytes = buffer_size;
-		buffer_description.lpwfxFormat   = & wave_format;
-
-		if ( ! SUCCEEDED( direct_sound->CreateSoundBuffer( & buffer_description, & secondary_buffer, 0 ) ))
-		{
-			// TODO : Diagnostic
-		}
-		if ( ! SUCCEEDED( secondary_buffer->SetFormat( & wave_format ) ) )
-		{
-			// TODO : Diagnostic
-		}
+		// TODO : Diagnostic
 	}
-
-	// Create primary buffer
-
-	// Create secondary buffer
-
-	// Start playing
+	if ( ! SUCCEEDED( DS_SecondaryBuffer->SetFormat( & wave_format ) ) )
+	{
+		// TODO : Diagnostic
+	}
 }
 
 internal WinDimensions
@@ -448,196 +438,313 @@ WinMain(
 		for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
 		{
 			JslSetLightColour( device_handles[ jsl_device_index ], (255 << 8) );
-			do_once_start
-				congrats( "GOT THE CONTROLLER BOIS" );
-			do_once_end
 		}
 	}
 
 	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
-	WNDCLASS window_class {};
-		window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
-		window_class.lpfnWndProc = main_window_callback;
-		// window_class.cbClsExtra  = ;
-		// window_class.cbWndExtra  = ;
-		window_class.hInstance   = instance;
-		// window_class.hIcon = ;
-		// window_class.hCursor = ;
-		// window_class.hbrBackground = ;
-		window_class.lpszMenuName  = L"Handmade Hero!";
-		window_class.lpszClassName = L"HandmadeHeroWindowClass";
+	WNDCLASS
+	window_class {};
+	window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
+	window_class.lpfnWndProc = main_window_callback;
+	// window_class.cbClsExtra  = ;
+	// window_class.cbWndExtra  = ;
+	window_class.hInstance   = instance;
+	// window_class.hIcon = ;
+	// window_class.hCursor = ;
+	// window_class.hbrBackground = ;
+	window_class.lpszMenuName  = L"Handmade Hero!";
+	window_class.lpszClassName = L"HandmadeHeroWindowClass";
 
-	if ( RegisterClassW( & window_class ) )
+	if ( ! RegisterClassW( & window_class ) )
 	{
-		HWND window_handle = CreateWindowExW(
-			0,
-			window_class.lpszClassName,
-			L"Handmade Hero",
-			WS_Overlapped_Window | WS_Initially_Visible,
-			CW_USEDEFAULT, CW_USEDEFAULT, // x, y
-			CW_USEDEFAULT, CW_USEDEFAULT, // width, height
-			0, 0,                         // parent, menu
-			instance, 0                   // instance, param
-		);
+		// TODO : Diagnostic Logging
+		return 0;
+	}
 
-		if ( window_handle )
+	HWND window_handle = CreateWindowExW(
+		0,
+		window_class.lpszClassName,
+		L"Handmade Hero",
+		WS_Overlapped_Window | WS_Initially_Visible,
+		CW_Use_Default, CW_Use_Default, // x, y
+		CW_Use_Default, CW_Use_Default, // width, height
+		0, 0,                         // parent, menu
+		instance, 0                   // instance, param
+	);
+
+	if ( ! window_handle )
+	{
+		// TODO : Diagnostic Logging
+		return 0;
+	}
+
+	Running = true;
+
+	WinDimensions dimensions = get_window_dimensions( window_handle );
+	resize_dib_section( &BackBuffer, 1280, 720 );
+
+	s32 ds_samples            = 48000;
+	s32 ds_samples_per_second = ds_samples * sizeof(s16) * 2;
+	s32 ds_bytes_per_sample   = sizeof(s16) * 2;
+	DS_SecondaryBufferSize	  = ds_samples_per_second * ds_bytes_per_sample;
+
+	init_sound( window_handle, ds_samples, DS_SecondaryBufferSize );
+
+	// Graphics & Input Test
+	u32 x_offset = 0;
+	u32 y_offset = 0;
+
+	// Controller State
+	bool xinput_detected = false;
+
+	u32 dpad_up        = false;
+	u32 dpad_down      = false;
+	u32 dpad_left      = false;
+	u32 dpad_right     = false;
+	u32 start          = false;
+	u32 back           = false;
+	u32 left_shoulder  = false;
+	u32 right_shoulder = false;
+	u32 btn_a_button   = false;
+	u32 btn_b_button   = false;
+	u32 btn_x_button   = false;
+	u32 btn_y_button   = false;
+	u16 stick_left_x  = 0;
+	u16 stick_left_y  = 0;
+	u16 stick_right_x = 0;
+	u16 stick_right_y = 0;
+
+	// Square Wave - Sound Test
+	u32 ds_running_sample_index = 0;
+	s32 square_wave_tone_hz 	= 262;
+	s32 square_wave_period      = ds_samples_per_second / square_wave_tone_hz;
+	s32 half_square_wave_period = square_wave_period / 2;
+	s32 square_wave_tone_volume = 3000;
+
+	// TODO : Add sine wave test
+
+	// Windows
+	MSG window_msg_info;
+
+	while( Running )
+	{
+		// Window Management
 		{
-			Running = true;
-
-			WinDimensions dimensions = get_window_dimensions( window_handle );
-			resize_dib_section( &BackBuffer, 1280, 720 );
-
-			init_sound( window_handle, 48000, 48000 * sizeof(s16) * 2 );
-
-			MSG  msg_info;
-
-			u32 x_offset = 0;
-			u32 y_offset = 0;
-
-			bool xinput_detected = false;
-
-			// Controller State
-			u8 dpad_up        = false;
-			u8 dpad_down      = false;
-			u8 dpad_left      = false;
-			u8 dpad_right     = false;
-			u8 start          = false;
-			u8 back           = false;
-			u8 left_shoulder  = false;
-			u8 right_shoulder = false;
-			u8 btn_a_button   = false;
-			u8 btn_b_button   = false;
-			u8 btn_x_button   = false;
-			u8 btn_y_button   = false;
-			u16 left_stick_x  = 0;
-			u16 left_stick_y  = 0;
-			u16 right_stick_x = 0;
-			u16 right_stick_y = 0;
-
-			while( Running )
+			if ( PeekMessageW( & window_msg_info, 0, 0, 0, PM_Remove_Messages_From_Queue ) )
 			{
-				if ( PeekMessageW( & msg_info, 0, 0, 0, PM_Remove_Messages_From_Queue ) )
+				if ( window_msg_info.message == WM_QUIT  )
 				{
-					if ( msg_info.message == WM_QUIT  )
-					{
-						OutputDebugStringA("WM_QUIT\n");
-						Running = false;
-					}
-
-					TranslateMessage( & msg_info );
-					DispatchMessageW( & msg_info );
+					OutputDebugStringA("WM_QUIT\n");
+					Running = false;
 				}
 
-				// XInput Polling
-				// TODO(Ed) : Should we poll this more frequently?
-				for ( DWORD controller_index = 0; controller_index < XUSER_MAX_COUNT; ++ controller_index )
+				TranslateMessage( & window_msg_info );
+				DispatchMessageW( & window_msg_info );
+			}
+		}
+
+		// Input
+		{
+			// XInput Polling
+			// TODO(Ed) : Should we poll this more frequently?
+			for ( DWORD controller_index = 0; controller_index < XUSER_MAX_COUNT; ++ controller_index )
+			{
+				XINPUT_STATE controller_state;
+				xinput_detected = xinput_get_state( controller_index, & controller_state ) == XI_PluggedIn;
+				if ( xinput_detected )
 				{
-					XINPUT_STATE controller_state;
-					xinput_detected = xinput_get_state( controller_index, & controller_state ) == XI_PluggedIn;
-					if ( xinput_detected )
-					{
-						XINPUT_GAMEPAD* pad = & controller_state.Gamepad;
+					XINPUT_GAMEPAD* pad = & controller_state.Gamepad;
 
-						dpad_up        = pad->wButtons & XINPUT_GAMEPAD_DPAD_UP;
-						dpad_down      = pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN;
-						dpad_left      = pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT;
-						dpad_right     = pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT;
-						start          = pad->wButtons & XINPUT_GAMEPAD_START;
-						back           = pad->wButtons & XINPUT_GAMEPAD_BACK;
-						left_shoulder  = pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER;
-						right_shoulder = pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER;
-						btn_a_button   = pad->wButtons & XINPUT_GAMEPAD_A;
-						btn_b_button   = pad->wButtons & XINPUT_GAMEPAD_B;
-						btn_x_button   = pad->wButtons & XINPUT_GAMEPAD_X;
-						btn_y_button   = pad->wButtons & XINPUT_GAMEPAD_Y;
+					dpad_up        = pad->wButtons & XINPUT_GAMEPAD_DPAD_UP;
+					dpad_down      = pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN;
+					dpad_left      = pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT;
+					dpad_right     = pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT;
+					start          = pad->wButtons & XINPUT_GAMEPAD_START;
+					back           = pad->wButtons & XINPUT_GAMEPAD_BACK;
+					left_shoulder  = pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER;
+					right_shoulder = pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER;
+					btn_a_button   = pad->wButtons & XINPUT_GAMEPAD_A;
+					btn_b_button   = pad->wButtons & XINPUT_GAMEPAD_B;
+					btn_x_button   = pad->wButtons & XINPUT_GAMEPAD_X;
+					btn_y_button   = pad->wButtons & XINPUT_GAMEPAD_Y;
 
-						left_stick_x  = pad->sThumbLX;
-						left_stick_y  = pad->sThumbLY;
-						right_stick_x = pad->sThumbRX;
-						right_stick_y = pad->sThumbRY;
-					}
-					else
-					{
-						// NOTE: Controller is not available
-					}
-				}
-
-				// JSL Input Polling
-				for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
-				{
-					if ( ! JslStillConnected( device_handles[ jsl_device_index ] ) )
-					{
-						OutputDebugStringA( "Error: JSLStillConnected returned false\n" );
-						continue;
-					}
-
-					JOY_SHOCK_STATE state = JslGetSimpleState( device_handles[ jsl_device_index ] );
-					dpad_up        = state.buttons & JSMASK_UP;
-					dpad_down      = state.buttons & JSMASK_DOWN;
-					dpad_left      = state.buttons & JSMASK_LEFT;
-					dpad_right     = state.buttons & JSMASK_RIGHT;
-					start          = state.buttons & JSMASK_PLUS;
-					back           = state.buttons & JSMASK_MINUS;
-					left_shoulder  = state.buttons & JSMASK_L;
-					right_shoulder = state.buttons & JSMASK_R;
-					btn_a_button   = state.buttons & JSMASK_S;
-					btn_b_button   = state.buttons & JSMASK_E;
-					btn_x_button   = state.buttons & JSMASK_W;
-					btn_y_button   = state.buttons & JSMASK_N;
-				}
-
-				x_offset += dpad_right;
-				x_offset -= dpad_left;
-				y_offset += dpad_up;
-				y_offset -= dpad_down;
-				// x_offset += left_stick_x;
-				// y_offset += left_stick_y;
-
-				if ( start )
-				{
-					if ( xinput_detected )
-					{
-						XINPUT_VIBRATION vibration;
-						vibration.wLeftMotorSpeed  = 30000;
-						xinput_set_state( 0, & vibration );
-					}
-					else
-					{
-						JslSetRumble( 0, 1, 0 );
-					}
+					stick_left_x  = pad->sThumbLX;
+					stick_left_y  = pad->sThumbLY;
+					stick_right_x = pad->sThumbRX;
+					stick_right_y = pad->sThumbRY;
 				}
 				else
 				{
-					if ( xinput_detected )
-					{
-						XINPUT_VIBRATION vibration;
-						vibration.wLeftMotorSpeed  = 0;
-						xinput_set_state( 0, & vibration );
-					}
-					else
-					{
-						JslSetRumble( 0, 0, 0 );
-					}
+					// NOTE: Controller is not available
+				}
+			}
+
+			// JSL Input Polling
+			for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
+			{
+				if ( ! JslStillConnected( device_handles[ jsl_device_index ] ) )
+				{
+					OutputDebugStringA( "Error: JSLStillConnected returned false\n" );
+					continue;
 				}
 
-				render_weird_graident( &BackBuffer, x_offset, y_offset );
+				JOY_SHOCK_STATE state = JslGetSimpleState( device_handles[ jsl_device_index ] );
+				dpad_up        = state.buttons & JSMASK_UP;
+				dpad_down      = state.buttons & JSMASK_DOWN;
+				dpad_left      = state.buttons & JSMASK_LEFT;
+				dpad_right     = state.buttons & JSMASK_RIGHT;
+				start          = state.buttons & JSMASK_PLUS;
+				back           = state.buttons & JSMASK_MINUS;
+				left_shoulder  = state.buttons & JSMASK_L;
+				right_shoulder = state.buttons & JSMASK_R;
+				btn_a_button   = state.buttons & JSMASK_S;
+				btn_b_button   = state.buttons & JSMASK_E;
+				btn_x_button   = state.buttons & JSMASK_W;
+				btn_y_button   = state.buttons & JSMASK_N;
 
-				WinDimensions dimensions     = get_window_dimensions( window_handle );
-				HDC           device_context = GetDC( window_handle );
-				display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &BackBuffer
-					, 0, 0
-					, dimensions.Width, dimensions.Height );
+				stick_left_x  = state.stickLX;
+				stick_left_y  = state.stickLY;
+				stick_right_x = state.stickRX;
+				stick_right_y = state.stickRY;
+			}
+
+			x_offset += dpad_right;
+			x_offset -= dpad_left;
+			y_offset += dpad_up;
+			y_offset -= dpad_down;
+			// x_offset += left_stick_x;
+			// y_offset += left_stick_y;
+
+			if ( start )
+			{
+				if ( xinput_detected )
+				{
+					XINPUT_VIBRATION vibration;
+					vibration.wLeftMotorSpeed  = 30000;
+					xinput_set_state( 0, & vibration );
+				}
+				else
+				{
+					JslSetRumble( 0, 1, 0 );
+				}
+			}
+			else
+			{
+				if ( xinput_detected )
+				{
+					XINPUT_VIBRATION vibration;
+					vibration.wLeftMotorSpeed  = 0;
+					xinput_set_state( 0, & vibration );
+				}
+				else
+				{
+					JslSetRumble( 0, 0, 0 );
+				}
 			}
 		}
-		else
+
+		// Rendering
 		{
-			// TODO(Ed) : Logging
+			render_weird_graident( &BackBuffer, x_offset, y_offset );
+
+			WinDimensions dimensions     = get_window_dimensions( window_handle );
+			HDC           device_context = GetDC( window_handle );
+			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &BackBuffer
+				, 0, 0
+				, dimensions.Width, dimensions.Height );
 		}
-	}
-	else
-	{
-		// TODO(Ed) : Logging
+
+		// Audio
+		do {
+			if ( btn_y_button )
+			{
+				square_wave_tone_volume += 10;
+			}
+			if ( btn_b_button )
+			{
+				square_wave_tone_volume -= 10;
+			}
+
+			DWORD ds_play_cursor;
+			DWORD ds_write_cursor;
+			if ( ! SUCCEEDED( DS_SecondaryBuffer->GetCurrentPosition( & ds_play_cursor, & ds_write_cursor ) ))
+			{
+				break;
+			}
+
+			DWORD byte_to_lock   = ds_running_sample_index * ds_bytes_per_sample % DS_SecondaryBufferSize;
+			DWORD bytes_to_write;
+			if ( byte_to_lock == ds_play_cursor )
+			{
+				// At play cursor
+				bytes_to_write = DS_SecondaryBufferSize;
+			}
+			else if ( byte_to_lock > ds_play_cursor)
+			{
+				// Infront of play cursor |--play--byte_to_write-->--|
+				bytes_to_write = DS_SecondaryBufferSize - byte_to_lock;
+				bytes_to_write += ds_play_cursor;
+			}
+			else
+			{
+				// Behind play cursor |--byte_to_write-->--play--|
+				bytes_to_write = ds_play_cursor - byte_to_lock;
+			}
+
+			bytes_to_write = max(bytes_to_write, 1);
+
+			LPVOID region_1;
+			DWORD  region_1_size;
+			LPVOID region_2;
+			DWORD  region_2_size;
+
+			HRESULT ds_lock_result = DS_SecondaryBuffer->Lock( byte_to_lock, bytes_to_write
+				, & region_1, & region_1_size
+				, & region_2, & region_2_size
+				, 0 );
+			if ( ! SUCCEEDED( ds_lock_result ) )
+			{
+				break;
+			}
+
+			// TODO : Assert that region sizes are valid
+
+			// TODO : Collapse these loops
+			DWORD region_1_sample_count = region_1_size / ds_bytes_per_sample;
+			s16* sample_out = rcast( s16*, region_1 );
+			for ( DWORD sample_index = 0; sample_index < region_1_sample_count; ++ sample_index )
+			{
+				s16 sample_value = (ds_running_sample_index /  half_square_wave_period) % 2 ?
+					square_wave_tone_volume : -square_wave_tone_volume;
+				++ ds_running_sample_index;
+
+				*sample_out = sample_value;
+				++ sample_out;
+
+				*sample_out = sample_value;
+				++ sample_out;
+			}
+
+			DWORD region_2_sample_count = region_2_size / ds_bytes_per_sample;
+			sample_out = rcast( s16*, region_2 );
+			for ( DWORD sample_index = 0; sample_index < region_2_sample_count; ++ sample_index )
+			{
+				s16 sample_value = (ds_running_sample_index / half_square_wave_period) % 2 ?
+					square_wave_tone_volume : -square_wave_tone_volume;
+				++ ds_running_sample_index;
+
+				*sample_out = sample_value;
+				++ sample_out;
+
+				*sample_out = sample_value;
+				++ sample_out;
+			}
+
+			DS_SecondaryBuffer->Unlock( region_1, region_1_size, region_2, region_2_size );
+
+			DS_SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
+		} while(0);
 	}
 
 	if ( jsl_num_devices > 0 )
