@@ -19,6 +19,20 @@
 // Using this to get dualsense controllers
 #include "JoyShockLibrary/JoyShockLibrary.h"
 
+#define congrats( message ) do {                                               \
+	JslSetLightColour( 0, (255 << 16) | (215 << 8) );                          \
+	JslSetRumble( 0, 0, 255 );                                                 \
+	MessageBoxA( 0, message, "Congratulations!", MB_OK | MB_ICONEXCLAMATION ); \
+	JslSetLightColour( 0, (255 << 8 ) );                                       \
+} while (0)
+
+#define fatal(message) do {                                         \
+	JslSetLightColour( 0, (255 << 16) );                            \
+	JslSetRumble( 0, 0, 255 );                                      \
+	MessageBoxA( 0, message, "Fatal Error", MB_OK | MB_ICONERROR ); \
+	JslSetLightColour( 0, (255 << 8 ) );                            \
+} while (0)
+
 
 NS_WIN32_BEGIN
 
@@ -317,6 +331,18 @@ WinMain(
 		OutputDebugStringA( "Error: JSLGetConnectedDeviceHandles didn't find as many as were stated with JslConnectDevices\n");
 	}
 
+	if ( jsl_num_devices > 0 )
+	{
+		OutputDebugStringA( "JSL Connected Devices:\n" );
+		for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
+		{
+			JslSetLightColour( device_handles[ jsl_device_index ], (255 << 8) );
+			do_once_start
+				congrats( "GOT THE CONTROLLER BOIS" );
+			do_once_end
+		}
+	}
+
 	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
 	WNDCLASS window_class {};
@@ -356,6 +382,8 @@ WinMain(
 			u32 x_offset = 0;
 			u32 y_offset = 0;
 
+			bool xinput_detected = false;
+
 			// Controller State
 			u8 dpad_up        = false;
 			u8 dpad_down      = false;
@@ -385,7 +413,7 @@ WinMain(
 					}
 
 					TranslateMessage( & msg_info );
-					DispatchMessage( & msg_info );
+					DispatchMessageW( & msg_info );
 				}
 
 				// XInput Polling
@@ -393,7 +421,8 @@ WinMain(
 				for ( DWORD controller_index = 0; controller_index < XUSER_MAX_COUNT; ++ controller_index )
 				{
 					XINPUT_STATE controller_state;
-					if ( xinput_get_state( controller_index, & controller_state ) == XI_PluggedIn )
+					xinput_detected = xinput_get_state( controller_index, & controller_state ) == XI_PluggedIn;
+					if ( xinput_detected )
 					{
 						XINPUT_GAMEPAD* pad = & controller_state.Gamepad;
 
@@ -454,15 +483,29 @@ WinMain(
 
 				if ( start )
 				{
-					XINPUT_VIBRATION vibration;
-					vibration.wLeftMotorSpeed  = 30000;
-					xinput_set_state( 0, & vibration );
+					if ( xinput_detected )
+					{
+						XINPUT_VIBRATION vibration;
+						vibration.wLeftMotorSpeed  = 30000;
+						xinput_set_state( 0, & vibration );
+					}
+					else
+					{
+						JslSetRumble( 0, 1, 0 );
+					}
 				}
 				else
 				{
-					XINPUT_VIBRATION vibration;
-					vibration.wLeftMotorSpeed  = 0;
-					xinput_set_state( 0, & vibration );
+					if ( xinput_detected )
+					{
+						XINPUT_VIBRATION vibration;
+						vibration.wLeftMotorSpeed  = 0;
+						xinput_set_state( 0, & vibration );
+					}
+					else
+					{
+						JslSetRumble( 0, 0, 0 );
+					}
 				}
 
 				render_weird_graident( &BackBuffer, x_offset, y_offset );
@@ -482,6 +525,15 @@ WinMain(
 	else
 	{
 		// TODO(Ed) : Logging
+	}
+
+	if ( jsl_num_devices > 0 )
+	{
+		OutputDebugStringA( "JSL Connected Devices:\n" );
+		for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
+		{
+			JslSetLightColour( device_handles[ jsl_device_index ], 0 );
+		}
 	}
 
 	return 0;

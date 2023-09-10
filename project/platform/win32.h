@@ -115,12 +115,12 @@ WIN_LIB_API DWORD WINAPI XInputSetState
 
 DWORD WINAPI xinput_get_state_stub( DWORD dwUserIndex, XINPUT_STATE* pVibration ) {
 	OutputDebugStringA( "xinput_get_state stubbed!\n");
-	return 0;
+	return ERROR_CALL_NOT_IMPLEMENTED;
 }
 
 DWORD WINAPI xinput_set_state_stub( DWORD dwUserIndex, XINPUT_VIBRATION* pVibration ) {
 	OutputDebugStringA( "xinput_set_state stubbed!\n");
-	return 0;
+	return ERROR_CALL_NOT_IMPLEMENTED;
 }
 
 using XInputGetStateFn = DWORD WINAPI( DWORD dwUserIndex, XINPUT_STATE* pVibration );

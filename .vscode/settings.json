@@ -29,7 +29,8 @@
 		"vector": "cpp",
 		"list": "cpp",
 		"xhash": "cpp",
-		// "*.md.html":"markdown"
+		"shared_mutex": "cpp",
+		"mutex": "cpp"
 	},
 	"C_Cpp.intelliSenseEngineFallback": "disabled",
 	"C_Cpp.errorSquiggles": "disabled", // This doesn't work well with how the headers are included.

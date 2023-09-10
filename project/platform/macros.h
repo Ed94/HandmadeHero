@@ -14,3 +14,27 @@
 #define pcast( Type, Value ) ( * reinterpret_cast< Type* >( & ( Value ) ) )
 #define rcast( Type, Value ) reinterpret_cast< Type >( Value )
 #define scast( Type, Value ) static_cast< Type >( Value )
+
+#define do_once()          \
+	do                     \
+	{                      \
+		static             \
+		bool Done = false; \
+		if ( Done )        \
+			return;        \
+		Done = true;       \
+	}                      \
+	while(0)
+
+#define do_once_start      \
+	do                     \
+	{                      \
+		static             \
+		bool Done = false; \
+		if ( Done )        \
+			break;         \
+		Done = true;
+
+#define do_once_end        \
+	}                      \
+	while(0);
