@@ -338,9 +338,14 @@ $includes = @(
 	$path_deps,
 	$path_platform
 )
+
+# Microsoft
 $lib_gdi32  = 'Gdi32.lib'
 $lib_xinput = 'Xinput.lib'
 $lib_user32 = 'User32.lib'
+
+# Github
+$lib_jsl = Join-Path $path_deps 'JoyShockLibrary/x64/JoyShockLibrary.lib'
 
 $unit       = Join-Path $path_project 'handmade_win32.cpp'
 $executable = Join-Path $path_build   'handmade_win32.exe'
@@ -351,6 +356,9 @@ $linker_args = @(
 	$lib_gdi32,
 	# $lib_xinput,
 	$lib_user32,
+
+	$lib_jsl,
+
 	$flag_link_win_subsystem_windows
 )
 

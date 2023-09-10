@@ -1,3 +1,5 @@
+#pragma once
+
 #pragma region Basic Types
 
 #define U8_MIN 0u

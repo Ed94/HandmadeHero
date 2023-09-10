@@ -1,3 +1,5 @@
+#pragma once
+
 // Keywords
 
 #define global        static    // Global variables

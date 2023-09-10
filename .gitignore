@@ -19,3 +19,5 @@ bld/
 vc140.pdb
 
 build
+
+**/*.dll

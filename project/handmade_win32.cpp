@@ -16,6 +16,10 @@
 
 #include "win32.h"
 
+// Using this to get dualsense controllers
+#include "JoyShockLibrary/JoyShockLibrary.h"
+
+
 NS_WIN32_BEGIN
 
 // TODO(Ed) : This is a global for now.
@@ -301,7 +305,17 @@ WinMain(
 )
 {
 	using namespace win32;
-	xinput_load_library_bindings();
+	// xinput_load_library_bindings();
+
+	using JSL_DeviceHandle = int;
+	u32 jsl_num_devices = JslConnectDevices();
+
+	JSL_DeviceHandle device_handles[4] {};
+	u32 jsl_getconnected_found = JslGetConnectedDeviceHandles( device_handles, jsl_num_devices );
+	if ( jsl_getconnected_found != jsl_num_devices )
+	{
+		OutputDebugStringA( "Error: JSLGetConnectedDeviceHandles didn't find as many as were stated with JslConnectDevices\n");
+	}
 
 	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
@@ -374,6 +388,7 @@ WinMain(
 					DispatchMessage( & msg_info );
 				}
 
+				// XInput Polling
 				// TODO(Ed) : Should we poll this more frequently?
 				for ( DWORD controller_index = 0; controller_index < XUSER_MAX_COUNT; ++ controller_index )
 				{
@@ -404,6 +419,30 @@ WinMain(
 					{
 						// NOTE: Controller is not available
 					}
+				}
+
+				// JSL Input Polling
+				for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
+				{
+					if ( ! JslStillConnected( device_handles[ jsl_device_index ] ) )
+					{
+						OutputDebugStringA( "Error: JSLStillConnected returned false\n" );
+						continue;
+					}
+
+					JOY_SHOCK_STATE state = JslGetSimpleState( device_handles[ jsl_device_index ] );
+					dpad_up        = state.buttons & JSMASK_UP;
+					dpad_down      = state.buttons & JSMASK_DOWN;
+					dpad_left      = state.buttons & JSMASK_LEFT;
+					dpad_right     = state.buttons & JSMASK_RIGHT;
+					start          = state.buttons & JSMASK_PLUS;
+					back           = state.buttons & JSMASK_MINUS;
+					left_shoulder  = state.buttons & JSMASK_L;
+					right_shoulder = state.buttons & JSMASK_R;
+					btn_a_button   = state.buttons & JSMASK_S;
+					btn_b_button   = state.buttons & JSMASK_E;
+					btn_x_button   = state.buttons & JSMASK_W;
+					btn_y_button   = state.buttons & JSMASK_N;
 				}
 
 				x_offset += dpad_right;

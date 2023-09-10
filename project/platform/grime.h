@@ -1,3 +1,5 @@
+#pragma once
+
 #pragma region Platform Detection
 
 /* Platform architecture */
