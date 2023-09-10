@@ -27,7 +27,7 @@ Move-Item         -Path (Join-Path $path_temp "gen.hpp") -Destination     $path_
 #region JoyShockLibrary
 $url_jsl_repo       = "https://github.com/JibbSmart/JoyShockLibrary.git"
 # $url_jsl_zip        = "https://github.com/JibbSmart/JoyShockLibrary/releases/download/v3.0/JSL_3_0.zip"
-$url_jsl_zip        = "https://github.com/Ed94/JoyShockLibrary/releases/download/not_for_public_use/JSL.zip"
+$url_jsl_zip        = "https://github.com/Ed94/JoyShockLibrary/releases/download/quick_fix/JSL.zip"
 $path_jsl_repo      = Join-Path $path_temp    "JoyShockLibraryRepo"
 $path_jsl_repo_code = Join-Path $path_jsl_repo "JoyShockLibrary"
 $path_jsl_lib_zip   = Join-Path $path_temp    "JSL_3_0.zip"
