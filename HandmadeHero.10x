@@ -14,10 +14,10 @@
 		<CleanCommand>pwsh $(WorkspaceDirectory)/scripts/clean.ps1</CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
-		<RunCommand>$(WorkspaceDirectory)/projects/build/handmade_win32.exe</RunCommand>
-		<RunCommandWorkingDirectory>$(WorkspaceDirectory)/projects</RunCommandWorkingDirectory>
-		<DebugCommand>$(WorkspaceDirectory)/projects/build/handmade_win32.exe</DebugCommand>
-		<ExePathCommand>$(WorkspaceDirectory)/projects/build/handmade_win32.exe</ExePathCommand>
+		<RunCommand>$(WorkspaceDirectory)/build/handmade_win32.exe</RunCommand>
+		<RunCommandWorkingDirectory>$(WorkspaceDirectory)/data</RunCommandWorkingDirectory>
+		<DebugCommand>$(WorkspaceDirectory)/build/handmade_win32.exe</DebugCommand>
+		<ExePathCommand>$(WorkspaceDirectory)/build/handmade_win32.exe</ExePathCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>
 		<Configurations>

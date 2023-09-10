@@ -30,10 +30,11 @@
 		"list": "cpp",
 		"xhash": "cpp",
 		"shared_mutex": "cpp",
-		"mutex": "cpp"
+		"mutex": "cpp",
+		"system_error": "cpp"
 	},
 	"C_Cpp.intelliSenseEngineFallback": "disabled",
-	"C_Cpp.errorSquiggles": "disabled", // This doesn't work well with how the headers are included.
+	"C_Cpp.errorSquiggles": "enabled",
 	"C_Cpp.default.compilerPath": "cl.exe",
 	"C_Cpp.exclusionPolicy": "checkFilesAndFolders",
 	"C_Cpp.files.exclude": {

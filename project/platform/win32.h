@@ -5,6 +5,8 @@ Alternative header for windows.h
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <xinput.h>
+#include <mmeapi.h>
+#include <dsound.h>
 
 // #include "windows/windows_base.h"
 // #include "windows/window.h"
@@ -115,12 +117,12 @@ WIN_LIB_API DWORD WINAPI XInputSetState
 
 DWORD WINAPI xinput_get_state_stub( DWORD dwUserIndex, XINPUT_STATE* pVibration ) {
 	OutputDebugStringA( "xinput_get_state stubbed!\n");
-	return ERROR_CALL_NOT_IMPLEMENTED;
+	return ERROR_DEVICE_NOT_CONNECTED;
 }
 
 DWORD WINAPI xinput_set_state_stub( DWORD dwUserIndex, XINPUT_VIBRATION* pVibration ) {
 	OutputDebugStringA( "xinput_set_state stubbed!\n");
-	return ERROR_CALL_NOT_IMPLEMENTED;
+	return ERROR_DEVICE_NOT_CONNECTED;
 }
 
 using XInputGetStateFn = DWORD WINAPI( DWORD dwUserIndex, XINPUT_STATE* pVibration );

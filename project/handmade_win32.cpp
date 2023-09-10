@@ -12,23 +12,34 @@
 #include "macros.h"
 #include "types.h"
 
-#include <stdio.h>
+// #include <stdio.h>
 
 #include "win32.h"
 
 // Using this to get dualsense controllers
 #include "JoyShockLibrary/JoyShockLibrary.h"
 
+// TOOD(Ed): Redo these macros properly later.
+
 #define congrats( message ) do {                                               \
 	JslSetLightColour( 0, (255 << 16) | (215 << 8) );                          \
-	JslSetRumble( 0, 0, 255 );                                                 \
 	MessageBoxA( 0, message, "Congratulations!", MB_OK | MB_ICONEXCLAMATION ); \
 	JslSetLightColour( 0, (255 << 8 ) );                                       \
 } while (0)
 
+#define ensure( condition, message ) ensure_impl( condition, message )
+inline bool
+ensure_impl( bool condition, char const* message ) {
+	if ( ! condition ) {
+		JslSetLightColour( 0, (255 << 16) );
+		MessageBoxA( 0, message, "Ensure Failure", MB_OK | MB_ICONASTERISK );
+		JslSetLightColour( 0, ( 255 << 8 ) );
+	}
+	return condition;
+}
+
 #define fatal(message) do {                                         \
 	JslSetLightColour( 0, (255 << 16) );                            \
-	JslSetRumble( 0, 0, 255 );                                      \
 	MessageBoxA( 0, message, "Fatal Error", MB_OK | MB_ICONERROR ); \
 	JslSetLightColour( 0, (255 << 8 ) );                            \
 } while (0)
@@ -59,7 +70,100 @@ struct WinDimensions
 global OffscreenBuffer BackBuffer;
 global WinDimensions   WindowDimensions;
 
-WinDimensions get_window_dimensions( HWND window_handle )
+HRESULT WINAPI
+DirectSoundCreate(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
+
+using DirectSoundCreateFn = HRESULT WINAPI (LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
+
+global DirectSoundCreateFn* direct_sound_create;
+
+
+internal void
+init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
+{
+	// Load library
+	HMODULE sound_library = LoadLibraryA( "dsound.dll" );
+	if ( ! ensure(sound_library, "Failed to load direct sound library" ) )
+	{
+		// TOOD : Diagnostic
+		return;
+	}
+
+	// Get direct sound object
+	direct_sound_create = rcast( DirectSoundCreateFn*, GetProcAddress( sound_library, "DirectSoundCreate" ));
+	if ( ! ensure(direct_sound_create, "Failed to get direct_sound_create_procedure" ) )
+	{
+		// TOOD : Diagnostic
+		return;
+	}
+
+	LPDIRECTSOUND direct_sound;
+	if ( ! SUCCEEDED(direct_sound_create( 0, & direct_sound, 0 )) )
+	{
+		// TODO : Diagnostic
+	}
+
+	if ( ! SUCCEEDED( direct_sound->SetCooperativeLevel(window_handle, DSSCL_PRIORITY) ) )
+	{
+		// TODO : Diagnostic
+	}
+
+	WAVEFORMATEX
+	wave_format {};
+	wave_format.wFormatTag      = WAVE_FORMAT_PCM;  /* format type */
+	wave_format.nChannels       = 2;  /* number of channels (i.e. mono, stereo...) */
+	wave_format.nSamplesPerSec  = samples_per_second;  /* sample rate */
+	wave_format.wBitsPerSample  = 16;  /* number of bits per sample of mono data */
+	wave_format.nBlockAlign     = wave_format.nChannels      * wave_format.wBitsPerSample / 8 ;  /* block size of data */
+	wave_format.nAvgBytesPerSec = wave_format.nSamplesPerSec * wave_format.nBlockAlign;  /* for buffer estimation */
+	wave_format.cbSize          = 0;  /* the count in bytes of the size of */
+
+	LPDIRECTSOUNDBUFFER primary_buffer;
+	{
+		DSBUFFERDESC
+		buffer_description { sizeof(buffer_description) };
+		buffer_description.dwFlags       = DSBCAPS_PRIMARYBUFFER;
+		buffer_description.dwBufferBytes = 0;
+
+		if ( ! SUCCEEDED( direct_sound->CreateSoundBuffer( & buffer_description, & primary_buffer, 0 ) ))
+		{
+			// TODO : Diagnostic
+		}
+		if ( ! SUCCEEDED( primary_buffer->SetFormat( & wave_format ) ) )
+		{
+			// TODO : Diagnostic
+		}
+
+		// Format is finally set!
+	}
+
+	LPDIRECTSOUNDBUFFER secondary_buffer;
+	{
+		DSBUFFERDESC
+		buffer_description { sizeof(buffer_description) };
+		buffer_description.dwFlags       = 0;
+		buffer_description.dwBufferBytes = buffer_size;
+		buffer_description.lpwfxFormat   = & wave_format;
+
+		if ( ! SUCCEEDED( direct_sound->CreateSoundBuffer( & buffer_description, & secondary_buffer, 0 ) ))
+		{
+			// TODO : Diagnostic
+		}
+		if ( ! SUCCEEDED( secondary_buffer->SetFormat( & wave_format ) ) )
+		{
+			// TODO : Diagnostic
+		}
+	}
+
+	// Create primary buffer
+
+	// Create secondary buffer
+
+	// Start playing
+}
+
+internal WinDimensions
+get_window_dimensions( HWND window_handle )
 {
 	RECT client_rect;
 	GetClientRect( window_handle, & client_rect );
@@ -148,7 +252,7 @@ resize_dib_section( OffscreenBuffer* buffer, u32 width, u32 height )
 
 	// We want to "touch" a pixel on every 4-byte boundary
 	u32 BitmapMemorySize = (buffer->Width * buffer->Height) * buffer->BytesPerPixel;
-	buffer->Memory = VirtualAlloc( NULL, BitmapMemorySize, MEM_Commit_Zeroed, Page_Read_Write );
+	buffer->Memory = VirtualAlloc( NULL, BitmapMemorySize, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
 
 	// TODO(Ed) : Clear to black
 }
@@ -208,8 +312,9 @@ main_window_callback(
 		case WM_KEYUP:
 		{
 			u32  vk_code  = w_param;
-			bool is_down  = (l_param >> 31) == 0;
-			bool was_down = (l_param >> 30) != 0;
+			b32 is_down  = (l_param >> 31) == 0;
+			b32 was_down = (l_param >> 30);
+			b32 alt_down = (l_param & (1 << 29));
 
 			switch ( vk_code )
 			{
@@ -271,6 +376,12 @@ main_window_callback(
 				case VK_SPACE:
 				{
 					OutputDebugStringA( "Space\n" );
+				}
+				break;
+				case VK_F4:
+				{
+					if ( alt_down )
+						Running = false;
 				}
 				break;
 			}
@@ -376,6 +487,8 @@ WinMain(
 
 			WinDimensions dimensions = get_window_dimensions( window_handle );
 			resize_dib_section( &BackBuffer, 1280, 720 );
+
+			init_sound( window_handle, 48000, 48000 * sizeof(s16) * 2 );
 
 			MSG  msg_info;
 

@@ -3,7 +3,9 @@
         {
             "name": "Win32 msvc",
             "includePath": [
-                "${workspaceFolder}/project/**"
+                "${workspaceFolder}/project/",
+                "${workspaceFolder}/project/dependencies/",
+                "${workspaceFolder}/project/platform/",
             ],
             "defines": [
                 "_DEBUG",
@@ -19,7 +21,9 @@
         {
             "name": "Win32 clang",
             "includePath": [
-                "${workspaceFolder}/project/**"
+                "${workspaceFolder}/project/",
+                "${workspaceFolder}/project/dependencies/",
+                "${workspaceFolder}/project/platform/",
             ],
             "defines": [
                 "_DEBUG",
