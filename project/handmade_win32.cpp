@@ -512,19 +512,22 @@ WinMain(
 
 	JSL_DeviceHandle device_handles[4] {};
 	u32 jsl_getconnected_found = JslGetConnectedDeviceHandles( device_handles, jsl_num_devices );
-	if ( jsl_getconnected_found != jsl_num_devices )
 	{
-		OutputDebugStringA( "Error: JSLGetConnectedDeviceHandles didn't find as many as were stated with JslConnectDevices\n");
-	}
-
-	if ( jsl_num_devices > 0 )
-	{
-		OutputDebugStringA( "JSL Connected Devices:\n" );
-		for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
+		if ( jsl_getconnected_found != jsl_num_devices )
 		{
-			JslSetLightColour( device_handles[ jsl_device_index ], (255 << 8) );
+			OutputDebugStringA( "Error: JSLGetConnectedDeviceHandles didn't find as many as were stated with JslConnectDevices\n");
+		}
+
+		if ( jsl_num_devices > 0 )
+		{
+			OutputDebugStringA( "JSL Connected Devices:\n" );
+			for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
+			{
+				JslSetLightColour( device_handles[ jsl_device_index ], (255 << 8) );
+			}
 		}
 	}
+
 
 	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
@@ -611,11 +614,18 @@ WinMain(
 	u16 stick_right_x = 0;
 	u16 stick_right_y = 0;
 
-
 	// TODO : Add sine wave test
 
 	// Windows
 	MSG window_msg_info;
+
+	u64 perf_counter_frequency;
+	QueryPerformanceFrequency( rcast(LARGE_INTEGER*, & perf_counter_frequency) );
+
+	u64 last_frame_time;
+	QueryPerformanceCounter( rcast(LARGE_INTEGER*, & last_frame_time) );
+
+	u64 last_cycle_time = __rdtsc();
 
 	while( Running )
 	{
@@ -820,6 +830,28 @@ WinMain(
 		#endif
 			DS_SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
 		} while(0);
+
+		u64 end_cycle_count = __rdtsc();
+
+		u64 frame_cycle_time_end;
+		QueryPerformanceCounter( rcast( LARGE_INTEGER*, & frame_cycle_time_end) );
+
+		// TODO : Display value here
+
+		#define MS_PER_SECOND 1000
+		#define MegaCycles_Per_Second (1000 * 1000)
+		u64 cycles_elapsed      = end_cycle_count - last_cycle_time;
+		s32 mega_cycles_elapsed = cycles_elapsed / MegaCycles_Per_Second;
+		u64 frame_time_elapsed  = frame_cycle_time_end - last_frame_time;
+		u32 ms_per_frame        = MS_PER_SECOND * frame_time_elapsed / perf_counter_frequency;
+		u32 fps                 = perf_counter_frequency / frame_time_elapsed;
+
+		char ms_timing_debug[256] {};
+		wsprintfA( ms_timing_debug, "%d ms\n" "FPS: %d\n" "mega cycles: %d\n", ms_per_frame, fps, mega_cycles_elapsed );
+		OutputDebugStringA( ms_timing_debug );
+
+		last_cycle_time = end_cycle_count;
+		last_frame_time = frame_cycle_time_end;
 	}
 
 	if ( jsl_num_devices > 0 )

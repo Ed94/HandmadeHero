@@ -1,6 +1,7 @@
 /*
 Alternative header for windows.h
 */
+#pragma once
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -112,21 +113,25 @@ WIN_LIB_API DWORD WINAPI XInputGetState
 (
 	DWORD         dwUserIndex,  // Index of the gamer associated with the device
 	XINPUT_STATE* pState        // Receives the current state
-) WIN_NOEXCEPT;
+);
 
 WIN_LIB_API DWORD WINAPI XInputSetState
 (
 	DWORD             dwUserIndex,  // Index of the gamer associated with the device
 	XINPUT_VIBRATION* pVibration    // The vibration information to send to the controller
-) WIN_NOEXCEPT;
+);
 
 DWORD WINAPI xinput_get_state_stub( DWORD dwUserIndex, XINPUT_STATE* pVibration ) {
-	OutputDebugStringA( "xinput_get_state stubbed!\n");
+	do_once_start
+		OutputDebugStringA( "xinput_get_state stubbed!\n");
+	do_once_end
 	return ERROR_DEVICE_NOT_CONNECTED;
 }
 
 DWORD WINAPI xinput_set_state_stub( DWORD dwUserIndex, XINPUT_VIBRATION* pVibration ) {
-	OutputDebugStringA( "xinput_set_state stubbed!\n");
+	do_once_start
+		OutputDebugStringA( "xinput_set_state stubbed!\n");
+	do_once_end
 	return ERROR_DEVICE_NOT_CONNECTED;
 }
 

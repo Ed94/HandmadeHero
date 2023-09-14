@@ -22,18 +22,13 @@
 #define I64_MIN ( -0x7fffffffffffffffll - 1 )
 #define I64_MAX 0x7fffffffffffffffll
 
-#if defined( GEN_ARCH_32_BIT )
-#	define USIZE_MIN GEN_U32_MIN
-#	define USIZE_MAX GEN_U32_MAX
-#	define ISIZE_MIN GEN_S32_MIN
-#	define ISIZE_MAX GEN_S32_MAX
-#elif defined( GEN_ARCH_64_BIT )
+#if defined( ARCH_64_BIT )
 #	define USIZE_MIN GEN_U64_MIN
 #	define USIZE_MAX GEN_U64_MAX
 #	define ISIZE_MIN GEN_I64_MIN
 #	define ISIZE_MAX GEN_I64_MAX
 #else
-#	error Unknown architecture size. This library only supports 32 bit and 64 bit architectures.
+#	error Unknown architecture size. This library only supports 64 bit architectures.
 #endif
 
 #define F32_MIN 1.17549435e-38f
@@ -41,7 +36,7 @@
 #define F64_MIN 2.2250738585072014e-308
 #define F64_MAX 1.7976931348623157e+308
 
-#if defined( GEN_COMPILER_MSVC )
+#if defined( COMPILER_MSVC )
 #	if _MSC_VER < 1300
 typedef unsigned char  u8;
 typedef signed   char  s8;
@@ -87,21 +82,9 @@ typedef ptrdiff_t sw;
 
 static_assert( sizeof( uw ) == sizeof( sw ), "sizeof(uw) != sizeof(sw)" );
 
-// NOTE: (u)zpl_intptr is only here for semantic reasons really as this library will only support 32/64 bit OSes.
 #if defined( _WIN64 )
 typedef signed   __int64 sptr;
 typedef unsigned __int64 uptr;
-#elif defined( _WIN32 )
-// NOTE; To mark types changing their size, e.g. zpl_intptr
-#	ifndef _W64
-#		if ! defined( __midl ) && ( defined( _X86_ ) || defined( _M_IX86 ) ) && _MSC_VER >= 1300
-#			define _W64 __w64
-#		else
-#			define _W64
-#		endif
-#	endif
-typedef _W64 signed int   sptr;
-typedef _W64 unsigned int uptr;
 #else
 typedef uintptr_t uptr;
 typedef intptr_t  sptr;

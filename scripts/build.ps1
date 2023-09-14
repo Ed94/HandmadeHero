@@ -115,6 +115,7 @@ if ( $vendor -match "clang" )
 	$flag_debug                      = '-g'
 	$flag_debug_codeview             = '-gcodeview'
 	$flag_define                     = '-D'
+	$flag_exceptions_disabled		= '-fno-exceptions'
 	$flag_preprocess 			     = '-E'
 	$flag_include                    = '-I'
 	$flag_library					 = '-l'
@@ -162,6 +163,7 @@ if ( $vendor -match "clang" )
 
 		$compiler_args += @(
 			$flag_no_color_diagnostics,
+			$flag_exceptions_disabled,
 			$flag_target_arch, $target_arch,
 			$flag_wall,
 			$flag_preprocess_non_intergrated,
@@ -210,6 +212,8 @@ if ( $vendor -match "msvc" )
 	$flag_compile			         = '/c'
 	$flag_debug                      = '/Zi'
 	$flag_define		             = '/D'
+	$flag_exceptions_disabled		= '/EHs-c-'
+	$flag_RTTI_disabled				= '/GR-'
 	$flag_include                    = '/I'
 	$flag_full_src_path              = '/FC'
 	$flag_nologo                     = '/nologo'
@@ -245,6 +249,9 @@ if ( $vendor -match "msvc" )
 
 		$compiler_args += @(
 			$flag_nologo,
+			$flag_exceptions_disabled,
+			( $flag_define + '_HAS_EXCEPTIONS=0' ),
+			$flag_RTTI_disabled,
 			$flag_preprocess_conform,
 			$flag_full_src_path,
 			( $flag_path_interm + $path_build + '\' ),
