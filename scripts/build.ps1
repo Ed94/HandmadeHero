@@ -38,11 +38,6 @@ if ( $vendor -eq $null ) {
 	$compiler = "clang"
 }
 
-if ( $release -eq $null ) {
-	write-host "No build type specified, assuming debug"
-	$release = $false
-}
-
 write-host "Building HandmadeHero with $vendor"
 write-host "Build Type: $(if ($release) {"Release"} else {"Debug"} )"
 
@@ -124,7 +119,7 @@ if ( $vendor -match "clang" )
 	$flag_include                    = '-I'
 	$flag_library					 = '-l'
 	$flag_library_path				 = '-L'
-	$flag_link_win                   = '-Wl,'
+	$flag_linker                     = '-Wl,'
 	$flag_link_win_subsystem_console = '/SUBSYSTEM:CONSOLE'
 	$flag_link_win_subsystem_windows = '/SUBSYSTEM:WINDOWS'
 	$flag_link_win_machine_32        = '/MACHINE:X86'
@@ -138,6 +133,7 @@ if ( $vendor -match "clang" )
 	$flag_path_output                = '-o'
 	$flag_preprocess_non_intergrated = '-no-integrated-cpp'
 	$flag_profiling_debug            = '-fdebug-info-for-profiling'
+	$flag_set_stack_size			 = '-stack='
 	$flag_syntax_only				 = '-fsyntax-only'
 	$flag_target_arch				 = '-target'
 	$flag_wall 					     = '-Wall'
@@ -211,6 +207,12 @@ if ( $vendor -match "clang" )
 
 		$linker_args += $object
 		run-linker $linker $executable $linker_args
+
+		# $compiler_args += $unit
+		# $linker_args | ForEach-Object {
+		# 	$compiler_args += $flag_linker + $_
+		# }
+		# run-compiler $compiler $unit $compiler_args
 	}
 
 	$compiler = 'clang++'
@@ -253,6 +255,7 @@ if ( $vendor -match "msvc" )
 	$flag_path_debug                 = '/Fd'
 	$flag_path_output                = '/Fe'
 	$flag_preprocess_conform         = '/Zc:preprocessor'
+	$flag_set_stack_size			 = '/F'
 	$flag_syntax_only				 = '/Zs'
 
 	# This works because this project uses a single unit to build
@@ -266,10 +269,10 @@ if ( $vendor -match "msvc" )
 
 		$compiler_args += @(
 			$flag_nologo,
-			$flag_all_cpp,
-			$flag_exceptions_disabled,
-			( $flag_define + '_HAS_EXCEPTIONS=0' ),
-			$flag_RTTI_disabled,
+			# $flag_all_cpp,
+			# $flag_exceptions_disabled,
+			# ( $flag_define + '_HAS_EXCEPTIONS=0' ),
+			# $flag_RTTI_disabled,
 			$flag_preprocess_conform,
 			$flag_full_src_path,
 			( $flag_path_interm + $path_build + '\' ),
@@ -297,18 +300,17 @@ if ( $vendor -match "msvc" )
 		else {
 			$compiler_args += $flag_link_win_rt_static
 		}
-
 		$compiler_args += $includes | ForEach-Object { $flag_include + $_ }
-		$compiler_args += $unit
-		# $compiler_args += $flag_compile, $unit
-		# run-compiler $compiler $unit $compiler_args
+
+		$compiler_args += $flag_compile, $unit
+		run-compiler $compiler $unit $compiler_args
 
 		$linker_args += @(
 			$flag_nologo,
 			$flag_link_win_machine_64,
 			( $flag_link_win_path_output + $executable )
 		)
-		if ( $release -eq $false ) {
+		if ( $debug ) {
 			$linker_args += $flag_link_win_debug
 			$linker_args += $flag_link_win_pdb + $pdb
 		}
@@ -316,11 +318,12 @@ if ( $vendor -match "msvc" )
 		}
 
 		$linker_args += $object
-		# run-linker $linker $executable $linker_args
+		run-linker $linker $executable $linker_args
 
-		$compiler_args += $flag_linker
-		$compiler_args += $linker_args
-		run-compiler $compiler $unit $compiler_args
+		# $compiler_args += $unit
+		# $compiler_args += $flag_linker
+		# $compiler_args += $linker_args
+		# run-compiler $compiler $unit $compiler_args
 	}
 
 	$compiler = 'cl'
@@ -393,9 +396,12 @@ $lib_jsl = Join-Path $path_deps 'JoyShockLibrary/x64/JoyShockLibrary.lib'
 $unit       = Join-Path $path_platform 'handmade_win32.cpp'
 $executable = Join-Path $path_build    'handmade_win32.exe'
 
+$stack_size = 1024 * 1024 * 4
+
 $compiler_args = @(
 	($flag_define + 'UNICODE'),
 	($flag_define + '_UNICODE')
+	# ($flag_set_stack_size + $stack_size)
 )
 
 $linker_args = @(

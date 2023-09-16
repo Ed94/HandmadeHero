@@ -29,11 +29,14 @@
 #endif
 
 #include <math.h> // TODO : Implement math ourselves
+#include "engine.cpp"
+
 
 // Platform Layer headers
 #include "platform.h"
 #include "jsl.h" // Using this to get dualsense controllers
 #include "win32.h"
+#include <malloc.h>
 
 // Engine layer headers
 #include "engine.h"
@@ -99,6 +102,8 @@ global LPDIRECTSOUNDBUFFER DS_SecondaryBuffer;
 global s32                 DS_SecondaryBuffer_Size;
 global s32                 DS_SecondaryBuffer_SamplesPerSecond;
 global s32                 DS_SecondaryBuffer_BytesPerSample;
+
+global s16* SoundBufferSamples;
 
 internal void
 init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
@@ -172,8 +177,7 @@ init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
 	}
 }
 
-
-struct DS_SoundOutputTest
+struct SoundOutput
 {
 	DWORD IsPlaying;
 	u32   RunningSampleIndex;
@@ -183,50 +187,45 @@ struct DS_SoundOutputTest
 	s32   LatencySampleCount;
 };
 
-using DS_FillSoundBuffer_GetSampleValueFn = s16( DS_SoundOutputTest* sound_output );
-
-internal s16
-square_wave_sample_value( DS_SoundOutputTest* sound_output )
-{
-	s16 sample_value = (sound_output->RunningSampleIndex /  (sound_output->WavePeriod /2)) % 2 ?
-		sound_output->ToneVolume : - sound_output->ToneVolume;
-
-	return sample_value;
-}
-
-internal s16
-sine_wave_sample_value( DS_SoundOutputTest* sound_output )
-{
-	local_persist f32 time = 0.f;
-
-	f32 sine_value   = sinf( time );
-	s16 sample_value = scast(u16, sine_value * sound_output->ToneVolume);
-
-	time += TAU * 1.0f / scast(f32, sound_output->WavePeriod );
-	return sample_value;
-}
-
 internal void
-ds_fill_soundbuffer_region( LPVOID region, DWORD region_size
-	, DS_SoundOutputTest* sound_output, DS_FillSoundBuffer_GetSampleValueFn* get_sample_value )
+ds_clear_sound_buffer( SoundOutput* sound_output )
 {
-	DWORD region_sample_count = region_size / DS_SecondaryBuffer_BytesPerSample;
-	s16*  sample_out          = rcast( s16*, region );
-	for ( DWORD sample_index = 0; sample_index < region_sample_count; ++ sample_index )
+	LPVOID region_1;
+	DWORD  region_1_size;
+	LPVOID region_2;
+	DWORD  region_2_size;
+
+	HRESULT ds_lock_result = DS_SecondaryBuffer->Lock( 0, DS_SecondaryBuffer_Size
+		, & region_1, & region_1_size
+		, & region_2, & region_2_size
+		, 0 );
+	if ( ! SUCCEEDED( ds_lock_result ) )
 	{
-		s16 sample_value = get_sample_value( sound_output );
-		++ sound_output->RunningSampleIndex;
+		return;
+	}
 
-		*sample_out = sample_value;
+	u8* sample_out = rcast( u8*, region_1 );
+	for ( DWORD byte_index = 0; byte_index < region_1_size; ++ byte_index )
+	{
+		*sample_out = 0;
 		++ sample_out;
+	}
 
-		*sample_out = sample_value;
+	sample_out = rcast( u8*, region_2 );
+	for ( DWORD byte_index = 0; byte_index < region_2_size; ++ byte_index )
+	{
+		*sample_out = 0;
 		++ sample_out;
+	}
+
+	if ( ! SUCCEEDED( DS_SecondaryBuffer->Unlock( region_1, region_1_size, region_2, region_2_size ) ))
+	{
+		return;
 	}
 }
 
 internal void
-ds_fill_sound_buffer_test( DS_SoundOutputTest* sound_output, DWORD byte_to_lock, DWORD bytes_to_write, DS_FillSoundBuffer_GetSampleValueFn* get_sample_value )
+ds_fill_sound_buffer( SoundOutput* sound_output, DWORD byte_to_lock, DWORD bytes_to_write, engine::SoundBuffer* sound_buffer )
 {
 	LPVOID region_1;
 	DWORD  region_1_size;
@@ -244,8 +243,36 @@ ds_fill_sound_buffer_test( DS_SoundOutputTest* sound_output, DWORD byte_to_lock,
 
 	// TODO : Assert that region sizes are valid
 
-	ds_fill_soundbuffer_region( region_1, region_1_size, sound_output, get_sample_value );
-	ds_fill_soundbuffer_region( region_2, region_2_size, sound_output, get_sample_value );
+	DWORD region_1_sample_count = region_1_size / DS_SecondaryBuffer_BytesPerSample;
+	s16*  sample_out            = rcast( s16*, region_1 );
+	s16*  sample_in 		    = sound_buffer->Samples;
+	for ( DWORD sample_index = 0; sample_index < region_1_sample_count; ++ sample_index )
+	{
+		*sample_out = *sample_in;
+		++ sample_out;
+		++ sample_in;
+
+		*sample_out = *sample_in;
+		++ sample_out;
+		++ sample_in;
+
+		++ sound_output->RunningSampleIndex;
+	}
+
+	DWORD region_2_sample_count = region_2_size / DS_SecondaryBuffer_BytesPerSample;
+	      sample_out            = rcast( s16*, region_2 );
+	for ( DWORD sample_index = 0; sample_index < region_2_sample_count; ++ sample_index )
+	{
+		*sample_out = *sample_in;
+		++ sample_out;
+		++ sample_in;
+
+		*sample_out = *sample_in;
+		++ sample_out;
+		++ sample_in;
+
+		++ sound_output->RunningSampleIndex;
+	}
 
 	if ( ! SUCCEEDED( DS_SecondaryBuffer->Unlock( region_1, region_1_size, region_2, region_2_size ) ))
 	{
@@ -263,7 +290,6 @@ get_window_dimensions( HWND window_handle )
 	result.Height = client_rect.bottom - client_rect.top;
 	return result;
 }
-
 
 internal void
 resize_dib_section( OffscreenBuffer* buffer, u32 width, u32 height )
@@ -465,6 +491,7 @@ main_window_callback(
 
 	return result;
 }
+
 NS_WIN32_END
 
 int CALLBACK
@@ -542,13 +569,16 @@ WinMain(
 	WinDimensions dimensions = get_window_dimensions( window_handle );
 	resize_dib_section( &BackBuffer, 1280, 720 );
 
-	DS_SoundOutputTest sound_output;
+	SoundOutput sound_output;
 	sound_output.IsPlaying              = 0;
 	DS_SecondaryBuffer_SamplesPerSecond = 48000;
 	DS_SecondaryBuffer_BytesPerSample   = sizeof(s16) * 2;
 
 	DS_SecondaryBuffer_Size = DS_SecondaryBuffer_SamplesPerSecond * DS_SecondaryBuffer_BytesPerSample;
 	init_sound( window_handle, DS_SecondaryBuffer_SamplesPerSecond, DS_SecondaryBuffer_Size );
+
+	SoundBufferSamples = rcast( s16*, VirtualAlloc( 0, 48000 * 2 * sizeof(s16)
+		, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write ));
 
 	// Wave Sound Test
 	bool wave_switch = false;
@@ -557,7 +587,7 @@ WinMain(
 	sound_output.WavePeriod         = DS_SecondaryBuffer_SamplesPerSecond / sound_output.WaveToneHz;
 	sound_output.ToneVolume         = 3000;
 	sound_output.LatencySampleCount = DS_SecondaryBuffer_SamplesPerSecond / 15;
-	ds_fill_sound_buffer_test( & sound_output, 0, sound_output.LatencySampleCount * DS_SecondaryBuffer_BytesPerSample, & sine_wave_sample_value );
+	ds_clear_sound_buffer( & sound_output );
 	DS_SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
 
 	// Graphics & Input Test
@@ -712,7 +742,51 @@ WinMain(
 			}
 		}
 
-		engine::update_and_render( rcast(engine::OffscreenBuffer*, & BackBuffer.Memory), x_offset, y_offset );
+
+		// Pain...
+		b32 sound_is_valid = false;
+		DWORD ds_play_cursor;
+		DWORD ds_write_cursor;
+		DWORD byte_to_lock;
+		DWORD bytes_to_write;
+		if ( SUCCEEDED( DS_SecondaryBuffer->GetCurrentPosition( & ds_play_cursor, & ds_write_cursor ) ))
+		{
+			DWORD target_cursor = (ds_play_cursor + sound_output.LatencySampleCount * DS_SecondaryBuffer_BytesPerSample) % DS_SecondaryBuffer_Size;
+
+			byte_to_lock = (sound_output.RunningSampleIndex * DS_SecondaryBuffer_BytesPerSample) % DS_SecondaryBuffer_Size;
+			bytes_to_write;
+
+			if ( byte_to_lock == target_cursor )
+			{
+				// We are in the middle of playing. Wait for the write cursor to catch up.
+				bytes_to_write = 0;
+			}
+			else if ( byte_to_lock > target_cursor)
+			{
+				// Infront of play cursor |--play--byte_to_write-->--|
+				bytes_to_write =  DS_SecondaryBuffer_Size - byte_to_lock;
+				bytes_to_write += target_cursor;
+			}
+			else
+			{
+				// Behind play cursor |--byte_to_write-->--play--|
+				bytes_to_write = target_cursor - byte_to_lock;
+			}
+
+			sound_is_valid = true;
+		}
+
+		// s16 samples[ 48000 * 2 ];
+		engine::SoundBuffer sound_buffer {};
+		sound_buffer.NumSamples         = DS_SecondaryBuffer_SamplesPerSecond / 30;
+		sound_buffer.RunningSampleIndex = sound_output.RunningSampleIndex;
+		sound_buffer.SamplesPerSecond   = DS_SecondaryBuffer_SamplesPerSecond;
+		sound_buffer.ToneVolume         = sound_output.ToneVolume;
+		sound_buffer.Samples            = SoundBufferSamples;
+		sound_buffer.WavePeriod = sound_output.WavePeriod;
+		sound_buffer.WaveToneHz = sound_output.WaveToneHz;
+
+		engine::update_and_render( rcast(engine::OffscreenBuffer*, & BackBuffer.Memory), & sound_buffer, x_offset, y_offset );
 
 		// Rendering
 		{
@@ -754,50 +828,14 @@ WinMain(
 				sound_output.IsPlaying = ds_status & DSBSTATUS_PLAYING;
 			}
 
-			DWORD ds_play_cursor;
-			DWORD ds_write_cursor;
-			if ( ! SUCCEEDED( DS_SecondaryBuffer->GetCurrentPosition( & ds_play_cursor, & ds_write_cursor ) ))
-			{
+			if ( ! sound_is_valid )
 				break;
-			}
 
-			DWORD target_cursor = (ds_play_cursor + sound_output.LatencySampleCount * DS_SecondaryBuffer_BytesPerSample) % DS_SecondaryBuffer_Size;
+			ds_fill_sound_buffer( & sound_output, byte_to_lock, bytes_to_write, & sound_buffer );
 
-			DWORD byte_to_lock   = (sound_output.RunningSampleIndex * DS_SecondaryBuffer_BytesPerSample) % DS_SecondaryBuffer_Size;
-			DWORD bytes_to_write;
-
-			if ( byte_to_lock == target_cursor )
-			{
-				// We are in the middle of playing. Wait for the write cursor to catch up.
-				bytes_to_write = 0;
-			}
-			else if ( byte_to_lock > target_cursor)
-			{
-				// Infront of play cursor |--play--byte_to_write-->--|
-				bytes_to_write =  DS_SecondaryBuffer_Size - byte_to_lock;
-				bytes_to_write += target_cursor;
-			}
-			else
-			{
-				// Behind play cursor |--byte_to_write-->--play--|
-				bytes_to_write = target_cursor - byte_to_lock;
-			}
-
-			if ( wave_switch )
-			{
-				ds_fill_sound_buffer_test( & sound_output, byte_to_lock, bytes_to_write, square_wave_sample_value );
-			}
-			else
-			{
-				ds_fill_sound_buffer_test( & sound_output, byte_to_lock, bytes_to_write, sine_wave_sample_value );
-			}
-
-		#if 1
 			if ( sound_output.IsPlaying )
-			{
 				break;
-			}
-		#endif
+
 			DS_SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
 		} while(0);
 
@@ -837,4 +875,4 @@ WinMain(
 }
 
 // Engine layer translation unit.
-#include "engine.cpp"
+// #include "engine.cpp"

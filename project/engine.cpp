@@ -2,6 +2,49 @@
 
 NS_ENGINE_BEGIN
 
+
+using GetSoundSampleValueFn = s16( SoundBuffer* sound_buffer );
+
+global s32 SoundWavePeriod = 250;
+
+internal s16
+square_wave_sample_value( SoundBuffer* sound_buffer )
+{
+	s16 sample_value = (sound_buffer->RunningSampleIndex /  (sound_buffer->WavePeriod /2)) % 2 ?
+		sound_buffer->ToneVolume : - sound_buffer->ToneVolume;
+
+	return sample_value;
+}
+
+internal s16
+sine_wave_sample_value( SoundBuffer* sound_buffer )
+{
+	local_persist f32 time = 0.f;
+
+	f32 sine_value   = sinf( time );
+	s16 sample_value = scast(u16, sine_value * sound_buffer->ToneVolume);
+
+	time += TAU * 1.0f / scast(f32, sound_buffer->WavePeriod );
+	return sample_value;
+}
+
+internal void
+output_sound( SoundBuffer* sound_buffer, GetSoundSampleValueFn* get_sample_value )
+{
+	s16* sample_out = sound_buffer->Samples;
+	for ( u32 sample_index = 0; sample_index < sound_buffer->NumSamples; ++ sample_index )
+	{
+		s16 sample_value = get_sample_value( sound_buffer );
+		++ sound_buffer->RunningSampleIndex;
+
+		*sample_out = sample_value;
+		++ sample_out;
+
+		*sample_out = sample_value;
+		++ sample_out;
+	}
+}
+
 internal void
 render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
 {
@@ -50,11 +93,14 @@ render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
 }
 
 internal
-void update_and_render( OffscreenBuffer* back_buffer
+void update_and_render( OffscreenBuffer* back_buffer, SoundBuffer* sound_buffer
 	// Temp (for feature parity)
 	, u32 x_offset, u32 y_offset
 )
 {
+	// TODO(Ed) : Allow sample offsets here for more robust platform options
+	output_sound( sound_buffer, square_wave_sample_value );
+
 	render_weird_graident( back_buffer, x_offset, y_offset );
 }
 

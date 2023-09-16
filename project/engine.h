@@ -20,9 +20,20 @@ struct OffscreenBuffer
 	u32        BytesPerPixel;
 };
 
+struct SoundBuffer
+{
+	s16* Samples;
+	u32  RunningSampleIndex;
+	s32  SamplesPerSecond;
+	s32  NumSamples;
+	s32  ToneVolume;
+	s32  WaveToneHz;
+	s32  WavePeriod;
+};
+
 // Needs a contextual reference to four things:
 // Timing, Input, Bitmap Buffer, Sound Buffer
-void update_and_render( OffscreenBuffer* back_buffer
+void update_and_render( OffscreenBuffer* back_buffer, SoundBuffer* sound_buffer
 	// Temp (for feature parity)
 	, u32 x_offset, u32 y_offset
 );
