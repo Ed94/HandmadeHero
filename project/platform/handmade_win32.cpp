@@ -1,3 +1,22 @@
+/*
+	TODO : This is not a final platform layer
+
+	- Saved game locations
+	- Getting a handle to our own executable file
+	- Asset loading path
+	- Threading (launch a thread)
+	- Raw Input (support for multiple keyboards)
+	- Sleep / timeBeginPeriod
+	- ClipCursor() (for multimonitor support)
+	- Fullscreen support
+	- WM_SETCURSOR (control cursor visibility)
+	- QueryCancelAutoplay
+	- WM_ACTIVATEAPP (for when not active)
+	- Blit speed improvemnts (BitBlt)
+	- Hardware acceleration ( OpenGL or Direct3D or both )
+	- GetKeyboardLayout (for French keyboards, international WASD support)
+*/
+
 #if __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-const-variable"
@@ -6,21 +25,19 @@
 #pragma clang diagnostic ignored "-Wunknown-pragmas"
 #pragma clang diagnostic ignored "-Wvarargs"
 #pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wunused-but-set-variable"
 #endif
 
-#include "grime.h"
-#include "macros.h"
-#include "types.h"
-#include "math_constants.h"
+#include <math.h> // TODO : Implement math ourselves
 
-// #include <stdio.h>
-
-// TODO : Implement sound ourselves
-#include <math.h>
-
+// Platform Layer headers
+#include "platform.h"
+#include "jsl.h" // Using this to get dualsense controllers
 #include "win32.h"
-// Using this to get dualsense controllers
-#include "JoyShockLibrary/JoyShockLibrary.h"
+
+// Engine layer headers
+#include "engine.h"
+
 
 // TOOD(Ed): Redo these macros properly later.
 
@@ -46,7 +63,6 @@ ensure_impl( bool condition, char const* message ) {
 	MessageBoxA( 0, message, "Fatal Error", MB_OK | MB_ICONERROR ); \
 	JslSetLightColour( 0, (255 << 8 ) );                            \
 } while (0)
-
 
 NS_WIN32_BEGIN
 
@@ -248,51 +264,6 @@ get_window_dimensions( HWND window_handle )
 	return result;
 }
 
-internal void
-render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
-{
-	// TODO(Ed): See if with optimizer if buffer should be passed by value.
-
-	struct Pixel {
-		u8 Blue;
-		u8 Green;
-		u8 Red;
-		u8 Alpha;
-	};
-
-	u8* row   = rcast( u8*, buffer->Memory);
-	local_persist float wildcard = 0;
-	for ( u32 y = 0; y < buffer->Height; ++ y )
-	{
-		// u8* pixel = rcast(u8*, row);
-		// Pixel* pixel = rcast( Pixel*, row );
-		u32* pixel = rcast(u32*, row);
-		for ( u32 x = 0; x < buffer->Width; ++ x )
-		{
-			/* Pixel in memory:
-			-----------------------------------------------
-				Pixel + 0  Pixel + 1  Pixel + 2   Pixel + 3
-				RR         GG         GG          XX
-			-----------------------------------------------
- 				x86-64 : Little Endian Arch
-				0x XX BB GG RR
-			*/
-		#if 0
-			u8 blue  = scast(u8, x + x_offset * u8(wildcard) % 256);
-			u8 green = scast(u8, y + y_offset - u8(wildcard) % 128);
-			u8 red   = scast(u8, wildcard) % 256 - x * 0.4f;
-		#else
-			u8 blue  = scast(u8, x + x_offset);
-			u8 green = scast(u8, y + y_offset);
-			u8 red   = 0;
-		#endif
-
-			*pixel++ = (red << 16) | (green << 8) | blue;
-		}
-		wildcard += 0.5375f;
-		row += buffer->Pitch;
-	}
-}
 
 internal void
 resize_dib_section( OffscreenBuffer* buffer, u32 width, u32 height )
@@ -357,7 +328,7 @@ main_window_callback(
 	LPARAM l_param
 )
 {
-	LRESULT result;
+	LRESULT result = 0;
 
 	switch ( system_messages )
 	{
@@ -528,10 +499,9 @@ WinMain(
 		}
 	}
 
-
 	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
-	WNDCLASS
+	WNDCLASSW
 	window_class {};
 	window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
 	window_class.lpfnWndProc = main_window_callback;
@@ -742,10 +712,10 @@ WinMain(
 			}
 		}
 
+		engine::update_and_render( rcast(engine::OffscreenBuffer*, & BackBuffer.Memory), x_offset, y_offset );
+
 		// Rendering
 		{
-			render_weird_graident( &BackBuffer, x_offset, y_offset );
-
 			WinDimensions dimensions     = get_window_dimensions( window_handle );
 			HDC           device_context = GetDC( window_handle );
 			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &BackBuffer
@@ -865,3 +835,6 @@ WinMain(
 
 	return 0;
 }
+
+// Engine layer translation unit.
+#include "engine.cpp"

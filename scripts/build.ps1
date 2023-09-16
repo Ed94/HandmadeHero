@@ -8,7 +8,9 @@ Push-Location $path_root
 
 #region Arguments
        $vendor       = $null
-       $release      = $null
+       $optimized    = $false
+	   $debug 	     = $false
+	   $analysis	 = $false
 
 [array] $vendors = @( "clang", "msvc" )
 
@@ -16,12 +18,13 @@ Push-Location $path_root
 
 if ( $args ) { $args | ForEach-Object {
 	switch ($_){
-		{ $_ -in $vendors }   { $vendor      = $_; break }
-		"release"             { $release      = $true }
-		"debug"               { $release      = $false }
+		{ $_ -in $vendors }   { $vendor    = $_; break }
+		"optimized"           { $optimized = $true }
+		"debug"               { $debug     = $true }
+		"analysis"            { $analysis  = $true }
 	}
 }}
-#endregion Arguments
+#endregion Argument
 
 #region Configuration
 if ($IsWindows) {
@@ -47,10 +50,9 @@ function run-compiler
 {
 	param( $compiler, $unit, $compiler_args )
 
-	$compiler_args += @(
-		($flag_define + 'UNICODE'),
-		($flag_define + '_UNICODE')
-	)
+	if ( $analysis ) {
+		$compiler_args += $flag_syntax_only
+	}
 
 	write-host "`Compiling $unit"
 	write-host "Compiler config:"
@@ -109,28 +111,34 @@ function run-linker
 if ( $vendor -match "clang" )
 {
 	# https://clang.llvm.org/docs/ClangCommandLineReference.html
+	$flag_all_c 					 = '/TC'
+	$flag_all_cpp                    = '/TP'
 	$flag_compile                    = '-c'
 	$flag_color_diagnostics          = '-fcolor-diagnostics'
 	$flag_no_color_diagnostics       = '-fno-color-diagnostics'
 	$flag_debug                      = '-g'
 	$flag_debug_codeview             = '-gcodeview'
 	$flag_define                     = '-D'
-	$flag_exceptions_disabled		= '-fno-exceptions'
+	$flag_exceptions_disabled		 = '-fno-exceptions'
 	$flag_preprocess 			     = '-E'
 	$flag_include                    = '-I'
 	$flag_library					 = '-l'
 	$flag_library_path				 = '-L'
 	$flag_link_win                   = '-Wl,'
 	$flag_link_win_subsystem_console = '/SUBSYSTEM:CONSOLE'
+	$flag_link_win_subsystem_windows = '/SUBSYSTEM:WINDOWS'
 	$flag_link_win_machine_32        = '/MACHINE:X86'
 	$flag_link_win_machine_64        = '/MACHINE:X64'
 	$flag_link_win_debug             = '/DEBUG'
 	$flag_link_win_pdb 			     = '/PDB:'
 	$flag_link_win_path_output       = '/OUT:'
 	$flag_no_optimization 		     = '-O0'
+	$flag_optimize_fast 		     = '-O2'
+	$flag_optimize_size 		     = '-O1'
 	$flag_path_output                = '-o'
 	$flag_preprocess_non_intergrated = '-no-integrated-cpp'
 	$flag_profiling_debug            = '-fdebug-info-for-profiling'
+	$flag_syntax_only				 = '-fsyntax-only'
 	$flag_target_arch				 = '-target'
 	$flag_wall 					     = '-Wall'
 	$flag_warning 					 = '-W'
@@ -169,10 +177,15 @@ if ( $vendor -match "clang" )
 			$flag_preprocess_non_intergrated,
 			( $flag_path_output + $object )
 		)
-		if ( $release -eq $false ) {
+		if ( $optimized ) {
+			$compiler_args += $flag_optimize_fast
+		}
+		else {
+			$compiler_args += $flag_no_optimization
+		}
+		if ( $debug ) {
 			$compiler_args += ( $flag_define + 'Build_Debug' )
 			$compiler_args += $flag_debug, $flag_debug_codeview, $flag_profiling_debug
-			$compiler_args += $flag_no_optimization
 		}
 
 		$warning_ignores | ForEach-Object {
@@ -187,11 +200,9 @@ if ( $vendor -match "clang" )
 			$flag_link_win_machine_64,
 			$( $flag_link_win_path_output + $executable )
 		)
-		if ( $release -eq $false ) {
+		if ( $debug ) {
 			$linker_args += $flag_link_win_debug
 			$linker_args += $flag_link_win_pdb + $pdb
-		}
-		else {
 		}
 
 		$libraries | ForEach-Object {
@@ -209,11 +220,13 @@ if ( $vendor -match "clang" )
 if ( $vendor -match "msvc" )
 {
 	# https://learn.microsoft.com/en-us/cpp/build/reference/compiler-options-listed-by-category?view=msvc-170
+	$flag_all_c 					 = '/TC'
+	$flag_all_cpp                    = '/TP'
 	$flag_compile			         = '/c'
 	$flag_debug                      = '/Zi'
 	$flag_define		             = '/D'
-	$flag_exceptions_disabled		= '/EHs-c-'
-	$flag_RTTI_disabled				= '/GR-'
+	$flag_exceptions_disabled		 = '/EHs-c-'
+	$flag_RTTI_disabled				 = '/GR-'
 	$flag_include                    = '/I'
 	$flag_full_src_path              = '/FC'
 	$flag_nologo                     = '/nologo'
@@ -232,11 +245,15 @@ if ( $vendor -match "msvc" )
 	$flag_link_win_subsystem_console = '/SUBSYSTEM:CONSOLE'
 	$flag_link_win_subsystem_windows = '/SUBSYSTEM:WINDOWS'
 	$flag_no_optimization		     = '/Od'
+	$flag_optimize_fast 		     = '/O2'
+	$flag_optimize_size 		     = '/O1'
+	$flag_optimized_debug			 = '/Zo'
 	$flag_out_name                   = '/OUT:'
 	$flag_path_interm                = '/Fo'
 	$flag_path_debug                 = '/Fd'
 	$flag_path_output                = '/Fe'
 	$flag_preprocess_conform         = '/Zc:preprocessor'
+	$flag_syntax_only				 = '/Zs'
 
 	# This works because this project uses a single unit to build
 	function build-simple
@@ -249,6 +266,7 @@ if ( $vendor -match "msvc" )
 
 		$compiler_args += @(
 			$flag_nologo,
+			$flag_all_cpp,
 			$flag_exceptions_disabled,
 			( $flag_define + '_HAS_EXCEPTIONS=0' ),
 			$flag_RTTI_disabled,
@@ -257,19 +275,33 @@ if ( $vendor -match "msvc" )
 			( $flag_path_interm + $path_build + '\' ),
 			( $flag_path_output + $path_build + '\' )
 		)
-		if ( $release -eq $false ) {
+
+		if ( $optimize ) {
+			$compiler_args += $flag_optimize_fast
+		}
+		else {
+			$compiler_args += $flag_no_optimization
+		}
+
+		if ( $debug )
+		{
 			$compiler_args += $flag_debug
 			$compiler_args += ( $flag_define + 'Build_Debug' )
 			$compiler_args += ( $flag_path_debug + $path_build + '\' )
 			$compiler_args += $flag_link_win_rt_static_debug
-			$compiler_args += $flag_no_optimization
+
+			if ( $optimized ) {
+				$compiler_args += $flag_optimized_debug
+			}
 		}
 		else {
 			$compiler_args += $flag_link_win_rt_static
 		}
+
 		$compiler_args += $includes | ForEach-Object { $flag_include + $_ }
-		$compiler_args += $flag_compile, $unit
-		run-compiler $compiler $unit $compiler_args
+		$compiler_args += $unit
+		# $compiler_args += $flag_compile, $unit
+		# run-compiler $compiler $unit $compiler_args
 
 		$linker_args += @(
 			$flag_nologo,
@@ -284,7 +316,11 @@ if ( $vendor -match "msvc" )
 		}
 
 		$linker_args += $object
-		run-linker $linker $executable $linker_args
+		# run-linker $linker $executable $linker_args
+
+		$compiler_args += $flag_linker
+		$compiler_args += $linker_args
+		run-compiler $compiler $unit $compiler_args
 	}
 
 	$compiler = 'cl'
@@ -354,10 +390,13 @@ $lib_user32 = 'User32.lib'
 # Github
 $lib_jsl = Join-Path $path_deps 'JoyShockLibrary/x64/JoyShockLibrary.lib'
 
-$unit       = Join-Path $path_project 'handmade_win32.cpp'
-$executable = Join-Path $path_build   'handmade_win32.exe'
+$unit       = Join-Path $path_platform 'handmade_win32.cpp'
+$executable = Join-Path $path_build    'handmade_win32.exe'
 
-$compiler_args = @()
+$compiler_args = @(
+	($flag_define + 'UNICODE'),
+	($flag_define + '_UNICODE')
+)
 
 $linker_args = @(
 	$lib_gdi32,

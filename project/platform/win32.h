@@ -1,5 +1,5 @@
 /*
-Alternative header for windows.h
+	Windows dependency header
 */
 #pragma once
 
