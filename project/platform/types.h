@@ -4,29 +4,31 @@
 
 #define U8_MIN 0u
 #define U8_MAX 0xffu
-#define I8_MIN ( -0x7f - 1 )
-#define I8_MAX 0x7f
+#define S8_MIN ( -0x7f - 1 )
+#define S8_MAX 0x7f
 
 #define U16_MIN 0u
 #define U16_MAX 0xffffu
-#define I16_MIN ( -0x7fff - 1 )
-#define I16_MAX 0x7fff
+#define S16_MIN ( -0x7fff - 1 )
+#define S16_MAX 0x7fff
 
 #define U32_MIN 0u
 #define U32_MAX 0xffffffffu
-#define I32_MIN ( -0x7fffffff - 1 )
-#define I32_MAX 0x7fffffff
+#define S32_MIN ( -0x7fffffff - 1 )
+#define S32_MAX 0x7fffffff
 
 #define U64_MIN 0ull
 #define U64_MAX 0xffffffffffffffffull
-#define I64_MIN ( -0x7fffffffffffffffll - 1 )
-#define I64_MAX 0x7fffffffffffffffll
+#define S64_MIN ( -0x7fffffffffffffffll - 1 )
+#define S64_MAX 0x7fffffffffffffffll
 
+// Word size is the same as uw or size_t. This engine will not run on some weird compiler that doesn't
+// Match the largest object to the word size of the architecture.
 #if defined( ARCH_64_BIT )
-#	define USIZE_MIN GEN_U64_MIN
-#	define USIZE_MAX GEN_U64_MAX
-#	define ISIZE_MIN GEN_I64_MIN
-#	define ISIZE_MAX GEN_I64_MAX
+#	define UWORD_MIN U64_MIN
+#	define UWORD_MAX U64_MAX
+#	define SWORD_MIN S64_MIN
+#	define SWORD_MAX S64_MAX
 #else
 #	error Unknown architecture size. This library only supports 64 bit architectures.
 #endif

@@ -6,6 +6,7 @@
 #pragma once
 #include "grime.h"
 #include "macros.h"
+#include "generics.h"
 #include "math_constants.h"
 #include "types.h"
 

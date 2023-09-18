@@ -89,8 +89,16 @@ struct WinDimensions
 	u32 Height;
 };
 
-HRESULT WINAPI
-DirectSoundCreate(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
+// TODO : This will def need to be looked over.
+struct SoundOutput
+{
+	DWORD IsPlaying;
+	u32   RunningSampleIndex;
+	s32   LatencySampleCount;
+};
+
+
+HRESULT WINAPI DirectSoundCreate(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
 
 using DirectSoundCreateFn = HRESULT WINAPI (LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
 global DirectSoundCreateFn* direct_sound_create;
@@ -176,16 +184,6 @@ init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
 		// TODO : Diagnostic
 	}
 }
-
-struct SoundOutput
-{
-	DWORD IsPlaying;
-	u32   RunningSampleIndex;
-	s32   WaveToneHz;
-	s32   WavePeriod;
-	s32   ToneVolume;
-	s32   LatencySampleCount;
-};
 
 internal void
 ds_clear_sound_buffer( SoundOutput* sound_output )
@@ -494,6 +492,15 @@ main_window_callback(
 
 NS_WIN32_END
 
+internal void
+input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* new_state, u32 raw_btns, u32 btn_flag )
+{
+#define had_transition() ( old_state->State == new_state->State )
+	new_state->State           = (raw_btns & btn_flag);
+	new_state->HalfTransitions = had_transition() ? 1 : 0;
+#undef had_transition
+}
+
 int CALLBACK
 WinMain(
 	HINSTANCE instance,
@@ -503,130 +510,126 @@ WinMain(
 )
 {
 	using namespace win32;
-	// xinput_load_library_bindings();
-
-	using JSL_DeviceHandle = int;
-	u32 jsl_num_devices = JslConnectDevices();
-
-	JSL_DeviceHandle device_handles[4] {};
-	u32 jsl_getconnected_found = JslGetConnectedDeviceHandles( device_handles, jsl_num_devices );
-	{
-		if ( jsl_getconnected_found != jsl_num_devices )
-		{
-			OutputDebugStringA( "Error: JSLGetConnectedDeviceHandles didn't find as many as were stated with JslConnectDevices\n");
-		}
-
-		if ( jsl_num_devices > 0 )
-		{
-			OutputDebugStringA( "JSL Connected Devices:\n" );
-			for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
-			{
-				JslSetLightColour( device_handles[ jsl_device_index ], (255 << 8) );
-			}
-		}
-	}
 
 	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
-	WNDCLASSW
-	window_class {};
-	window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
-	window_class.lpfnWndProc = main_window_callback;
-	// window_class.cbClsExtra  = ;
-	// window_class.cbWndExtra  = ;
-	window_class.hInstance   = instance;
-	// window_class.hIcon = ;
-	// window_class.hCursor = ;
-	// window_class.hbrBackground = ;
-	window_class.lpszMenuName  = L"Handmade Hero!";
-	window_class.lpszClassName = L"HandmadeHeroWindowClass";
-
-	if ( ! RegisterClassW( & window_class ) )
+	WNDCLASSW window_class {};
+	HWND window_handle = nullptr;
+	MSG window_msg_info;
 	{
-		// TODO : Diagnostic Logging
-		return 0;
+		window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
+		window_class.lpfnWndProc = main_window_callback;
+		// window_class.cbClsExtra  = ;
+		// window_class.cbWndExtra  = ;
+		window_class.hInstance   = instance;
+		// window_class.hIcon = ;
+		// window_class.hCursor = ;
+		// window_class.hbrBackground = ;
+		window_class.lpszMenuName  = L"Handmade Hero!";
+		window_class.lpszClassName = L"HandmadeHeroWindowClass";
+
+		if ( ! RegisterClassW( & window_class ) )
+		{
+			// TODO : Diagnostic Logging
+			return 0;
+		}
+
+		window_handle = CreateWindowExW(
+			0,
+			window_class.lpszClassName,
+			L"Handmade Hero",
+			WS_Overlapped_Window | WS_Initially_Visible,
+			CW_Use_Default, CW_Use_Default, // x, y
+			CW_Use_Default, CW_Use_Default, // width, height
+			0, 0,                         // parent, menu
+			instance, 0                   // instance, param
+		);
+
+		if ( ! window_handle )
+		{
+			// TODO : Diagnostic Logging
+			return 0;
+		}
 	}
-
-	HWND window_handle = CreateWindowExW(
-		0,
-		window_class.lpszClassName,
-		L"Handmade Hero",
-		WS_Overlapped_Window | WS_Initially_Visible,
-		CW_Use_Default, CW_Use_Default, // x, y
-		CW_Use_Default, CW_Use_Default, // width, height
-		0, 0,                         // parent, menu
-		instance, 0                   // instance, param
-	);
-
-	if ( ! window_handle )
-	{
-		// TODO : Diagnostic Logging
-		return 0;
-	}
-
-	Running = true;
 
 	WinDimensions dimensions = get_window_dimensions( window_handle );
 	resize_dib_section( &BackBuffer, 1280, 720 );
 
 	SoundOutput sound_output;
-	sound_output.IsPlaying              = 0;
-	DS_SecondaryBuffer_SamplesPerSecond = 48000;
-	DS_SecondaryBuffer_BytesPerSample   = sizeof(s16) * 2;
+	{
+		sound_output.IsPlaying              = 0;
+		DS_SecondaryBuffer_SamplesPerSecond = 48000;
+		DS_SecondaryBuffer_BytesPerSample   = sizeof(s16) * 2;
 
-	DS_SecondaryBuffer_Size = DS_SecondaryBuffer_SamplesPerSecond * DS_SecondaryBuffer_BytesPerSample;
-	init_sound( window_handle, DS_SecondaryBuffer_SamplesPerSecond, DS_SecondaryBuffer_Size );
+		DS_SecondaryBuffer_Size = DS_SecondaryBuffer_SamplesPerSecond * DS_SecondaryBuffer_BytesPerSample;
+		init_sound( window_handle, DS_SecondaryBuffer_SamplesPerSecond, DS_SecondaryBuffer_Size );
 
-	SoundBufferSamples = rcast( s16*, VirtualAlloc( 0, 48000 * 2 * sizeof(s16)
-		, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write ));
+		SoundBufferSamples = rcast( s16*, VirtualAlloc( 0, 48000 * 2 * sizeof(s16)
+			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write ));
 
-	// Wave Sound Test
-	bool wave_switch = false;
-	sound_output.RunningSampleIndex = 0;
-	sound_output.WaveToneHz 	    = 262;
-	sound_output.WavePeriod         = DS_SecondaryBuffer_SamplesPerSecond / sound_output.WaveToneHz;
-	sound_output.ToneVolume         = 3000;
-	sound_output.LatencySampleCount = DS_SecondaryBuffer_SamplesPerSecond / 15;
-	ds_clear_sound_buffer( & sound_output );
-	DS_SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
+		sound_output.RunningSampleIndex = 0;
+		sound_output.LatencySampleCount = DS_SecondaryBuffer_SamplesPerSecond / 15;
+		// ds_clear_sound_buffer( & sound_output );
+		DS_SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
+	}
 
-	// Graphics & Input Test
-	u32 x_offset = 0;
-	u32 y_offset = 0;
-
-	// Controller State
-	bool xinput_detected = false;
-
-	b32 dpad_up        = false;
-	b32 dpad_down      = false;
-	b32 dpad_left      = false;
-	b32 dpad_right     = false;
-	b32 start          = false;
-	b32 back           = false;
-	b32 left_shoulder  = false;
-	b32 right_shoulder = false;
-	b32 btn_a          = false;
-	b32 btn_b          = false;
-	b32 btn_x          = false;
-	b32 btn_y          = false;
-	u16 stick_left_x  = 0;
-	u16 stick_left_y  = 0;
-	u16 stick_right_x = 0;
-	u16 stick_right_y = 0;
-
-	// TODO : Add sine wave test
-
-	// Windows
-	MSG window_msg_info;
-
+	// Timing
 	u64 perf_counter_frequency;
-	QueryPerformanceFrequency( rcast(LARGE_INTEGER*, & perf_counter_frequency) );
-
 	u64 last_frame_time;
+	QueryPerformanceFrequency( rcast(LARGE_INTEGER*, & perf_counter_frequency) );
 	QueryPerformanceCounter( rcast(LARGE_INTEGER*, & last_frame_time) );
 
 	u64 last_cycle_time = __rdtsc();
 
+	// Input shitshow
+	constexpr u32 Max_Controllers = 4;
+	// Max controllers for the platform layer and thus for all other layers is 4. (Sanity and xinput limit)
+
+	engine::InputState input {};
+
+	using EngineXInputPadStates = engine::XInputPadState[ Max_Controllers ];
+	EngineXInputPadStates xpad_states[2];
+	EngineXInputPadStates* old_xpads = & xpad_states[0];
+	EngineXInputPadStates* new_xpads = & xpad_states[1];
+
+	using EngineDSPadStates = engine::DualsensePadState[Max_Controllers];
+	EngineDSPadStates ds_pad_states[2];
+	EngineDSPadStates* old_ds_pads = & ds_pad_states[0];
+	EngineDSPadStates* new_ds_pads = & ds_pad_states[1];
+
+	using JSL_DeviceHandle = int;
+	u32 jsl_num_devices
+			// = JslConnectDevices();
+			= 0;
+	JSL_DeviceHandle jsl_device_handles[4] {};
+	{
+		xinput_load_library_bindings();
+
+		u32 jsl_getconnected_found = JslGetConnectedDeviceHandles( jsl_device_handles, jsl_num_devices );
+		{
+			if ( jsl_getconnected_found != jsl_num_devices )
+			{
+				OutputDebugStringA( "Error: JSLGetConnectedDeviceHandles didn't find as many as were stated with JslConnectDevices\n");
+			}
+
+			if ( jsl_num_devices > 0 )
+			{
+				OutputDebugStringA( "JSL Connected Devices:\n" );
+				for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
+				{
+					JslSetLightColour( jsl_device_handles[ jsl_device_index ], (255 << 8) );
+				}
+			}
+		}
+
+		if ( jsl_num_devices > 4 )
+		{
+			jsl_num_devices = 4;
+			MessageBoxA( window_handle, "More than 4 JSL devices found, this engine will only support the first four found.", "Warning", MB_ICONEXCLAMATION );
+		}
+	}
+
+	Running = true;
 	while( Running )
 	{
 		// Window Management
@@ -646,102 +649,131 @@ WinMain(
 
 		// Input
 		{
+			// Swapping at the beginning of the input frame instead of the end.
+			swap( old_xpads,   new_xpads );
+			swap( old_ds_pads, new_ds_pads );
+
 			// XInput Polling
 			// TODO(Ed) : Should we poll this more frequently?
-			for ( DWORD controller_index = 0; controller_index < XUSER_MAX_COUNT; ++ controller_index )
+			for ( DWORD controller_index = 0; controller_index < Max_Controllers; ++ controller_index )
 			{
 				XINPUT_STATE controller_state;
-				xinput_detected = xinput_get_state( controller_index, & controller_state ) == XI_PluggedIn;
+				b32 xinput_detected = xinput_get_state( controller_index, & controller_state ) == XI_PluggedIn;
 				if ( xinput_detected )
 				{
-					XINPUT_GAMEPAD* pad = & controller_state.Gamepad;
+					XINPUT_GAMEPAD*       xpad = & controller_state.Gamepad;
+					engine::XInputPadState* old_xpad = old_xpads[ controller_index ];
+					engine::XInputPadState* new_xpad = new_xpads[ controller_index ];
 
-					dpad_up        = pad->wButtons & XINPUT_GAMEPAD_DPAD_UP;
-					dpad_down      = pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN;
-					dpad_left      = pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT;
-					dpad_right     = pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT;
-					start          = pad->wButtons & XINPUT_GAMEPAD_START;
-					back           = pad->wButtons & XINPUT_GAMEPAD_BACK;
-					left_shoulder  = pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER;
-					right_shoulder = pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER;
-					btn_a          = pad->wButtons & XINPUT_GAMEPAD_A;
-					btn_b          = pad->wButtons & XINPUT_GAMEPAD_B;
-					btn_x          = pad->wButtons & XINPUT_GAMEPAD_X;
-					btn_y          = pad->wButtons & XINPUT_GAMEPAD_Y;
+					input_process_digital_btn( & old_xpad->DPad.Up,    & new_xpad->DPad.Up, xpad->wButtons, XINPUT_GAMEPAD_DPAD_UP );
+					input_process_digital_btn( & old_xpad->DPad.Down,  & new_xpad->DPad.Down, xpad->wButtons, XINPUT_GAMEPAD_DPAD_DOWN );
+					input_process_digital_btn( & old_xpad->DPad.Left,  & new_xpad->DPad.Left, xpad->wButtons, XINPUT_GAMEPAD_DPAD_LEFT );
+					input_process_digital_btn( & old_xpad->DPad.Right, & new_xpad->DPad.Right, xpad->wButtons, XINPUT_GAMEPAD_DPAD_RIGHT );
 
-					stick_left_x  = pad->sThumbLX;
-					stick_left_y  = pad->sThumbLY;
-					stick_right_x = pad->sThumbRX;
-					stick_right_y = pad->sThumbRY;
+					input_process_digital_btn( & old_xpad->Y, & new_xpad->Y, xpad->wButtons, XINPUT_GAMEPAD_Y );
+					input_process_digital_btn( & old_xpad->A, & new_xpad->A, xpad->wButtons, XINPUT_GAMEPAD_A );
+					input_process_digital_btn( & old_xpad->B, & new_xpad->B, xpad->wButtons, XINPUT_GAMEPAD_B );
+					input_process_digital_btn( & old_xpad->X, & new_xpad->X, xpad->wButtons, XINPUT_GAMEPAD_X );
+
+					input_process_digital_btn( & old_xpad->Back,  & new_xpad->Back,  xpad->wButtons, XINPUT_GAMEPAD_BACK );
+					input_process_digital_btn( & old_xpad->Start, & new_xpad->Start, xpad->wButtons, XINPUT_GAMEPAD_START );
+
+					input_process_digital_btn( & old_xpad->LeftShoulder,  & new_xpad->LeftShoulder,  xpad->wButtons, XINPUT_GAMEPAD_LEFT_SHOULDER );
+					input_process_digital_btn( & old_xpad->RightShoulder, & new_xpad->RightShoulder, xpad->wButtons, XINPUT_GAMEPAD_RIGHT_SHOULDER );
+
+					new_xpad->Stick.Left.X.Start = old_xpad->Stick.Left.X.End;
+					new_xpad->Stick.Left.Y.Start = old_xpad->Stick.Left.Y.End;
+
+					// TODO(Ed) : Compress this into a proc
+					f32 X;
+					if ( xpad->sThumbLX < 0 )
+					{
+						X = scast(f32, xpad->sThumbLX) / scast(f32, -S16_MIN);
+					}
+					else
+					{
+						X = scast(f32, xpad->sThumbLX) / scast(f32, S16_MAX);
+					}
+
+					// TODO(Ed) : Min/Max macros!!!
+					new_xpad->Stick.Left.X.Min = new_xpad->Stick.Left.X.Max = new_xpad->Stick.Left.X.End = X;
+
+					f32 Y;
+					if ( xpad->sThumbLY < 0 )
+					{
+						Y = scast(f32, xpad->sThumbLY) / scast(f32, -S16_MIN);
+					}
+					else
+					{
+						Y = scast(f32, xpad->sThumbLY) / scast(f32, S16_MAX);
+					}
+
+					// TODO(Ed) : Min/Max macros!!!
+					new_xpad->Stick.Left.Y.Min = new_xpad->Stick.Left.Y.Max = new_xpad->Stick.Left.Y.End = Y;
+
+
+
+					// epad->Stick.Left.X.End  = xpad->sThumbLX;
+					// epad->Stick.Left.Y.End  = xpad->sThumbLY;
+					// epad->Stick.Right.X.End = xpad->sThumbRX;
+					// epad->Stick.Right.X.End = xpad->sThumbRY;
+
+					// TODO(Ed) : Dead zone processing!!!!!!!!!!!!!!!
+					// XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE
+					// XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE
+
+					// S16_MAX
+					// S16_MIN
+
+					input.Controllers[ controller_index ].XPad = new_xpad;
 				}
 				else
 				{
-					// NOTE: Controller is not available
+					input.Controllers[ controller_index ].XPad = nullptr;
 				}
 			}
 
 			// JSL Input Polling
 			for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
 			{
-				if ( ! JslStillConnected( device_handles[ jsl_device_index ] ) )
+				if ( ! JslStillConnected( jsl_device_handles[ jsl_device_index ] ) )
 				{
 					OutputDebugStringA( "Error: JSLStillConnected returned false\n" );
 					continue;
 				}
 
-				JOY_SHOCK_STATE state = JslGetSimpleState( device_handles[ jsl_device_index ] );
-				dpad_up        = state.buttons & JSMASK_UP;
-				dpad_down      = state.buttons & JSMASK_DOWN;
-				dpad_left      = state.buttons & JSMASK_LEFT;
-				dpad_right     = state.buttons & JSMASK_RIGHT;
-				start          = state.buttons & JSMASK_PLUS;
-				back           = state.buttons & JSMASK_MINUS;
-				left_shoulder  = state.buttons & JSMASK_L;
-				right_shoulder = state.buttons & JSMASK_R;
-				btn_a          = state.buttons & JSMASK_S;
-				btn_b          = state.buttons & JSMASK_E;
-				btn_x          = state.buttons & JSMASK_W;
-				btn_y          = state.buttons & JSMASK_N;
+				// TODO : Won't support more than 4 for now... (or prob ever)
+				if ( jsl_device_index > 4 )
+					break;
 
-				stick_left_x  = state.stickLX;
-				stick_left_y  = state.stickLY;
-				stick_right_x = state.stickRX;
-				stick_right_y = state.stickRY;
-			}
+				JOY_SHOCK_STATE       state = JslGetSimpleState( jsl_device_handles[ jsl_device_index ] );
+				engine::DualsensePadState* old_ds_pad  = old_ds_pads[ jsl_device_index ];
+				engine::DualsensePadState* new_ds_pad  = new_ds_pads[ jsl_device_index ];
 
-			x_offset += dpad_right;
-			x_offset -= dpad_left;
-			y_offset += dpad_up;
-			y_offset -= dpad_down;
+				input_process_digital_btn( & old_ds_pad->DPad.Up,    & new_ds_pad->DPad.Up,    state.buttons, JSMASK_UP );
+				input_process_digital_btn( & old_ds_pad->DPad.Down,  & new_ds_pad->DPad.Down,  state.buttons, JSMASK_DOWN );
+				input_process_digital_btn( & old_ds_pad->DPad.Left,  & new_ds_pad->DPad.Left,  state.buttons, JSMASK_LEFT );
+				input_process_digital_btn( & old_ds_pad->DPad.Right, & new_ds_pad->DPad.Right, state.buttons, JSMASK_RIGHT );
 
-			if ( start )
-			{
-				if ( xinput_detected )
-				{
-					XINPUT_VIBRATION vibration;
-					vibration.wLeftMotorSpeed  = 30000;
-					xinput_set_state( 0, & vibration );
-				}
-				else
-				{
-					JslSetRumble( 0, 1, 0 );
-				}
-			}
-			else
-			{
-				if ( xinput_detected )
-				{
-					XINPUT_VIBRATION vibration;
-					vibration.wLeftMotorSpeed  = 0;
-					xinput_set_state( 0, & vibration );
-				}
-				else
-				{
-					JslSetRumble( 0, 0, 0 );
-				}
+				input_process_digital_btn( & old_ds_pad->Triangle, & new_ds_pad->Triangle, state.buttons, JSMASK_N );
+				input_process_digital_btn( & old_ds_pad->X,        & new_ds_pad->X,        state.buttons, JSMASK_S );
+				input_process_digital_btn( & old_ds_pad->Square,   & new_ds_pad->Square,   state.buttons, JSMASK_W );
+				input_process_digital_btn( & old_ds_pad->Circle,   & new_ds_pad->Circle,   state.buttons, JSMASK_E );
+
+				input_process_digital_btn( & old_ds_pad->Share,   & new_ds_pad->Share,   state.buttons, JSMASK_SHARE );
+				input_process_digital_btn( & old_ds_pad->Options, & new_ds_pad->Options, state.buttons, JSMASK_OPTIONS );
+
+				input_process_digital_btn( & old_ds_pad->L1, & new_ds_pad->L1, state.buttons, JSMASK_L );
+				input_process_digital_btn( & old_ds_pad->R1, & new_ds_pad->R1, state.buttons, JSMASK_R );
+
+				// epad->Stick.Left.X.End  = state.stickLX;
+				// epad->Stick.Left.Y.End  = state.stickLY;
+				// epad->Stick.Right.X.End = state.stickRX;
+				// epad->Stick.Right.X.End = state.stickRY;
+
+				input.Controllers[ jsl_device_index ].DSPad = new_ds_pad;
 			}
 		}
-
 
 		// Pain...
 		b32 sound_is_valid = false;
@@ -751,17 +783,11 @@ WinMain(
 		DWORD bytes_to_write;
 		if ( SUCCEEDED( DS_SecondaryBuffer->GetCurrentPosition( & ds_play_cursor, & ds_write_cursor ) ))
 		{
-			DWORD target_cursor = (ds_play_cursor + sound_output.LatencySampleCount * DS_SecondaryBuffer_BytesPerSample) % DS_SecondaryBuffer_Size;
 
-			byte_to_lock = (sound_output.RunningSampleIndex * DS_SecondaryBuffer_BytesPerSample) % DS_SecondaryBuffer_Size;
-			bytes_to_write;
+			byte_to_lock        = (sound_output.RunningSampleIndex * DS_SecondaryBuffer_BytesPerSample) % DS_SecondaryBuffer_Size;
+			DWORD target_cursor = (ds_play_cursor + (sound_output.LatencySampleCount * DS_SecondaryBuffer_BytesPerSample)) % DS_SecondaryBuffer_Size;
 
-			if ( byte_to_lock == target_cursor )
-			{
-				// We are in the middle of playing. Wait for the write cursor to catch up.
-				bytes_to_write = 0;
-			}
-			else if ( byte_to_lock > target_cursor)
+			if ( byte_to_lock > target_cursor)
 			{
 				// Infront of play cursor |--play--byte_to_write-->--|
 				bytes_to_write =  DS_SecondaryBuffer_Size - byte_to_lock;
@@ -778,15 +804,12 @@ WinMain(
 
 		// s16 samples[ 48000 * 2 ];
 		engine::SoundBuffer sound_buffer {};
-		sound_buffer.NumSamples         = DS_SecondaryBuffer_SamplesPerSecond / 30;
+		sound_buffer.NumSamples         = bytes_to_write / DS_SecondaryBuffer_BytesPerSample;
 		sound_buffer.RunningSampleIndex = sound_output.RunningSampleIndex;
 		sound_buffer.SamplesPerSecond   = DS_SecondaryBuffer_SamplesPerSecond;
-		sound_buffer.ToneVolume         = sound_output.ToneVolume;
 		sound_buffer.Samples            = SoundBufferSamples;
-		sound_buffer.WavePeriod = sound_output.WavePeriod;
-		sound_buffer.WaveToneHz = sound_output.WaveToneHz;
 
-		engine::update_and_render( rcast(engine::OffscreenBuffer*, & BackBuffer.Memory), & sound_buffer, x_offset, y_offset );
+		engine::update_and_render( & input, rcast(engine::OffscreenBuffer*, & BackBuffer.Memory), & sound_buffer );
 
 		// Rendering
 		{
@@ -799,29 +822,6 @@ WinMain(
 
 		// Audio
 		do {
-			if ( btn_y )
-			{
-				sound_output.ToneVolume += 10;
-			}
-			if ( btn_b )
-			{
-				sound_output.ToneVolume -= 10;
-			}
-			if ( btn_x )
-			{
-				sound_output.WaveToneHz += 1;
-				sound_output.WavePeriod  = DS_SecondaryBuffer_SamplesPerSecond / sound_output.WaveToneHz;
-			}
-			if ( btn_a )
-			{
-				sound_output.WaveToneHz -= 1;
-				sound_output.WavePeriod  = DS_SecondaryBuffer_SamplesPerSecond / sound_output.WaveToneHz;
-			}
-			if ( back )
-			{
-				wave_switch ^= true;
-			}
-
 			DWORD ds_status = 0;
 			if ( SUCCEEDED( DS_SecondaryBuffer->GetStatus( & ds_status ) ) )
 			{
@@ -854,9 +854,9 @@ WinMain(
 		u32 ms_per_frame        = MS_PER_SECOND * frame_time_elapsed / perf_counter_frequency;
 		u32 fps                 = perf_counter_frequency / frame_time_elapsed;
 
-		char ms_timing_debug[256] {};
-		wsprintfA( ms_timing_debug, "%d ms\n" "FPS: %d\n" "mega cycles: %d\n", ms_per_frame, fps, mega_cycles_elapsed );
-		OutputDebugStringA( ms_timing_debug );
+		// char ms_timing_debug[256] {};
+		// wsprintfA( ms_timing_debug, "%d ms\n" "FPS: %d\n" "mega cycles: %d\n", ms_per_frame, fps, mega_cycles_elapsed );
+		// OutputDebugStringA( ms_timing_debug );
 
 		last_cycle_time = end_cycle_count;
 		last_frame_time = frame_cycle_time_end;
@@ -864,15 +864,11 @@ WinMain(
 
 	if ( jsl_num_devices > 0 )
 	{
-		OutputDebugStringA( "JSL Connected Devices:\n" );
 		for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
 		{
-			JslSetLightColour( device_handles[ jsl_device_index ], 0 );
+			JslSetLightColour( jsl_device_handles[ jsl_device_index ], 0 );
 		}
 	}
 
 	return 0;
 }
-
-// Engine layer translation unit.
-// #include "engine.cpp"

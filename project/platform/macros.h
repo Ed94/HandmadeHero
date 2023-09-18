@@ -38,3 +38,6 @@
 #define do_once_end        \
 	}                      \
 	while(0);
+
+
+#define array_count( array ) ( sizeof( array ) / sizeof( ( array )[0] ) )
