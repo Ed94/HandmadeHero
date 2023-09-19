@@ -3,43 +3,46 @@
 
 NS_ENGINE_BEGIN
 
+struct EngineState
+{
+	s32 WavePeriod;
+	s32 WaveToneHz;
+	s32 ToneVolume;
+	s32 XOffset;
+	s32 YOffset;
+};
 
-using GetSoundSampleValueFn = s16( SoundBuffer* sound_buffer );
-
-global s32 SoundTest_ToneVolume = 3000;
-global s32 SoundTest_WavePeriod = 0;
-global s32 SoundTest_WaveToneHz = 262;
-
+using GetSoundSampleValueFn = s16( EngineState* state, SoundBuffer* sound_buffer );
 
 internal s16
-square_wave_sample_value( SoundBuffer* sound_buffer )
+square_wave_sample_value( EngineState* state, SoundBuffer* sound_buffer )
 {
-	s16 sample_value = (sound_buffer->RunningSampleIndex /  (SoundTest_WavePeriod /2)) % 2 ?
-		SoundTest_ToneVolume : - SoundTest_ToneVolume;
+	s16 sample_value = (sound_buffer->RunningSampleIndex /  (state->WavePeriod / 2) ) % 2 ?
+		state->ToneVolume : - state->ToneVolume;
 
 	return sample_value;
 }
 
 internal s16
-sine_wave_sample_value( SoundBuffer* sound_buffer )
+sine_wave_sample_value( EngineState* state, SoundBuffer* sound_buffer )
 {
 	local_persist f32 time = 0.f;
 
 	// time =  TAU * (f32)sound_buffer->RunningSampleIndex / (f32)SoundTest_WavePeriod;
 	f32 sine_value   = sinf( time );
-	s16 sample_value = scast(u16, sine_value * SoundTest_ToneVolume);
+	s16 sample_value = scast(u16, sine_value * state->ToneVolume);
 
-	time += TAU * 1.0f / scast(f32, SoundTest_WavePeriod );
+	time += TAU * 1.0f / scast(f32, state->WavePeriod );
 	return sample_value;
 }
 
 internal void
-output_sound( SoundBuffer* sound_buffer, GetSoundSampleValueFn* get_sample_value )
+output_sound( EngineState* state, SoundBuffer* sound_buffer, GetSoundSampleValueFn* get_sample_value )
 {
 	s16* sample_out = sound_buffer->Samples;
 	for ( u32 sample_index = 0; sample_index < sound_buffer->NumSamples; ++ sample_index )
 	{
-		s16 sample_value = get_sample_value( sound_buffer );
+		s16 sample_value = get_sample_value( state, sound_buffer );
 		sound_buffer->RunningSampleIndex++;
 
 		// char ms_timing_debug[256] {};
@@ -106,9 +109,19 @@ b32 input_using_analog()
 	return false;
 }
 
+internal void
+startup()
+{
+}
+
+internal void
+shutdown()
+{
+}
+
 // TODO : I rather expose the back_buffer and sound_buffer using getters for access in any function.
 internal void
-update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer* sound_buffer )
+update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer* sound_buffer, Memory* memory )
 {
 	// Graphics & Input Test
 	local_persist u32 x_offset = 0;
@@ -128,11 +141,17 @@ update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer*
 	}
 #endif
 
-#if 1
+	EngineState* state = rcast( EngineState*, memory->Persistent );
 	do_once_start
-	{
-		SoundTest_WavePeriod = sound_buffer->SamplesPerSecond / SoundTest_WaveToneHz;
-	}
+		assert( sizeof(EngineState) <= memory->PersistentSize );
+
+		state->ToneVolume = 3000;
+		state->WaveToneHz = 262;
+		state->WavePeriod = sound_buffer->SamplesPerSecond / state->WaveToneHz;
+
+		state->XOffset = 0;
+		state->YOffset = 0;
+
 	do_once_end
 
 	ControllerState* controller = & input->Controllers[0];
@@ -151,22 +170,22 @@ update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer*
 
 		if ( pad->Triangle.State )
 		{
-			SoundTest_ToneVolume += 10;
+			state->ToneVolume += 10;
 		}
 		if ( pad->Circle.State )
 		{
-			SoundTest_ToneVolume -= 10;
+			state->ToneVolume -= 10;
 		}
 
 		if ( pad->Square.State )
 		{
-			SoundTest_WaveToneHz  += 1;
-			SoundTest_WavePeriod  = sound_buffer->SamplesPerSecond / SoundTest_WaveToneHz;
+			state->WaveToneHz += 1;
+			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 		}
 		if ( pad->X.State )
 		{
-			SoundTest_WaveToneHz  -= 1;
-			SoundTest_WavePeriod  = sound_buffer->SamplesPerSecond / SoundTest_WaveToneHz;
+			state->WaveToneHz -= 1;
+			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 		}
 
 		if ( pad->Options.State )
@@ -193,22 +212,22 @@ update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer*
 
 		if ( pad->Y.State )
 		{
-			SoundTest_ToneVolume += 10;
+			state->ToneVolume += 10;
 		}
 		if ( pad->B.State )
 		{
-			SoundTest_ToneVolume -= 10;
+			state->ToneVolume -= 10;
 		}
 
 		if ( pad->X.State )
 		{
-			SoundTest_WaveToneHz  += 1;
-			SoundTest_WavePeriod  = sound_buffer->SamplesPerSecond / SoundTest_WaveToneHz;
+			state->WaveToneHz += 1;
+			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 		}
 		if ( pad->A.State )
 		{
-			SoundTest_WaveToneHz  -= 1;
-			SoundTest_WavePeriod  = sound_buffer->SamplesPerSecond / SoundTest_WaveToneHz;
+			state->WaveToneHz -= 1;
+			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 		}
 
 		if ( pad->Start.State )
@@ -221,13 +240,12 @@ update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer*
 			// TODO(Ed) : Add rumble test
 		}
 	}
-#endif
 
 	// TODO(Ed) : Allow sample offsets here for more robust platform options
 	if ( ! wave_switch )
-		output_sound( sound_buffer, sine_wave_sample_value );
+		output_sound( state, sound_buffer, sine_wave_sample_value );
 	else
-		output_sound( sound_buffer, square_wave_sample_value );
+		output_sound( state, sound_buffer, square_wave_sample_value );
 
 	render_weird_graident( back_buffer, x_offset, y_offset );
 }

@@ -8,9 +8,10 @@ Push-Location $path_root
 
 #region Arguments
        $vendor       = $null
-       $optimized    = $false
-	   $debug 	     = $false
+       $optimized    = $null
+	   $debug 	     = $null
 	   $analysis	 = $false
+	   $dev          = $false
 
 [array] $vendors = @( "clang", "msvc" )
 
@@ -22,6 +23,7 @@ if ( $args ) { $args | ForEach-Object {
 		"optimized"           { $optimized = $true }
 		"debug"               { $debug     = $true }
 		"analysis"            { $analysis  = $true }
+		"dev"                 { $dev       = $true }
 	}
 }}
 #endregion Argument
@@ -39,7 +41,16 @@ if ( $vendor -eq $null ) {
 }
 
 write-host "Building HandmadeHero with $vendor"
-write-host "Build Type: $(if ($release) {"Release"} else {"Debug"} )"
+
+if ( $dev ) {
+	if ( $debug -eq $null ) {
+		$debug = $true
+	}
+
+	if ( $optimize -eq $null ) {
+		$optimize = $false
+	}
+}
 
 function run-compiler
 {
@@ -180,8 +191,11 @@ if ( $vendor -match "clang" )
 			$compiler_args += $flag_no_optimization
 		}
 		if ( $debug ) {
-			$compiler_args += ( $flag_define + 'Build_Debug' )
+			$compiler_args += ( $flag_define + 'Build_Debug=1' )
 			$compiler_args += $flag_debug, $flag_debug_codeview, $flag_profiling_debug
+		}
+		else {
+			$compiler_args += ( $flag_define + 'Build_Debug=0' )
 		}
 
 		$warning_ignores | ForEach-Object {
@@ -289,7 +303,7 @@ if ( $vendor -match "msvc" )
 		if ( $debug )
 		{
 			$compiler_args += $flag_debug
-			$compiler_args += ( $flag_define + 'Build_Debug' )
+			$compiler_args += ( $flag_define + 'Build_Debug=1' )
 			$compiler_args += ( $flag_path_debug + $path_build + '\' )
 			$compiler_args += $flag_link_win_rt_static_debug
 
@@ -298,6 +312,7 @@ if ( $vendor -match "msvc" )
 			}
 		}
 		else {
+			$compiler_args += ( $flag_define + 'Build_Debug=0' )
 			$compiler_args += $flag_link_win_rt_static
 		}
 		$compiler_args += $includes | ForEach-Object { $flag_include + $_ }
@@ -403,6 +418,13 @@ $compiler_args = @(
 	($flag_define + '_UNICODE')
 	# ($flag_set_stack_size + $stack_size)
 )
+
+if ( $dev ) {
+	$compiler_args += ( $flag_define + 'Build_Development=1' )
+}
+else {
+	$compiler_args += ( $flag_define + 'Build_Development=0' )
+}
 
 $linker_args = @(
 	$lib_gdi32,

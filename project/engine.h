@@ -11,6 +11,29 @@
 
 NS_ENGINE_BEGIN
 
+struct Clocks
+{
+	// TODO(Ed) : Clock values...
+	f32 SecondsElapsed;
+};
+
+struct Memory
+{
+	// All memory for the engine is required to be zero initialized.
+
+	// Wiped on shutdown
+	void* Persistent;
+	u64   PersistentSize;
+
+	// Wiped on a per-frame basis
+	// void* Frame;
+	// u64   FrameSize;
+
+	// Wiped whenever the engine wants to?
+	void* Transient;
+	u64   TransientSize;
+};
+
 struct OffscreenBuffer
 {
 	void*      Memory; // Lets use directly mess with the "pixel's memory buffer"
@@ -157,6 +180,6 @@ b32 input_using_analog();
 
 // Needs a contextual reference to four things:
 // Timing, Input, Bitmap Buffer, Sound Buffer
-void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer* sound_buffer );
+void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer* sound_buffer, Memory* memory );
 
 NS_ENGINE_END

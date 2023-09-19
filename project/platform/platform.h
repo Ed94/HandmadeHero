@@ -9,4 +9,3 @@
 #include "generics.h"
 #include "math_constants.h"
 #include "types.h"
-

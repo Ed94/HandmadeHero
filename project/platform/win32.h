@@ -15,7 +15,7 @@
 // #include "windows/file.h"
 // #include "windows/io.h"
 
-// #ifdef Build_Debug
+// #if Build_Debug
 // #	include "windows/dbghelp.h"
 // #endif
 

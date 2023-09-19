@@ -18,7 +18,7 @@
 #define do_once()          \
 	do                     \
 	{                      \
-		static             \
+		local_persist      \
 		bool Done = false; \
 		if ( Done )        \
 			return;        \
@@ -29,7 +29,7 @@
 #define do_once_start      \
 	do                     \
 	{                      \
-		static             \
+		local_persist      \
 		bool Done = false; \
 		if ( Done )        \
 			break;         \
@@ -41,3 +41,29 @@
 
 
 #define array_count( array ) ( sizeof( array ) / sizeof( ( array )[0] ) )
+
+// TODO(Ed) : Move to memory header eventually
+#define kilobytes( x ) ( ( x ) * ( s64 )( 1024 ) )
+#define megabytes( x ) ( kilobytes( x ) * ( s64 )( 1024 ) )
+#define gigabytes( x ) ( megabytes( x ) * ( s64 )( 1024 ) )
+#define terabytes( x ) ( gigabytes( x ) * ( s64 )( 1024 ) )
+
+// TODO(Ed) : Move to debug header eventually
+
+#if Build_Development
+#	define assert( expression ) \
+		if ( !( expression ) )   \
+		{                        \
+			*( int* )0 = 0;      \
+		}
+	// platform::assertion_failure( __FILE__, __LINE__, #expression );
+#else
+#	define assert( expression )
+#endif
+
+// TODO(Ed) : Add this sauce later
+#if 0
+#define congrats( message )
+#define ensure( condition, expression )
+#define fatal( message )
+#endif

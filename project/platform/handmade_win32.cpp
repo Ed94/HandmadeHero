@@ -97,7 +97,6 @@ struct SoundOutput
 	s32   LatencySampleCount;
 };
 
-
 HRESULT WINAPI DirectSoundCreate(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
 
 using DirectSoundCreateFn = HRESULT WINAPI (LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
@@ -511,6 +510,48 @@ WinMain(
 {
 	using namespace win32;
 
+	// Memory
+	engine::Memory engine_memory {};
+	{
+		engine_memory.PersistentSize = megabytes( 64 );
+		// engine_memory.FrameSize	     = megabytes( 64 );
+		engine_memory.TransientSize  = gigabytes( 2 );
+
+		u64 total_size = engine_memory.PersistentSize
+			// + engine_memory.FrameSize
+			+ engine_memory.TransientSize;
+
+	#if Build_Debug
+		void* Base_Address      = (void*) terabytes( 1 );
+		// void* Frame_Address     = (void*) terabytes( 2 );
+		// void* Transient_Address = (void*) terabytes( 2 );
+	#else
+		void* Base_Address      = 0;
+		// void* Frame_Address     = 0;
+		// void* Transient_Address = 0;
+	#endif
+
+		engine_memory.Persistent = VirtualAlloc( Base_Address, total_size
+			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+		engine_memory.Transient = rcast( u8*, engine_memory.Persistent ) + engine_memory.PersistentSize;
+
+	#if 0
+		engine_memory.Frame = VirtualAlloc( 0, engine_memory.FrameSize
+			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+
+		engine_memory.Transient = VirtualAlloc( 0, engine_memory.TransientSize
+			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+	#endif
+
+		if ( engine_memory.Persistent == nullptr
+			// || ! engine_memory.Frame
+			|| engine_memory.Transient == nullptr )
+		{
+			// TODO : Diagnostic Logging
+			return -1;
+		}
+	}
+
 	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
 	WNDCLASSW window_class {};
@@ -567,6 +608,8 @@ WinMain(
 		SoundBufferSamples = rcast( s16*, VirtualAlloc( 0, 48000 * 2 * sizeof(s16)
 			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write ));
 
+		assert( SoundBufferSamples );
+
 		sound_output.RunningSampleIndex = 0;
 		sound_output.LatencySampleCount = DS_SecondaryBuffer_SamplesPerSecond / 15;
 		// ds_clear_sound_buffer( & sound_output );
@@ -599,8 +642,8 @@ WinMain(
 
 	using JSL_DeviceHandle = int;
 	u32 jsl_num_devices
-			// = JslConnectDevices();
-			= 0;
+			= JslConnectDevices();
+			// = 0;
 	JSL_DeviceHandle jsl_device_handles[4] {};
 	{
 		xinput_load_library_bindings();
@@ -809,7 +852,7 @@ WinMain(
 		sound_buffer.SamplesPerSecond   = DS_SecondaryBuffer_SamplesPerSecond;
 		sound_buffer.Samples            = SoundBufferSamples;
 
-		engine::update_and_render( & input, rcast(engine::OffscreenBuffer*, & BackBuffer.Memory), & sound_buffer );
+		engine::update_and_render( & input, rcast(engine::OffscreenBuffer*, & BackBuffer.Memory), & sound_buffer, & engine_memory );
 
 		// Rendering
 		{
