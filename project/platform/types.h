@@ -22,7 +22,7 @@
 #define S64_MIN ( -0x7fffffffffffffffll - 1 )
 #define S64_MAX 0x7fffffffffffffffll
 
-// Word size is the same as uw or size_t. This engine will not run on some weird compiler that doesn't
+// Word size is the same as uw or size_t. This platform will not run on some weird compiler that doesn't
 // Match the largest object to the word size of the architecture.
 #if defined( ARCH_64_BIT )
 #	define UWORD_MIN U64_MIN
@@ -103,5 +103,7 @@ static_assert( sizeof( f64 ) == 8, "sizeof(f64) != 8" );
 typedef s8  b8;
 typedef s16 b16;
 typedef s32 b32;
+
+using mem_ptr = void*;
 
 #pragma endregion Basic Types

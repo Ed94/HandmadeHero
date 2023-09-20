@@ -67,7 +67,8 @@ ensure_impl( bool condition, char const* message ) {
 	JslSetLightColour( 0, (255 << 8 ) );                            \
 } while (0)
 
-NS_WIN32_BEGIN
+NS_PLATFORM_BEGIN
+using namespace win32;
 
 // TODO(Ed) : This is a global for now.
 global bool Running;
@@ -111,6 +112,83 @@ global s32                 DS_SecondaryBuffer_SamplesPerSecond;
 global s32                 DS_SecondaryBuffer_BytesPerSample;
 
 global s16* SoundBufferSamples;
+
+
+#if Build_Debug
+internal
+void debug_file_free_content( Debug_FileContent* content )
+{
+	if ( content->Data)
+	{
+		VirtualFree( content->Data, 0, MEM_Release);
+		*content = {};
+	}
+}
+
+internal
+Debug_FileContent debug_file_read_content( char* file_path )
+{
+	Debug_FileContent result {};
+
+	HANDLE file_handle = CreateFileA( file_path
+		, GENERIC_READ, FILE_SHARE_READ, 0
+		, OPEN_EXISTING, 0, 0
+	);
+	if ( file_handle == INVALID_HANDLE_VALUE )
+	{
+		// TODO(Ed) : Logging
+		return result;
+	}
+
+	GetFileSizeEx( file_handle, rcast(LARGE_INTEGER*, &result.Size) );
+	if ( result.Size == 0 )
+	{
+		// TODO(Ed) : Logging
+		return result;
+	}
+	result.Data = VirtualAlloc( 0, result.Size, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+
+	u32 bytes_read;
+	if ( ReadFile( file_handle, result.Data, result.Size, rcast(LPDWORD, &bytes_read), 0 ) == false )
+	{
+		// TODO(Ed) : Logging
+		return {};
+	}
+
+	if ( bytes_read != result.Size )
+	{
+		// TODO : Logging
+		return {};
+	}
+
+	CloseHandle( file_handle );
+	return result;
+}
+
+internal
+b32 debug_file_write_content( char* file_path, u32 content_size, void* content_memory )
+{
+	HANDLE file_handle = CreateFileA( file_path
+		, GENERIC_WRITE, 0, 0
+		, CREATE_ALWAYS, 0, 0
+	);
+	if ( file_handle == INVALID_HANDLE_VALUE )
+	{
+		// TODO : Logging
+		return false;
+	}
+
+	DWORD bytes_written;
+	if ( WriteFile( file_handle, content_memory, content_size, & bytes_written, 0 ) == false )
+	{
+		// TODO : Logging
+		return false;
+	}
+
+	CloseHandle( file_handle );
+	return true;
+}
+#endif
 
 internal void
 init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
@@ -489,8 +567,6 @@ main_window_callback(
 	return result;
 }
 
-NS_WIN32_END
-
 internal void
 input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* new_state, u32 raw_btns, u32 btn_flag )
 {
@@ -499,6 +575,8 @@ input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* ne
 	new_state->HalfTransitions = had_transition() ? 1 : 0;
 #undef had_transition
 }
+
+NS_PLATFORM_END
 
 int CALLBACK
 WinMain(
@@ -509,6 +587,7 @@ WinMain(
 )
 {
 	using namespace win32;
+	using namespace platform;
 
 	// Memory
 	engine::Memory engine_memory {};

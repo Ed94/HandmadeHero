@@ -6,7 +6,9 @@ Any code I do for this [series](https://handmadehero.org) will be here.
 
 ## Scripts
 
-* `build.ps1` - Builds the project use `.\scripts\build msvc debug` or `.\scripts\build clang debug`. Add `optimize` for optimized builds.
+* `build.ps1` - Builds the project use `.\scripts\build msvc debug` or `.\scripts\build clang debug`. 
+  * `optimize` for optimized builds.
+  * `dev` for development builds. ( Dev memory layout and code paths compiled ).
 * `clean.ps1` - Cleans the project
 * `update_deps.ps1` - Updates the project dependencies to their latest from their respective repos. (Not done automatically on build)
 

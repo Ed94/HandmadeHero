@@ -152,6 +152,19 @@ update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer*
 		state->XOffset = 0;
 		state->YOffset = 0;
 
+		#if Build_Debug
+		{
+			using namespace platform;
+
+			char* file_path = __FILE__;
+			Debug_FileContent file_content = debug_file_read_content( file_path );
+			if ( file_content.Size )
+			{
+				debug_file_write_content( "test.out", file_content.Size, file_content.Data );
+				debug_file_free_content( & file_content );
+			}
+		}
+		#endif
 	do_once_end
 
 	ControllerState* controller = & input->Controllers[0];
