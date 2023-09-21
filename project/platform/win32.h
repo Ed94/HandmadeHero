@@ -3,11 +3,15 @@
 */
 #pragma once
 
+#pragma warning( push )
+#pragma warning( disable: 5105 )
+#pragma warning( disable: 4820 )
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <xinput.h>
 #include <mmeapi.h>
 #include <dsound.h>
+#pragma warning( pop )
 
 // #include "windows/windows_base.h"
 // #include "windows/window.h"
@@ -146,8 +150,11 @@ xinput_load_library_bindings()
 {
 	HMODULE xinput_lib = LoadLibraryA( XINPUT_DLL_A );
 
+#pragma warning( push )
+#pragma warning( disable: 4191 )
 	xinput_get_state = rcast( XInputGetStateFn*, GetProcAddress( xinput_lib, "XInputGetState" ));
 	xinput_set_state = rcast( XInputSetStateFn*, GetProcAddress( xinput_lib, "XInputSetState" ));
+#pragma warning( pop )
 }
 #pragma endregion XInput
 

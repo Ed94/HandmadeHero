@@ -8,8 +8,8 @@
 		<ShowEmptyFolders>true</ShowEmptyFolders>
 		<IsVirtual>false</IsVirtual>
 		<IsFolder>false</IsFolder>
-		<BuildCommand>pwsh $(WorkspaceDirectory)/scripts/build.ps1 msvc</BuildCommand>
-		<RebuildCommand>pwsh $(WorkspaceDirectory)/scripts/clean; $(WorkspaceDirectory)scripts/build msvc</RebuildCommand>
+		<BuildCommand>pwsh $(WorkspaceDirectory)/scripts/build.ps1 msvc dev debug</BuildCommand>
+		<RebuildCommand>pwsh $(WorkspaceDirectory)/scripts/clean.ps1; $(WorkspaceDirectory)scripts/build.ps1 msvc dev debug</RebuildCommand>
 		<BuildFileCommand></BuildFileCommand>
 		<CleanCommand>pwsh $(WorkspaceDirectory)/scripts/clean.ps1</CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>
@@ -21,8 +21,9 @@
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>
 		<Configurations>
-			<Configuration>Debug</Configuration>
-			<Configuration>Release</Configuration>
+			<Configuration>Dev Optimzied</Configuration>
+			<Configuration>Dev </Configuration>
+			<Configuration>Optimized</Configuration>
 		</Configurations>
 		<Platforms>
 			<Platform>x64</Platform>
@@ -41,6 +42,8 @@
 			<Define>UNICODE</Define>
 			<Define>_UNICODE</Define>
 			<Define>GEN_TIME</Define>
+			<Define>Build_Debug</Define>
+			<Define>Build_Development</Define>
 		</Defines>
 		<ConfigProperties>
 			<ConfigAndPlatform>

@@ -4,6 +4,16 @@
 */
 
 #pragma once
+
+#pragma warning( disable: 4201 ) // Support for non-standard nameless struct or union extesnion
+#pragma warning( disable: 4100 ) // Support for unreferenced formal parameters
+#pragma warning( disable: 4800 ) // Support implicit conversion to bools
+#pragma warning( disable: 4365 ) // Support for signed/unsigned mismatch auto-conversion
+#pragma warning( disable: 4189 ) // Support for unused variables
+#pragma warning( disable: 4514 ) // Support for unused inline functions
+#pragma warning( disable: 4505 ) // Support for unused static functions
+#pragma warning( disable: 5045 )  // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
+
 #include "grime.h"
 #include "macros.h"
 #include "generics.h"
@@ -22,8 +32,9 @@ NS_PLATFORM_BEGIN
 
 struct Debug_FileContent
 {
-	u32   Size;
 	void* Data;
+	u32   Size;
+	char  _PAD_[4];
 };
 
 void              debug_file_free_content ( Debug_FileContent* file_content );

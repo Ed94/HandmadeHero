@@ -50,6 +50,7 @@ struct SoundBuffer
 	u32  RunningSampleIndex;
 	s32  SamplesPerSecond;
 	s32  NumSamples;
+	char _PAD_[4];
 };
 
 struct DigitalBtn
@@ -76,10 +77,18 @@ struct AnalogStick
 
 struct KeyboardState
 {
+	DigitalBtn Q;
+	DigitalBtn E;
 	DigitalBtn W;
 	DigitalBtn A;
 	DigitalBtn S;
 	DigitalBtn D;
+	DigitalBtn Esc;
+	DigitalBtn Up;
+	DigitalBtn Down;
+	DigitalBtn Left;
+	DigitalBtn Right;
+	DigitalBtn Space;
 };
 
 struct MousesState

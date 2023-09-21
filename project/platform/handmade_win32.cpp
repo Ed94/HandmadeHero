@@ -17,7 +17,7 @@
 	- GetKeyboardLayout (for French keyboards, international WASD support)
 */
 
-#if __clang__
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-const-variable"
 #pragma clang diagnostic ignored "-Wswitch"
@@ -77,11 +77,12 @@ global bool Running;
 struct OffscreenBuffer
 {
 	BITMAPINFO Info;
+	char       _PAD_[4];
 	void*      Memory; // Lets use directly mess with the "pixel's memory buffer"
-	u32        Width;
-	u32        Height;
-	u32        Pitch;
-	u32        BytesPerPixel;
+	s32        Width;
+	s32        Height;
+	s32        Pitch;
+	s32        BytesPerPixel;
 };
 
 struct WinDimensions
@@ -115,7 +116,6 @@ global s16* SoundBufferSamples;
 
 
 #if Build_Debug
-internal
 void debug_file_free_content( Debug_FileContent* content )
 {
 	if ( content->Data)
@@ -125,7 +125,6 @@ void debug_file_free_content( Debug_FileContent* content )
 	}
 }
 
-internal
 Debug_FileContent debug_file_read_content( char* file_path )
 {
 	Debug_FileContent result {};
@@ -165,7 +164,6 @@ Debug_FileContent debug_file_read_content( char* file_path )
 	return result;
 }
 
-internal
 b32 debug_file_write_content( char* file_path, u32 content_size, void* content_memory )
 {
 	HANDLE file_handle = CreateFileA( file_path
@@ -202,12 +200,15 @@ init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
 	}
 
 	// Get direct sound object
+#pragma warning( push )
+#pragma warning( disable: 4191 )
 	direct_sound_create = rcast( DirectSoundCreateFn*, GetProcAddress( sound_library, "DirectSoundCreate" ));
 	if ( ! ensure( direct_sound_create, "Failed to get direct_sound_create_procedure" ) )
 	{
 		// TOOD : Diagnostic
 		return;
 	}
+#pragma warning( pop )
 
 	LPDIRECTSOUND direct_sound;
 	if ( ! SUCCEEDED(direct_sound_create( 0, & direct_sound, 0 )) )
@@ -223,7 +224,7 @@ init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
 	wave_format {};
 	wave_format.wFormatTag      = WAVE_FORMAT_PCM;  /* format type */
 	wave_format.nChannels       = 2;  /* number of channels (i.e. mono, stereo...) */
-	wave_format.nSamplesPerSec  = samples_per_second;  /* sample rate */
+	wave_format.nSamplesPerSec  = scast(u32, samples_per_second);  /* sample rate */
 	wave_format.wBitsPerSample  = 16;  /* number of bits per sample of mono data */
 	wave_format.nBlockAlign     = wave_format.nChannels      * wave_format.wBitsPerSample / 8 ;  /* block size of data */
 	wave_format.nAvgBytesPerSec = wave_format.nSamplesPerSec * wave_format.nBlockAlign;  /* for buffer estimation */
@@ -453,88 +454,6 @@ main_window_callback(
 		}
 		break;
 
-		case WM_SYSKEYDOWN:
-		case WM_SYSKEYUP:
-		case WM_KEYDOWN:
-		case WM_KEYUP:
-		{
-			u32  vk_code  = w_param;
-			b32 is_down  = (l_param >> 31) == 0;
-			b32 was_down = (l_param >> 30);
-			b32 alt_down = (l_param & (1 << 29));
-
-			switch ( vk_code )
-			{
-				case 'Q':
-				{
-					OutputDebugStringA( "Q\n" );
-				}
-				break;
-				case 'E':
-				{
-					OutputDebugStringA( "E\n" );
-				}
-				break;
-				case 'W':
-				{
-					OutputDebugStringA( "W\n" );
-				}
-				break;
-				case 'A':
-				{
-					OutputDebugStringA( "A\n" );
-				}
-				break;
-				case 'S':
-				{
-					OutputDebugStringA( "S\n" );
-				}
-				break;
-				case 'D':
-				{
-					OutputDebugStringA( "D\n" );
-				}
-				break;
-				case VK_ESCAPE:
-				{
-					OutputDebugStringA( "Escape\n" );
-				}
-				break;
-				case VK_UP:
-				{
-					OutputDebugStringA( "Up\n" );
-				}
-				break;
-				case VK_DOWN:
-				{
-					OutputDebugStringA( "Down\n" );
-				}
-				break;
-				case VK_LEFT:
-				{
-					OutputDebugStringA( "Left\n" );
-				}
-				break;
-				case VK_RIGHT:
-				{
-					OutputDebugStringA( "Right\n" );
-				}
-				break;
-				case VK_SPACE:
-				{
-					OutputDebugStringA( "Space\n" );
-				}
-				break;
-				case VK_F4:
-				{
-					if ( alt_down )
-						Running = false;
-				}
-				break;
-			}
-		}
-		break;
-
 		case WM_PAINT:
 		{
 			PAINTSTRUCT info;
@@ -574,6 +493,13 @@ input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* ne
 	new_state->State           = (raw_btns & btn_flag);
 	new_state->HalfTransitions = had_transition() ? 1 : 0;
 #undef had_transition
+}
+
+internal void
+input_process_keyboard_key( engine::DigitalBtn* key, b32 is_down )
+{
+	key->State            = is_down;
+	key->HalfTransitions += is_down;
 }
 
 NS_PLATFORM_END
@@ -672,7 +598,7 @@ WinMain(
 		}
 	}
 
-	WinDimensions dimensions = get_window_dimensions( window_handle );
+	// WinDimensions dimensions = get_window_dimensions( window_handle );
 	resize_dib_section( &BackBuffer, 1280, 720 );
 
 	SoundOutput sound_output;
@@ -708,6 +634,10 @@ WinMain(
 	// Max controllers for the platform layer and thus for all other layers is 4. (Sanity and xinput limit)
 
 	engine::InputState input {};
+
+	engine::KeyboardState keyboard;
+	input.Controllers[0].Keyboard = & keyboard;
+	// Important: Assuming keyboard always connected for now, and assigning to first controller.
 
 	using EngineXInputPadStates = engine::XInputPadState[ Max_Controllers ];
 	EngineXInputPadStates xpad_states[2];
@@ -754,9 +684,11 @@ WinMain(
 	Running = true;
 	while( Running )
 	{
+		keyboard = {};
+
 		// Window Management
 		{
-			if ( PeekMessageW( & window_msg_info, 0, 0, 0, PM_Remove_Messages_From_Queue ) )
+			while ( PeekMessageW( & window_msg_info, 0, 0, 0, PM_Remove_Messages_From_Queue ) )
 			{
 				if ( window_msg_info.message == WM_QUIT  )
 				{
@@ -764,8 +696,96 @@ WinMain(
 					Running = false;
 				}
 
-				TranslateMessage( & window_msg_info );
-				DispatchMessageW( & window_msg_info );
+
+				// Keyboard input handling
+				switch (window_msg_info.message)
+				{
+					case WM_SYSKEYDOWN:
+					case WM_SYSKEYUP:
+					case WM_KEYDOWN:
+					case WM_KEYUP:
+					{
+						WPARAM vk_code  = window_msg_info.wParam;
+						b32    is_down  = scast(b32, (window_msg_info.lParam >> 31) == 0 );
+						b32    was_down = scast(b32, (window_msg_info.lParam >> 30) );
+						b32    alt_down = scast(b32, (window_msg_info.lParam & (1 << 29)) );
+
+						switch ( vk_code )
+						{
+							case 'Q':
+							{
+								input_process_keyboard_key( & keyboard.Q, is_down );
+							}
+							break;
+							case 'E':
+							{
+								input_process_keyboard_key( & keyboard.E, is_down );
+							}
+							break;
+							case 'W':
+							{
+								input_process_keyboard_key( & keyboard.W, is_down );
+							}
+							break;
+							case 'A':
+							{
+								input_process_keyboard_key( & keyboard.A, is_down );
+							}
+							break;
+							case 'S':
+							{
+								input_process_keyboard_key( & keyboard.S, is_down );
+							}
+							break;
+							case 'D':
+							{
+								input_process_keyboard_key( & keyboard.D, is_down );
+							}
+							break;
+							case VK_ESCAPE:
+							{
+								input_process_keyboard_key( & keyboard.Esc, is_down );
+							}
+							break;
+							case VK_UP:
+							{
+								input_process_keyboard_key( & keyboard.Up, is_down );
+							}
+							break;
+							case VK_DOWN:
+							{
+								input_process_keyboard_key( & keyboard.Down, is_down );
+							}
+							break;
+							case VK_LEFT:
+							{
+								input_process_keyboard_key( & keyboard.Left, is_down );
+							}
+							break;
+							case VK_RIGHT:
+							{
+								input_process_keyboard_key( & keyboard.Right, is_down );
+							}
+							break;
+							case VK_SPACE:
+							{
+								input_process_keyboard_key( & keyboard.Space, is_down );
+							}
+							break;
+							case VK_F4:
+							{
+								if ( alt_down )
+									Running = false;
+							}
+							break;
+						}
+					}
+					break;
+
+					default:
+						TranslateMessage( & window_msg_info );
+						DispatchMessageW( & window_msg_info );
+				}
 			}
 		}
 
@@ -901,8 +921,8 @@ WinMain(
 		b32 sound_is_valid = false;
 		DWORD ds_play_cursor;
 		DWORD ds_write_cursor;
-		DWORD byte_to_lock;
-		DWORD bytes_to_write;
+		DWORD byte_to_lock   = 0;
+		DWORD bytes_to_write = 0;
 		if ( SUCCEEDED( DS_SecondaryBuffer->GetCurrentPosition( & ds_play_cursor, & ds_write_cursor ) ))
 		{
 
@@ -971,10 +991,10 @@ WinMain(
 		#define MS_PER_SECOND 1000
 		#define MegaCycles_Per_Second (1000 * 1000)
 		u64 cycles_elapsed      = end_cycle_count - last_cycle_time;
-		s32 mega_cycles_elapsed = cycles_elapsed / MegaCycles_Per_Second;
+		u64 mega_cycles_elapsed = cycles_elapsed / MegaCycles_Per_Second;
 		u64 frame_time_elapsed  = frame_cycle_time_end - last_frame_time;
-		u32 ms_per_frame        = MS_PER_SECOND * frame_time_elapsed / perf_counter_frequency;
-		u32 fps                 = perf_counter_frequency / frame_time_elapsed;
+		u32 ms_per_frame        = scast(u32, MS_PER_SECOND * frame_time_elapsed / perf_counter_frequency);
+		u32 fps                 = scast(u32, perf_counter_frequency / frame_time_elapsed);
 
 		// char ms_timing_debug[256] {};
 		// wsprintfA( ms_timing_debug, "%d ms\n" "FPS: %d\n" "mega cycles: %d\n", ms_per_frame, fps, mega_cycles_elapsed );

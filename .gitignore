@@ -21,3 +21,4 @@ vc140.pdb
 build
 
 **/*.dll
+data/test.out

@@ -131,6 +131,7 @@ if ( $vendor -match "clang" )
 	$flag_library					 = '-l'
 	$flag_library_path				 = '-L'
 	$flag_linker                     = '-Wl,'
+	$flag_link_mapfile 				 = '-Map'
 	$flag_link_win_subsystem_console = '/SUBSYSTEM:CONSOLE'
 	$flag_link_win_subsystem_windows = '/SUBSYSTEM:WINDOWS'
 	$flag_link_win_machine_32        = '/MACHINE:X86'
@@ -141,6 +142,7 @@ if ( $vendor -match "clang" )
 	$flag_no_optimization 		     = '-O0'
 	$flag_optimize_fast 		     = '-O2'
 	$flag_optimize_size 		     = '-O1'
+	$flag_optimize_intrinsics		 = '-Oi'
 	$flag_path_output                = '-o'
 	$flag_preprocess_non_intergrated = '-no-integrated-cpp'
 	$flag_profiling_debug            = '-fdebug-info-for-profiling'
@@ -149,7 +151,7 @@ if ( $vendor -match "clang" )
 	$flag_target_arch				 = '-target'
 	$flag_wall 					     = '-Wall'
 	$flag_warning 					 = '-W'
-	$flag_warning_as_error 		     = '-Werror'
+	$flag_warnings_as_errors         = '-Werror'
 	$flag_win_nologo 			     = '/nologo'
 
 	$ignore_warning_ms_include = 'no-microsoft-include'
@@ -175,6 +177,7 @@ if ( $vendor -match "clang" )
 
 		$object = $executable -replace '\.exe', '.obj'
 		$pdb    = $executable -replace '\.exe', '.pdb'
+		$map    = $executable -replace '\.exe', '.map'
 
 		$compiler_args += @(
 			$flag_no_color_diagnostics,
@@ -213,6 +216,7 @@ if ( $vendor -match "clang" )
 		if ( $debug ) {
 			$linker_args += $flag_link_win_debug
 			$linker_args += $flag_link_win_pdb + $pdb
+			$linker_args += $flag_link_mapfile + $map
 		}
 
 		$libraries | ForEach-Object {
@@ -241,7 +245,7 @@ if ( $vendor -match "msvc" )
 	$flag_compile			         = '/c'
 	$flag_debug                      = '/Zi'
 	$flag_define		             = '/D'
-	$flag_exceptions_disabled		 = '/EHs-c-'
+	$flag_exceptions_disabled		 = '/EHsc-'
 	$flag_RTTI_disabled				 = '/GR-'
 	$flag_include                    = '/I'
 	$flag_full_src_path              = '/FC'
@@ -249,6 +253,8 @@ if ( $vendor -match "msvc" )
 	$flag_dll 				         = '/LD'
 	$flag_dll_debug 			     = '/LDd'
 	$flag_linker 		             = '/link'
+	$flag_link_mapfile 				 = '/MAP:'
+	$flag_link_optimize_references   = '/OPT:REF'
 	$flag_link_win_debug 	         = '/DEBUG'
 	$flag_link_win_pdb 		         = '/PDB:'
 	$flag_link_win_machine_32        = '/MACHINE:X86'
@@ -263,6 +269,7 @@ if ( $vendor -match "msvc" )
 	$flag_no_optimization		     = '/Od'
 	$flag_optimize_fast 		     = '/O2'
 	$flag_optimize_size 		     = '/O1'
+	$flag_optimize_intrinsics		 = '/Oi'
 	$flag_optimized_debug			 = '/Zo'
 	$flag_out_name                   = '/OUT:'
 	$flag_path_interm                = '/Fo'
@@ -271,6 +278,8 @@ if ( $vendor -match "msvc" )
 	$flag_preprocess_conform         = '/Zc:preprocessor'
 	$flag_set_stack_size			 = '/F'
 	$flag_syntax_only				 = '/Zs'
+	$flag_wall 					     = '/Wall'
+	$flag_warnings_as_errors 		 = '/WX'
 
 	# This works because this project uses a single unit to build
 	function build-simple
@@ -280,13 +289,14 @@ if ( $vendor -match "msvc" )
 
 		$object = $executable -replace '\.exe', '.obj'
 		$pdb    = $executable -replace '\.exe', '.pdb'
+		$map    = $executable -replace '\.exe', '.map'
 
 		$compiler_args += @(
 			$flag_nologo,
 			# $flag_all_cpp,
-			# $flag_exceptions_disabled,
-			# ( $flag_define + '_HAS_EXCEPTIONS=0' ),
-			# $flag_RTTI_disabled,
+			$flag_exceptions_disabled,
+			( $flag_define + '_HAS_EXCEPTIONS=0' ),
+			$flag_RTTI_disabled,
 			$flag_preprocess_conform,
 			$flag_full_src_path,
 			( $flag_path_interm + $path_build + '\' ),
@@ -328,6 +338,7 @@ if ( $vendor -match "msvc" )
 		if ( $debug ) {
 			$linker_args += $flag_link_win_debug
 			$linker_args += $flag_link_win_pdb + $pdb
+			$linker_args += $flag_link_mapfile + $map
 		}
 		else {
 		}
@@ -417,6 +428,11 @@ $compiler_args = @(
 	($flag_define + 'UNICODE'),
 	($flag_define + '_UNICODE')
 	# ($flag_set_stack_size + $stack_size)
+	$flag_wall
+	$flag_warnings_as_errors
+	$flag_optimize_intrinsics
+
+	($flag_define + 'Build_DLL=0' )
 )
 
 if ( $dev ) {
@@ -434,6 +450,7 @@ $linker_args = @(
 	$lib_jsl,
 
 	$flag_link_win_subsystem_windows
+	$flag_link_optimize_references
 )
 
 build-simple $includes $compiler_args $linker_args $unit $executable

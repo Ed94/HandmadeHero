@@ -17,10 +17,10 @@ using GetSoundSampleValueFn = s16( EngineState* state, SoundBuffer* sound_buffer
 internal s16
 square_wave_sample_value( EngineState* state, SoundBuffer* sound_buffer )
 {
-	s16 sample_value = (sound_buffer->RunningSampleIndex /  (state->WavePeriod / 2) ) % 2 ?
+	s32 sample_value = (sound_buffer->RunningSampleIndex /  (state->WavePeriod / 2) ) % 2 ?
 		state->ToneVolume : - state->ToneVolume;
 
-	return sample_value;
+	return scast(s16, sample_value);
 }
 
 internal s16
@@ -30,7 +30,7 @@ sine_wave_sample_value( EngineState* state, SoundBuffer* sound_buffer )
 
 	// time =  TAU * (f32)sound_buffer->RunningSampleIndex / (f32)SoundTest_WavePeriod;
 	f32 sine_value   = sinf( time );
-	s16 sample_value = scast(u16, sine_value * state->ToneVolume);
+	s16 sample_value = scast(s16, sine_value * scast(f32, state->ToneVolume));
 
 	time += TAU * 1.0f / scast(f32, state->WavePeriod );
 	return sample_value;
@@ -40,7 +40,7 @@ internal void
 output_sound( EngineState* state, SoundBuffer* sound_buffer, GetSoundSampleValueFn* get_sample_value )
 {
 	s16* sample_out = sound_buffer->Samples;
-	for ( u32 sample_index = 0; sample_index < sound_buffer->NumSamples; ++ sample_index )
+	for ( s32 sample_index = 0; sample_index < sound_buffer->NumSamples; ++ sample_index )
 	{
 		s16 sample_value = get_sample_value( state, sound_buffer );
 		sound_buffer->RunningSampleIndex++;
@@ -97,7 +97,7 @@ render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
 		#endif
 
 
-			*pixel++ = (red << 16) | (green << 8) | blue;
+			*pixel++ = u32(red << 16) | u32(green << 8) | blue;
 		}
 		wildcard += 0.5375f;
 		row += buffer->Pitch;
@@ -120,8 +120,7 @@ shutdown()
 }
 
 // TODO : I rather expose the back_buffer and sound_buffer using getters for access in any function.
-internal void
-update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer* sound_buffer, Memory* memory )
+void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer* sound_buffer, Memory* memory )
 {
 	// Graphics & Input Test
 	local_persist u32 x_offset = 0;
@@ -178,8 +177,8 @@ update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer*
 		y_offset += pad->DPad.Down.State;
 		y_offset -= pad->DPad.Up.State;
 
-		x_offset += pad->Stick.Left.X.End;
-		y_offset += pad->Stick.Left.Y.End;
+		x_offset += scast(u32, pad->Stick.Left.X.End);
+		y_offset += scast(u32, pad->Stick.Left.Y.End);
 
 		if ( pad->Triangle.State )
 		{
@@ -211,17 +210,17 @@ update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer*
 			// TODO(Ed) : Add rumble test
 		}
 	}
-	else if ( controller->XPad )
+	if ( controller->XPad )
 	{
 		XInputPadState* pad = controller->XPad;
 
 		x_offset += pad->DPad.Right.State;
 		x_offset -= pad->DPad.Left.State;
-		y_offset += pad->DPad.Down.State;
-		y_offset -= pad->DPad.Up.State;
+		y_offset -= pad->DPad.Down.State;
+		y_offset += pad->DPad.Up.State;
 
-		x_offset += pad->Stick.Left.X.End;
-		y_offset += pad->Stick.Left.Y.End;
+		x_offset += scast(u32, pad->Stick.Left.X.End);
+		y_offset += scast(u32, pad->Stick.Left.Y.End);
 
 		if ( pad->Y.State )
 		{
@@ -251,6 +250,44 @@ update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer*
 		if ( pad->Back.State )
 		{
 			// TODO(Ed) : Add rumble test
+		}
+	}
+	if ( controller->Keyboard )
+	{
+		KeyboardState* keyboard = controller->Keyboard;
+
+		x_offset += keyboard->D.State;
+		x_offset -= keyboard->A.State;
+		y_offset += keyboard->W.State;
+		y_offset -= keyboard->S.State;
+
+		if ( keyboard->Esc.State )
+		{
+			// TODO : Add exit game
+		}
+
+		if ( keyboard->Space.State )
+		{
+			wave_switch ^= true;
+		}
+
+		if ( keyboard->Up.State )
+		{
+			state->ToneVolume += 10;
+		}
+		if ( keyboard->Down.State )
+		{
+			state->ToneVolume -= 10;
+		}
+		if ( keyboard->Left.State )
+		{
+			state->WaveToneHz -= 1;
+			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
+		}
+		if ( keyboard->Right.State )
+		{
+			state->WaveToneHz += 1;
+			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 		}
 	}
 
