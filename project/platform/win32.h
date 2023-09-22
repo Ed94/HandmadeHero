@@ -11,6 +11,7 @@
 #include <xinput.h>
 #include <mmeapi.h>
 #include <dsound.h>
+#include <timeapi.h>
 #pragma warning( pop )
 
 // #include "windows/windows_base.h"

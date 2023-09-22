@@ -29,7 +29,7 @@
 #endif
 
 #include <math.h> // TODO : Implement math ourselves
-#include <stdio.h>
+#include <stdio.h> // TODO : Implement output logging ourselves
 #include "engine.cpp"
 
 
@@ -100,8 +100,7 @@ struct SoundOutput
 	s32   LatencySampleCount;
 };
 
-HRESULT WINAPI DirectSoundCreate(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
-
+// HRESULT WINAPI DirectSoundCreate(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
 using DirectSoundCreateFn = HRESULT WINAPI (LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
 global DirectSoundCreateFn* direct_sound_create;
 
@@ -115,7 +114,11 @@ global s32                 DS_SecondaryBuffer_BytesPerSample;
 
 global s16* SoundBufferSamples;
 
+constexpr u64 Tick_To_Millisecond = 1000;
+constexpr u64 Tick_To_Microsecond = 1000 * 1000;
 
+global u64 Performance_Counter_Frequency;
+ 
 #if Build_Debug
 void debug_file_free_content( Debug_FileContent* content )
 {
@@ -189,6 +192,37 @@ b32 debug_file_write_content( char* file_path, u32 content_size, void* content_m
 }
 #endif
 
+inline u64
+timing_get_wall_clock()
+{
+	u64 clock;
+	QueryPerformanceCounter( rcast( LARGE_INTEGER*, & clock) );
+	return clock;
+}
+
+inline f32
+timing_get_seconds_elapsed( u64 start, u64 end )
+{
+	u64 delta = end - start;
+	f32 result = scast(f32, delta) / scast(f32, Performance_Counter_Frequency);
+}
+
+inline f32
+timing_get_ms_elapsed( u64 start, u64 end )
+{
+	u64 delta  = (end - start) * Tick_To_Millisecond;
+	f32 result = scast(f32, delta) / scast(f32, Performance_Counter_Frequency);
+	return result;
+}
+
+inline f32
+timing_get_us_elapsed( u64 start, u64 end )
+{
+	u64 delta = (end - start) * Tick_To_Microsecond;
+	f32 result = scast(f32, delta) / scast(f32, Performance_Counter_Frequency);
+	return result;
+}
+
 internal void
 input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* new_state, u32 raw_btns, u32 btn_flag )
 {
@@ -220,15 +254,15 @@ input_process_axis_value( f32 value, f32 deadzone_threshold )
 	if ( value < -deadzone_threshold  )
 	{
 		result = (value + deadzone_threshold ) / (1.0f - deadzone_threshold );
-		
-		if (result < -1.0f) 
+
+		if (result < -1.0f)
 			result = -1.0f; // Clamp to ensure it doesn't go below -1
 	}
 	else if ( value > deadzone_threshold )
 	{
 		result = (value - deadzone_threshold ) / (1.0f - deadzone_threshold );
-		
-		if (result > 1.0f) 
+
+		if (result > 1.0f)
 			result = 1.0f; // Clamp to ensure it doesn't exceed 1
 	}
 	return result;
@@ -559,10 +593,6 @@ process_pending_window_messages( engine::KeyboardState* keyboard )
 			// I rather do this with GetAsyncKeyState...
 			case WM_SYSKEYDOWN:
 			case WM_SYSKEYUP:
-		#if 0
-			case WM_KEYDOWN:
-			case WM_KEYUP:
-		#endif
 			{
 				WPARAM vk_code  = window_msg_info.wParam;
 				b32    is_down  = scast(b32, (window_msg_info.lParam >> 31) == 0 );
@@ -571,71 +601,6 @@ process_pending_window_messages( engine::KeyboardState* keyboard )
 
 				switch ( vk_code )
 				{
-				#if 0
-					case 'Q':
-					{
-						input_process_keyboard_key( & keyboard->Q, is_down );
-					}
-					break;
-					case 'E':
-					{
-						input_process_keyboard_key( & keyboard->E, is_down );
-					}
-					break;
-					case 'W':
-					{
-						input_process_keyboard_key( & keyboard->W, is_down );
-					}
-					break;
-					case 'A':
-					{
-						input_process_keyboard_key( & keyboard->A, is_down );
-					}
-					break;
-					case 'S':
-					{
-						input_process_keyboard_key( & keyboard->S, is_down );
-					}
-					break;
-					case 'D':
-					{
-						input_process_keyboard_key( & keyboard->D, is_down );
-					}
-					break;
-					case VK_ESCAPE:
-					{
-						input_process_keyboard_key( & keyboard->Escape, is_down );
-					}
-					break;
-					case VK_BACK:
-						input_process_keyboard_key( & keyboard->Backspace, is_down );
-					break;
-					case VK_UP:
-					{
-						input_process_keyboard_key( & keyboard->Up, is_down );
-					}
-					break;
-					case VK_DOWN:
-					{
-						input_process_keyboard_key( & keyboard->Down, is_down );
-					}
-					break;
-					case VK_LEFT:
-					{
-						input_process_keyboard_key( & keyboard->Left, is_down );
-					}
-					break;
-					case VK_RIGHT:
-					{
-						input_process_keyboard_key( & keyboard->Right, is_down );
-					}
-					break;
-					case VK_SPACE:
-					{
-						input_process_keyboard_key( & keyboard->Space, is_down );
-					}
-					break;
-				#endif
 					case VK_F4:
 					{
 						if ( alt_down )
@@ -666,6 +631,29 @@ WinMain(
 	using namespace win32;
 	using namespace platform;
 
+	// Timing
+#if Build_Development
+	u64 launch_clock = timing_get_wall_clock();
+	u64 launch_cycle = __rdtsc();
+#endif
+
+	// TODO(Ed): Make this more flexible later
+	f32 monitor_refresh_hz     = 165.f;
+	f32 engine_update_hz       
+		// = monitor_refresh_hz / 2.f;
+		= monitor_refresh_hz;
+	f32 engine_frame_target_ms = 1000.f / engine_update_hz;
+
+	// Sets the windows scheduler granulaity for this process to 1 ms
+	u32 desired_scheduler_ms = 1;
+	b32 sleep_is_granular = ( timeBeginPeriod( desired_scheduler_ms ) == TIMERR_NOERROR );
+	
+	// Anything at or below the high performance frame-time is too low latency to sleep against the window's scheduler.
+	f32 high_perf_frametime_ms      = 1000.f / 120.f;
+	b32 sub_ms_granularity_required = engine_frame_target_ms <= high_perf_frametime_ms;
+
+	QueryPerformanceFrequency( rcast(LARGE_INTEGER*, & Performance_Counter_Frequency) );
+
 	// Memory
 	engine::Memory engine_memory {};
 	{
@@ -678,37 +666,22 @@ WinMain(
 			+ engine_memory.TransientSize;
 
 	#if Build_Debug
-		void* Base_Address      = (void*) terabytes( 1 );
-		// void* Frame_Address     = (void*) terabytes( 2 );
-		// void* Transient_Address = (void*) terabytes( 2 );
+		void* Base_Address = rcast(void*, terabytes( 1 ));
 	#else
-		void* Base_Address      = 0;
-		// void* Frame_Address     = 0;
-		// void* Transient_Address = 0;
+		void* Base_Address = 0;
 	#endif
 
 		engine_memory.Persistent = VirtualAlloc( Base_Address, total_size
 			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
 		engine_memory.Transient = rcast( u8*, engine_memory.Persistent ) + engine_memory.PersistentSize;
 
-	#if 0
-		engine_memory.Frame = VirtualAlloc( 0, engine_memory.FrameSize
-			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
-
-		engine_memory.Transient = VirtualAlloc( 0, engine_memory.TransientSize
-			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
-	#endif
-
-		if ( engine_memory.Persistent == nullptr
-			// || ! engine_memory.Frame
-			|| engine_memory.Transient == nullptr )
+		if (	engine_memory.Persistent == nullptr
+			||	engine_memory.Transient  == nullptr )
 		{
 			// TODO : Diagnostic Logging
 			return -1;
 		}
 	}
-
-	// MessageBox( 0, L"First message!", L"Handmade Hero", MB_Ok_Btn | MB_Icon_Information );
 
 	WNDCLASSW window_class {};
 	HWND window_handle = nullptr;
@@ -747,7 +720,6 @@ WinMain(
 			return 0;
 		}
 	}
-
 	// WinDimensions dimensions = get_window_dimensions( window_handle );
 	resize_dib_section( &BackBuffer, 1280, 720 );
 
@@ -771,39 +743,28 @@ WinMain(
 		DS_SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
 	}
 
-	// Timing
-	u64 perf_counter_frequency;
-	u64 last_frame_time;
-	QueryPerformanceFrequency( rcast(LARGE_INTEGER*, & perf_counter_frequency) );
-	QueryPerformanceCounter( rcast(LARGE_INTEGER*, & last_frame_time) );
-
-	u64 last_cycle_time = __rdtsc();
-
-	// Input shitshow
 	constexpr u32 Max_Controllers = 4;
 	// Max controllers for the platform layer and thus for all other layers is 4. (Sanity and xinput limit)
 
 	engine::InputState input {};
 
-	engine::KeyboardState keyboard_states[2] {};
+	engine::KeyboardState  keyboard_states[2] {};
 	engine::KeyboardState* old_keyboard = & keyboard_states[0];
 	engine::KeyboardState* new_keyboard = & keyboard_states[1];
 	// Important: Assuming keyboard always connected for now, and assigning to first controller.
 
 	using EngineXInputPadStates = engine::XInputPadState[ Max_Controllers ];
-	EngineXInputPadStates xpad_states[2] {};
+	EngineXInputPadStates  xpad_states[2] {};
 	EngineXInputPadStates* old_xpads = & xpad_states[0];
 	EngineXInputPadStates* new_xpads = & xpad_states[1];
 
 	using EngineDSPadStates = engine::DualsensePadState[Max_Controllers];
-	EngineDSPadStates ds_pad_states[2] {};
+	EngineDSPadStates  ds_pad_states[2] {};
 	EngineDSPadStates* old_ds_pads = & ds_pad_states[0];
 	EngineDSPadStates* new_ds_pads = & ds_pad_states[1];
 
 	using JSL_DeviceHandle = int;
-	u32 jsl_num_devices
-			= JslConnectDevices();
-			// = 0;
+	u32 jsl_num_devices = JslConnectDevices();
 	JSL_DeviceHandle jsl_device_handles[4] {};
 	{
 		xinput_load_library_bindings();
@@ -832,27 +793,18 @@ WinMain(
 		}
 	}
 
+	u64 last_frame_clock = timing_get_wall_clock();
+	u64 last_frame_cycle = __rdtsc();
+
+#if Build_Development
+	u64 startup_cycles = last_frame_cycle - launch_cycle;
+	f32 startup_ms     = timing_get_ms_elapsed( launch_clock, last_frame_clock );
+#endif
+
 	Running = true;
 	while( Running )
 	{
-		// Handeled properly in the input section.
-	#if 0
-		swap( old_keyboard, new_keyboard );
-		*new_keyboard = {};
-		for ( u32 key_index = 0; key_index < array_count( new_keyboard->Keys ); ++ key_index )
-		{
-			engine::DigitalBtn* old_key = & old_keyboard->Keys[ key_index ];
-			engine::DigitalBtn* new_key = & new_keyboard->Keys[ key_index ];
-
-			new_key->EndedDown = old_key->EndedDown;
-		}
-	#endif
 		process_pending_window_messages( new_keyboard );
-		
-		
-		input.Controllers[0].Keyboard = new_keyboard;
-		// printf("Q- Old: %d, New: %d\n", old_keyboard->Q.EndedDown, new_keyboard->Q.EndedDown);
-		printf("Q- HTOld: %d, HTNew: %d\n", old_keyboard->Q.HalfTransitions, new_keyboard->Q.HalfTransitions);
 
 		// Input
 		// TODO(Ed) : Setup user definable deadzones for triggers and sticks.
@@ -861,8 +813,9 @@ WinMain(
 			swap( old_keyboard, new_keyboard );
 			swap( old_xpads,    new_xpads );
 			swap( old_ds_pads,  new_ds_pads );
-			
+
 			// Keyboard Polling
+			// Keyboards are unified for now.
 			{
 				constexpr u32 is_down = 0x8000;
 				input_process_digital_btn( & old_keyboard->Q,         & new_keyboard->Q,         GetAsyncKeyState( 'Q' ),       is_down );
@@ -878,6 +831,8 @@ WinMain(
 				input_process_digital_btn( & old_keyboard->Left,      & new_keyboard->Left,      GetAsyncKeyState( VK_LEFT ),   is_down );
 				input_process_digital_btn( & old_keyboard->Right,     & new_keyboard->Right,     GetAsyncKeyState( VK_RIGHT ),  is_down );
 				input_process_digital_btn( & old_keyboard->Space,     & new_keyboard->Space,     GetAsyncKeyState( VK_SPACE ),  is_down );
+
+				input.Controllers[0].Keyboard = new_keyboard;
 			}
 
 			// XInput Polling
@@ -917,7 +872,7 @@ WinMain(
 					// TODO(Ed) : Min/Max macros!!!
 					new_xpad->Stick.Left.X.Min = new_xpad->Stick.Left.X.Max = new_xpad->Stick.Left.X.End = left_x;
 					new_xpad->Stick.Left.Y.Min = new_xpad->Stick.Left.Y.Max = new_xpad->Stick.Left.Y.End = left_y;
-					
+
 					// TODO(Ed): Make this actually an average for later
 					new_xpad->Stick.Left.X.Average = left_x;
 					new_xpad->Stick.Left.Y.Average = left_y;
@@ -944,6 +899,9 @@ WinMain(
 					break;
 
 				JOY_SHOCK_STATE state = JslGetSimpleState( jsl_device_handles[ jsl_device_index ] );
+
+				// For now we're assuming anything that is detected via JSL is a dualsense pad.
+				// We'll eventually add support possibly for the nintendo pro controller.
 				engine::DualsensePadState* old_ds_pad  = old_ds_pads[ jsl_device_index ];
 				engine::DualsensePadState* new_ds_pad  = new_ds_pads[ jsl_device_index ];
 
@@ -973,7 +931,7 @@ WinMain(
 
 				new_ds_pad->Stick.Left.X.Min = new_ds_pad->Stick.Left.X.Max = new_ds_pad->Stick.Left.X.End = left_x;
 				new_ds_pad->Stick.Left.Y.Min = new_ds_pad->Stick.Left.Y.Max = new_ds_pad->Stick.Left.Y.End = left_y;
-				
+
 				// TODO(Ed): Make this actually an average for later
 				new_ds_pad->Stick.Left.X.Average = left_x;
 				new_ds_pad->Stick.Left.Y.Average = left_y;
@@ -1018,16 +976,38 @@ WinMain(
 
 		engine::update_and_render( & input, rcast(engine::OffscreenBuffer*, & BackBuffer.Memory), & sound_buffer, & engine_memory );
 
-		// Rendering
+		u64 work_frame_end_cycle = __rdtsc();
+		u64 work_frame_end_clock = timing_get_wall_clock();
+
+		f32 work_frame_ms  = timing_get_ms_elapsed( last_frame_clock, work_frame_end_clock );
+		f32 work_cycles    = timing_get_ms_elapsed( last_frame_cycle, work_frame_end_cycle );
+
+		f32 frame_elapsed_ms = work_frame_ms;
+		if ( frame_elapsed_ms < engine_frame_target_ms )
 		{
-			WinDimensions dimensions     = get_window_dimensions( window_handle );
-			HDC           device_context = GetDC( window_handle );
-			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &BackBuffer
-				, 0, 0
-				, dimensions.Width, dimensions.Height );
+			
+			DWORD sleep_ms = scast(DWORD, (engine_frame_target_ms - frame_elapsed_ms)) - 1;
+			if ( ! sub_ms_granularity_required && sleep_is_granular )
+			{
+				Sleep( sleep_ms );
+			}
+
+			u64 frame_clock  = timing_get_wall_clock();
+			frame_elapsed_ms = timing_get_ms_elapsed( last_frame_clock, frame_clock );
+			
+			assert( frame_elapsed_ms < engine_frame_target_ms );
+			while ( frame_elapsed_ms < engine_frame_target_ms )
+			{
+				frame_clock      = timing_get_wall_clock();
+				frame_elapsed_ms = timing_get_ms_elapsed( last_frame_clock, frame_clock );
+			}
+		}
+		else
+		{
+			// TODO(Ed) : Missed the display sync window!
 		}
 
-		// Audio
+		// Update audio buffer
 		do {
 			DWORD ds_status = 0;
 			if ( SUCCEEDED( DS_SecondaryBuffer->GetStatus( & ds_status ) ) )
@@ -1045,28 +1025,20 @@ WinMain(
 
 			DS_SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
 		} while(0);
+		
+		// Update framebuffer
+		{
+			WinDimensions dimensions     = get_window_dimensions( window_handle );
+			HDC           device_context = GetDC( window_handle );
+			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &BackBuffer
+				, 0, 0
+				, dimensions.Width, dimensions.Height );
+		}
 
-		u64 end_cycle_count = __rdtsc();
+		printf("%f\n", frame_elapsed_ms );
 
-		u64 frame_cycle_time_end;
-		QueryPerformanceCounter( rcast( LARGE_INTEGER*, & frame_cycle_time_end) );
-
-		// TODO : Display value here
-
-		#define MS_PER_SECOND 1000
-		#define MegaCycles_Per_Second (1000 * 1000)
-		u64 cycles_elapsed      = end_cycle_count - last_cycle_time;
-		u64 mega_cycles_elapsed = cycles_elapsed / MegaCycles_Per_Second;
-		u64 frame_time_elapsed  = frame_cycle_time_end - last_frame_time;
-		u32 ms_per_frame        = scast(u32, MS_PER_SECOND * frame_time_elapsed / perf_counter_frequency);
-		u32 fps                 = scast(u32, perf_counter_frequency / frame_time_elapsed);
-
-		// char ms_timing_debug[256] {};
-		// wsprintfA( ms_timing_debug, "%d ms\n" "FPS: %d\n" "mega cycles: %d\n", ms_per_frame, fps, mega_cycles_elapsed );
-		// OutputDebugStringA( ms_timing_debug );
-
-		last_cycle_time = end_cycle_count;
-		last_frame_time = frame_cycle_time_end;
+		last_frame_clock = timing_get_wall_clock();
+		last_frame_cycle = __rdtsc();
 	}
 
 	if ( jsl_num_devices > 0 )

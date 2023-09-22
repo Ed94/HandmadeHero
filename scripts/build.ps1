@@ -415,6 +415,7 @@ $includes = @(
 $lib_gdi32  = 'Gdi32.lib'
 $lib_xinput = 'Xinput.lib'
 $lib_user32 = 'User32.lib'
+$lib_winmm  = 'Winmm.lib'
 
 # Github
 $lib_jsl = Join-Path $path_deps 'JoyShockLibrary/x64/JoyShockLibrary.lib'
@@ -446,6 +447,7 @@ $linker_args = @(
 	$lib_gdi32,
 	# $lib_xinput,
 	$lib_user32,
+	$lib_winmm,
 
 	$lib_jsl,
 
