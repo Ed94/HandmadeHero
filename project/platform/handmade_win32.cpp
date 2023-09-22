@@ -29,6 +29,7 @@
 #endif
 
 #include <math.h> // TODO : Implement math ourselves
+#include <stdio.h>
 #include "engine.cpp"
 
 
@@ -187,6 +188,60 @@ b32 debug_file_write_content( char* file_path, u32 content_size, void* content_m
 	return true;
 }
 #endif
+
+internal void
+input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* new_state, u32 raw_btns, u32 btn_flag )
+{
+#define had_transition() ( old_state->EndedDown == new_state->EndedDown )
+	new_state->EndedDown       = (raw_btns & btn_flag) > 0;
+	new_state->HalfTransitions = had_transition() ? 1 : 0;
+#undef had_transition
+}
+
+internal f32
+xinput_process_axis_value( s16 value, s16 deadzone_threshold )
+{
+	f32 result = 0;
+	if ( value < -deadzone_threshold )
+	{
+		result = scast(f32, value + deadzone_threshold) / (32768.0f - scast(f32, deadzone_threshold));
+	}
+	else if ( value > deadzone_threshold )
+	{
+		result = scast(f32, value + deadzone_threshold) / (32767.0f - scast(f32, deadzone_threshold));
+	}
+	return result;
+}
+
+internal f32
+input_process_axis_value( f32 value, f32 deadzone_threshold )
+{
+	f32 result = 0;
+	if ( value < -deadzone_threshold  )
+	{
+		result = (value + deadzone_threshold ) / (1.0f - deadzone_threshold );
+		
+		if (result < -1.0f) 
+			result = -1.0f; // Clamp to ensure it doesn't go below -1
+	}
+	else if ( value > deadzone_threshold )
+	{
+		result = (value - deadzone_threshold ) / (1.0f - deadzone_threshold );
+		
+		if (result > 1.0f) 
+			result = 1.0f; // Clamp to ensure it doesn't exceed 1
+	}
+	return result;
+}
+
+internal void
+input_process_keyboard_key( engine::DigitalBtn* key, b32 is_down )
+{
+	// This assert fails all the time, have no idea why. I'm just going to use GetAsyncKeyState instead, using the messaging events is horrible.
+	// assert( key->EndedDown != is_down )
+	key->EndedDown        = is_down;
+	key->HalfTransitions += is_down;
+}
 
 internal void
 init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
@@ -487,19 +542,115 @@ main_window_callback(
 }
 
 internal void
-input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* new_state, u32 raw_btns, u32 btn_flag )
+process_pending_window_messages( engine::KeyboardState* keyboard )
 {
-#define had_transition() ( old_state->State == new_state->State )
-	new_state->State           = (raw_btns & btn_flag);
-	new_state->HalfTransitions = had_transition() ? 1 : 0;
-#undef had_transition
-}
+	MSG window_msg_info;
+	while ( PeekMessageA( & window_msg_info, 0, 0, 0, PM_Remove_Messages_From_Queue ) )
+	{
+		if ( window_msg_info.message == WM_QUIT  )
+		{
+			OutputDebugStringA("WM_QUIT\n");
+			Running = false;
+		}
 
-internal void
-input_process_keyboard_key( engine::DigitalBtn* key, b32 is_down )
-{
-	key->State            = is_down;
-	key->HalfTransitions += is_down;
+		// Keyboard input handling
+		switch (window_msg_info.message)
+		{
+			// I rather do this with GetAsyncKeyState...
+			case WM_SYSKEYDOWN:
+			case WM_SYSKEYUP:
+		#if 0
+			case WM_KEYDOWN:
+			case WM_KEYUP:
+		#endif
+			{
+				WPARAM vk_code  = window_msg_info.wParam;
+				b32    is_down  = scast(b32, (window_msg_info.lParam >> 31) == 0 );
+				b32    was_down = scast(b32, (window_msg_info.lParam >> 30) );
+				b32    alt_down = scast(b32, (window_msg_info.lParam & (1 << 29)) );
+
+				switch ( vk_code )
+				{
+				#if 0
+					case 'Q':
+					{
+						input_process_keyboard_key( & keyboard->Q, is_down );
+					}
+					break;
+					case 'E':
+					{
+						input_process_keyboard_key( & keyboard->E, is_down );
+					}
+					break;
+					case 'W':
+					{
+						input_process_keyboard_key( & keyboard->W, is_down );
+					}
+					break;
+					case 'A':
+					{
+						input_process_keyboard_key( & keyboard->A, is_down );
+					}
+					break;
+					case 'S':
+					{
+						input_process_keyboard_key( & keyboard->S, is_down );
+					}
+					break;
+					case 'D':
+					{
+						input_process_keyboard_key( & keyboard->D, is_down );
+					}
+					break;
+					case VK_ESCAPE:
+					{
+						input_process_keyboard_key( & keyboard->Escape, is_down );
+					}
+					break;
+					case VK_BACK:
+						input_process_keyboard_key( & keyboard->Backspace, is_down );
+					break;
+					case VK_UP:
+					{
+						input_process_keyboard_key( & keyboard->Up, is_down );
+					}
+					break;
+					case VK_DOWN:
+					{
+						input_process_keyboard_key( & keyboard->Down, is_down );
+					}
+					break;
+					case VK_LEFT:
+					{
+						input_process_keyboard_key( & keyboard->Left, is_down );
+					}
+					break;
+					case VK_RIGHT:
+					{
+						input_process_keyboard_key( & keyboard->Right, is_down );
+					}
+					break;
+					case VK_SPACE:
+					{
+						input_process_keyboard_key( & keyboard->Space, is_down );
+					}
+					break;
+				#endif
+					case VK_F4:
+					{
+						if ( alt_down )
+							Running = false;
+					}
+					break;
+				}
+			}
+			break;
+
+			default:
+				TranslateMessage( & window_msg_info );
+				DispatchMessageW( & window_msg_info );
+		}
+	}
 }
 
 NS_PLATFORM_END
@@ -561,7 +712,6 @@ WinMain(
 
 	WNDCLASSW window_class {};
 	HWND window_handle = nullptr;
-	MSG window_msg_info;
 	{
 		window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
 		window_class.lpfnWndProc = main_window_callback;
@@ -635,17 +785,18 @@ WinMain(
 
 	engine::InputState input {};
 
-	engine::KeyboardState keyboard;
-	input.Controllers[0].Keyboard = & keyboard;
+	engine::KeyboardState keyboard_states[2] {};
+	engine::KeyboardState* old_keyboard = & keyboard_states[0];
+	engine::KeyboardState* new_keyboard = & keyboard_states[1];
 	// Important: Assuming keyboard always connected for now, and assigning to first controller.
 
 	using EngineXInputPadStates = engine::XInputPadState[ Max_Controllers ];
-	EngineXInputPadStates xpad_states[2];
+	EngineXInputPadStates xpad_states[2] {};
 	EngineXInputPadStates* old_xpads = & xpad_states[0];
 	EngineXInputPadStates* new_xpads = & xpad_states[1];
 
 	using EngineDSPadStates = engine::DualsensePadState[Max_Controllers];
-	EngineDSPadStates ds_pad_states[2];
+	EngineDSPadStates ds_pad_states[2] {};
 	EngineDSPadStates* old_ds_pads = & ds_pad_states[0];
 	EngineDSPadStates* new_ds_pads = & ds_pad_states[1];
 
@@ -684,116 +835,50 @@ WinMain(
 	Running = true;
 	while( Running )
 	{
-		keyboard = {};
-
-		// Window Management
+		// Handeled properly in the input section.
+	#if 0
+		swap( old_keyboard, new_keyboard );
+		*new_keyboard = {};
+		for ( u32 key_index = 0; key_index < array_count( new_keyboard->Keys ); ++ key_index )
 		{
-			while ( PeekMessageW( & window_msg_info, 0, 0, 0, PM_Remove_Messages_From_Queue ) )
-			{
-				if ( window_msg_info.message == WM_QUIT  )
-				{
-					OutputDebugStringA("WM_QUIT\n");
-					Running = false;
-				}
+			engine::DigitalBtn* old_key = & old_keyboard->Keys[ key_index ];
+			engine::DigitalBtn* new_key = & new_keyboard->Keys[ key_index ];
 
-
-				// Keyboard input handling
-				switch (window_msg_info.message)
-				{
-					case WM_SYSKEYDOWN:
-					case WM_SYSKEYUP:
-					case WM_KEYDOWN:
-					case WM_KEYUP:
-					{
-						WPARAM vk_code  = window_msg_info.wParam;
-						b32    is_down  = scast(b32, (window_msg_info.lParam >> 31) == 0 );
-						b32    was_down = scast(b32, (window_msg_info.lParam >> 30) );
-						b32    alt_down = scast(b32, (window_msg_info.lParam & (1 << 29)) );
-
-						switch ( vk_code )
-						{
-							case 'Q':
-							{
-								input_process_keyboard_key( & keyboard.Q, is_down );
-							}
-							break;
-							case 'E':
-							{
-								input_process_keyboard_key( & keyboard.E, is_down );
-							}
-							break;
-							case 'W':
-							{
-								input_process_keyboard_key( & keyboard.W, is_down );
-							}
-							break;
-							case 'A':
-							{
-								input_process_keyboard_key( & keyboard.A, is_down );
-							}
-							break;
-							case 'S':
-							{
-								input_process_keyboard_key( & keyboard.S, is_down );
-							}
-							break;
-							case 'D':
-							{
-								input_process_keyboard_key( & keyboard.D, is_down );
-							}
-							break;
-							case VK_ESCAPE:
-							{
-								input_process_keyboard_key( & keyboard.Esc, is_down );
-							}
-							break;
-							case VK_UP:
-							{
-								input_process_keyboard_key( & keyboard.Up, is_down );
-							}
-							break;
-							case VK_DOWN:
-							{
-								input_process_keyboard_key( & keyboard.Down, is_down );
-							}
-							break;
-							case VK_LEFT:
-							{
-								input_process_keyboard_key( & keyboard.Left, is_down );
-							}
-							break;
-							case VK_RIGHT:
-							{
-								input_process_keyboard_key( & keyboard.Right, is_down );
-							}
-							break;
-							case VK_SPACE:
-							{
-								input_process_keyboard_key( & keyboard.Space, is_down );
-							}
-							break;
-							case VK_F4:
-							{
-								if ( alt_down )
-									Running = false;
-							}
-							break;
-						}
-					}
-					break;
-
-					default:
-						TranslateMessage( & window_msg_info );
-						DispatchMessageW( & window_msg_info );
-				}
-			}
+			new_key->EndedDown = old_key->EndedDown;
 		}
+	#endif
+		process_pending_window_messages( new_keyboard );
+		
+		
+		input.Controllers[0].Keyboard = new_keyboard;
+		// printf("Q- Old: %d, New: %d\n", old_keyboard->Q.EndedDown, new_keyboard->Q.EndedDown);
+		printf("Q- HTOld: %d, HTNew: %d\n", old_keyboard->Q.HalfTransitions, new_keyboard->Q.HalfTransitions);
 
 		// Input
+		// TODO(Ed) : Setup user definable deadzones for triggers and sticks.
 		{
 			// Swapping at the beginning of the input frame instead of the end.
-			swap( old_xpads,   new_xpads );
-			swap( old_ds_pads, new_ds_pads );
+			swap( old_keyboard, new_keyboard );
+			swap( old_xpads,    new_xpads );
+			swap( old_ds_pads,  new_ds_pads );
+			
+			// Keyboard Polling
+			{
+				constexpr u32 is_down = 0x8000;
+				input_process_digital_btn( & old_keyboard->Q,         & new_keyboard->Q,         GetAsyncKeyState( 'Q' ),       is_down );
+				input_process_digital_btn( & old_keyboard->E,         & new_keyboard->E,         GetAsyncKeyState( 'E' ),       is_down );
+				input_process_digital_btn( & old_keyboard->W,         & new_keyboard->W,         GetAsyncKeyState( 'W' ),       is_down );
+				input_process_digital_btn( & old_keyboard->A,         & new_keyboard->A,         GetAsyncKeyState( 'A' ),       is_down );
+				input_process_digital_btn( & old_keyboard->S,         & new_keyboard->S,         GetAsyncKeyState( 'S' ),       is_down );
+				input_process_digital_btn( & old_keyboard->D,         & new_keyboard->D,         GetAsyncKeyState( 'D' ),       is_down );
+				input_process_digital_btn( & old_keyboard->Escape,    & new_keyboard->Escape,    GetAsyncKeyState( VK_ESCAPE ), is_down );
+				input_process_digital_btn( & old_keyboard->Backspace, & new_keyboard->Backspace, GetAsyncKeyState( VK_BACK ),   is_down );
+				input_process_digital_btn( & old_keyboard->Up,        & new_keyboard->Up,        GetAsyncKeyState( VK_UP ),     is_down );
+				input_process_digital_btn( & old_keyboard->Down,      & new_keyboard->Down,      GetAsyncKeyState( VK_DOWN ),   is_down );
+				input_process_digital_btn( & old_keyboard->Left,      & new_keyboard->Left,      GetAsyncKeyState( VK_LEFT ),   is_down );
+				input_process_digital_btn( & old_keyboard->Right,     & new_keyboard->Right,     GetAsyncKeyState( VK_RIGHT ),  is_down );
+				input_process_digital_btn( & old_keyboard->Space,     & new_keyboard->Space,     GetAsyncKeyState( VK_SPACE ),  is_down );
+			}
 
 			// XInput Polling
 			// TODO(Ed) : Should we poll this more frequently?
@@ -826,46 +911,16 @@ WinMain(
 					new_xpad->Stick.Left.X.Start = old_xpad->Stick.Left.X.End;
 					new_xpad->Stick.Left.Y.Start = old_xpad->Stick.Left.Y.End;
 
-					// TODO(Ed) : Compress this into a proc
-					f32 X;
-					if ( xpad->sThumbLX < 0 )
-					{
-						X = scast(f32, xpad->sThumbLX) / scast(f32, -S16_MIN);
-					}
-					else
-					{
-						X = scast(f32, xpad->sThumbLX) / scast(f32, S16_MAX);
-					}
+					f32 left_x = xinput_process_axis_value( xpad->sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE );
+					f32 left_y = xinput_process_axis_value( xpad->sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE );
 
 					// TODO(Ed) : Min/Max macros!!!
-					new_xpad->Stick.Left.X.Min = new_xpad->Stick.Left.X.Max = new_xpad->Stick.Left.X.End = X;
-
-					f32 Y;
-					if ( xpad->sThumbLY < 0 )
-					{
-						Y = scast(f32, xpad->sThumbLY) / scast(f32, -S16_MIN);
-					}
-					else
-					{
-						Y = scast(f32, xpad->sThumbLY) / scast(f32, S16_MAX);
-					}
-
-					// TODO(Ed) : Min/Max macros!!!
-					new_xpad->Stick.Left.Y.Min = new_xpad->Stick.Left.Y.Max = new_xpad->Stick.Left.Y.End = Y;
-
-
-
-					// epad->Stick.Left.X.End  = xpad->sThumbLX;
-					// epad->Stick.Left.Y.End  = xpad->sThumbLY;
-					// epad->Stick.Right.X.End = xpad->sThumbRX;
-					// epad->Stick.Right.X.End = xpad->sThumbRY;
-
-					// TODO(Ed) : Dead zone processing!!!!!!!!!!!!!!!
-					// XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE
-					// XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE
-
-					// S16_MAX
-					// S16_MIN
+					new_xpad->Stick.Left.X.Min = new_xpad->Stick.Left.X.Max = new_xpad->Stick.Left.X.End = left_x;
+					new_xpad->Stick.Left.Y.Min = new_xpad->Stick.Left.Y.Max = new_xpad->Stick.Left.Y.End = left_y;
+					
+					// TODO(Ed): Make this actually an average for later
+					new_xpad->Stick.Left.X.Average = left_x;
+					new_xpad->Stick.Left.Y.Average = left_y;
 
 					input.Controllers[ controller_index ].XPad = new_xpad;
 				}
@@ -888,7 +943,7 @@ WinMain(
 				if ( jsl_device_index > 4 )
 					break;
 
-				JOY_SHOCK_STATE       state = JslGetSimpleState( jsl_device_handles[ jsl_device_index ] );
+				JOY_SHOCK_STATE state = JslGetSimpleState( jsl_device_handles[ jsl_device_index ] );
 				engine::DualsensePadState* old_ds_pad  = old_ds_pads[ jsl_device_index ];
 				engine::DualsensePadState* new_ds_pad  = new_ds_pads[ jsl_device_index ];
 
@@ -908,10 +963,20 @@ WinMain(
 				input_process_digital_btn( & old_ds_pad->L1, & new_ds_pad->L1, state.buttons, JSMASK_L );
 				input_process_digital_btn( & old_ds_pad->R1, & new_ds_pad->R1, state.buttons, JSMASK_R );
 
-				// epad->Stick.Left.X.End  = state.stickLX;
-				// epad->Stick.Left.Y.End  = state.stickLY;
-				// epad->Stick.Right.X.End = state.stickRX;
-				// epad->Stick.Right.X.End = state.stickRY;
+				new_ds_pad->Stick.Left.X.Start = old_ds_pad->Stick.Left.X.End;
+				new_ds_pad->Stick.Left.Y.Start = old_ds_pad->Stick.Left.Y.End;
+
+				// Joyshock abstracts the sticks to a float value already for us of -1.f to 1.f.
+				// We'll assume a deadzone of 10% for now.
+				f32 left_x = input_process_axis_value( state.stickLX, 0.1f );
+				f32 left_y = input_process_axis_value( state.stickLY, 0.1f );
+
+				new_ds_pad->Stick.Left.X.Min = new_ds_pad->Stick.Left.X.Max = new_ds_pad->Stick.Left.X.End = left_x;
+				new_ds_pad->Stick.Left.Y.Min = new_ds_pad->Stick.Left.Y.Max = new_ds_pad->Stick.Left.Y.End = left_y;
+				
+				// TODO(Ed): Make this actually an average for later
+				new_ds_pad->Stick.Left.X.Average = left_x;
+				new_ds_pad->Stick.Left.Y.Average = left_y;
 
 				input.Controllers[ jsl_device_index ].DSPad = new_ds_pad;
 			}

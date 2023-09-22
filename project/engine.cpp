@@ -141,10 +141,11 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBu
 #endif
 
 	EngineState* state = rcast( EngineState*, memory->Persistent );
+
 	do_once_start
 		assert( sizeof(EngineState) <= memory->PersistentSize );
 
-		state->ToneVolume = 3000;
+		state->ToneVolume = 1000;
 		state->WaveToneHz = 262;
 		state->WavePeriod = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 
@@ -167,128 +168,108 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBu
 	do_once_end
 
 	ControllerState* controller = & input->Controllers[0];
+	
+	// Abstracting the actionables as booleans and processing within this scope 
+	// for now until proper callbacks for input bindings are setup.
+	b32 move_up    = false;
+	b32 move_down  = false;
+	b32 move_left  = false;
+	b32 move_right = false;
+	
+	b32 action_up    = false;
+	b32 action_down  = false;
+	b32 action_left  = false;
+	b32 action_right = false;
+	
+	f32 analog_threshold = 0.5f;
+	
+	b32 raise_volume  = false;
+	b32 lower_volume  = false;
+	b32 raise_tone_hz = false;
+	b32 lower_tone_hz = false;
+	
+	b32 toggle_wave_tone = false;
 
 	if ( controller->DSPad )
 	{
 		DualsensePadState* pad = controller->DSPad;
-
-		x_offset += pad->DPad.Right.State;
-		x_offset -= pad->DPad.Left.State;
-		y_offset += pad->DPad.Down.State;
-		y_offset -= pad->DPad.Up.State;
-
-		x_offset += scast(u32, pad->Stick.Left.X.End);
-		y_offset += scast(u32, pad->Stick.Left.Y.End);
-
-		if ( pad->Triangle.State )
-		{
-			state->ToneVolume += 10;
-		}
-		if ( pad->Circle.State )
-		{
-			state->ToneVolume -= 10;
-		}
-
-		if ( pad->Square.State )
-		{
-			state->WaveToneHz += 1;
-			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
-		}
-		if ( pad->X.State )
-		{
-			state->WaveToneHz -= 1;
-			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
-		}
-
-		if ( pad->Options.State )
-		{
-			wave_switch ^= true;
-		}
-
-		if ( pad->Share.State )
-		{
-			// TODO(Ed) : Add rumble test
-		}
+		
+		move_right |= pad->DPad.Right.EndedDown || pad->Stick.Left.X.End >  analog_threshold;
+		move_left  |= pad->DPad.Left.EndedDown  || pad->Stick.Left.X.End < -analog_threshold;
+		move_up    |= pad->DPad.Up.EndedDown    || pad->Stick.Left.Y.End >  analog_threshold;
+		move_down  |= pad->DPad.Down.EndedDown  || pad->Stick.Left.Y.End < -analog_threshold;
+		
+		raise_volume |= pad->Triangle.EndedDown;
+		lower_volume |= pad->Circle.EndedDown;
+		
+		raise_tone_hz |= pad->Square.EndedDown;
+		lower_tone_hz |= pad->X.EndedDown;
+		
+		toggle_wave_tone |= pad->Options.EndedDown;
 	}
 	if ( controller->XPad )
 	{
 		XInputPadState* pad = controller->XPad;
-
-		x_offset += pad->DPad.Right.State;
-		x_offset -= pad->DPad.Left.State;
-		y_offset -= pad->DPad.Down.State;
-		y_offset += pad->DPad.Up.State;
-
-		x_offset += scast(u32, pad->Stick.Left.X.End);
-		y_offset += scast(u32, pad->Stick.Left.Y.End);
-
-		if ( pad->Y.State )
-		{
-			state->ToneVolume += 10;
-		}
-		if ( pad->B.State )
-		{
-			state->ToneVolume -= 10;
-		}
-
-		if ( pad->X.State )
-		{
-			state->WaveToneHz += 1;
-			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
-		}
-		if ( pad->A.State )
-		{
-			state->WaveToneHz -= 1;
-			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
-		}
-
-		if ( pad->Start.State )
-		{
-			wave_switch ^= true;
-		}
-
-		if ( pad->Back.State )
-		{
-			// TODO(Ed) : Add rumble test
-		}
+		
+		move_right |= pad->DPad.Right.EndedDown || pad->Stick.Left.X.End >  analog_threshold;
+		move_left  |= pad->DPad.Left.EndedDown  || pad->Stick.Left.X.End < -analog_threshold;
+		move_up    |= pad->DPad.Up.EndedDown    || pad->Stick.Left.Y.End >  analog_threshold;
+		move_down  |= pad->DPad.Down.EndedDown  || pad->Stick.Left.Y.End < -analog_threshold;
+		
+		raise_volume |= pad->Y.EndedDown;
+		lower_volume |= pad->B.EndedDown;
+		
+		raise_tone_hz |= pad->X.EndedDown;
+		lower_tone_hz |= pad->A.EndedDown;
+		
+		toggle_wave_tone |= pad->Start.EndedDown;
 	}
 	if ( controller->Keyboard )
 	{
 		KeyboardState* keyboard = controller->Keyboard;
+		
+		move_right |= keyboard->D.EndedDown;
+		move_left  |= keyboard->A.EndedDown;
+		move_up    |= keyboard->W.EndedDown;
+		move_down  |= keyboard->S.EndedDown;
+		
+		raise_volume |= keyboard->Up.EndedDown;
+		lower_volume |= keyboard->Down.EndedDown;
+		
+		raise_tone_hz |= keyboard->Right.EndedDown;
+		lower_tone_hz |= keyboard->Left.EndedDown;
+		
+		toggle_wave_tone |= keyboard->Space.EndedDown;
+	}
+	
+	x_offset += move_right;
+	x_offset -= move_left;
+	y_offset += move_down;
+	y_offset -= move_up;
 
-		x_offset += keyboard->D.State;
-		x_offset -= keyboard->A.State;
-		y_offset += keyboard->W.State;
-		y_offset -= keyboard->S.State;
+	if ( raise_volume )
+	{
+		state->ToneVolume += 10;
+	}
+	if ( lower_volume )
+	{
+		state->ToneVolume -= 10;
+	}
 
-		if ( keyboard->Esc.State )
-		{
-			// TODO : Add exit game
-		}
+	if ( raise_tone_hz )
+	{
+		state->WaveToneHz += 1;
+		state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
+	}
+	if ( lower_tone_hz )
+	{
+		state->WaveToneHz -= 1;
+		state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
+	}
 
-		if ( keyboard->Space.State )
-		{
-			wave_switch ^= true;
-		}
-
-		if ( keyboard->Up.State )
-		{
-			state->ToneVolume += 10;
-		}
-		if ( keyboard->Down.State )
-		{
-			state->ToneVolume -= 10;
-		}
-		if ( keyboard->Left.State )
-		{
-			state->WaveToneHz -= 1;
-			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
-		}
-		if ( keyboard->Right.State )
-		{
-			state->WaveToneHz += 1;
-			state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
-		}
+	if ( toggle_wave_tone )
+	{
+		wave_switch ^= true;
 	}
 
 	// TODO(Ed) : Allow sample offsets here for more robust platform options

@@ -12,7 +12,7 @@
 #pragma warning( disable: 4189 ) // Support for unused variables
 #pragma warning( disable: 4514 ) // Support for unused inline functions
 #pragma warning( disable: 4505 ) // Support for unused static functions
-#pragma warning( disable: 5045 )  // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
+#pragma warning( disable: 5045 ) // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
 
 #include "grime.h"
 #include "macros.h"
