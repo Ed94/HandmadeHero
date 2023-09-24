@@ -20,11 +20,11 @@
 #include <math.h> // TODO : Implement math ourselves
 #include <stdio.h> // TODO : Implement output logging ourselves
 
-#include "grime.h"
-#include "macros.h"
-#include "generics.h"
-#include "math_constants.h"
-#include "types.h"
+#include "grime.hpp"
+#include "macros.hpp"
+#include "generics.hpp"
+#include "math_constants.hpp"
+#include "types.hpp"
 
 #define NS_PLATFORM_BEGIN namespace platform {
 #define NS_PLATFORM_END }

@@ -18,14 +18,14 @@
 */
 
 // Platform Layer headers
-#include "platform.h"
-#include "jsl.h" // Using this to get dualsense controllers
-#include "win32.h"
+#include "platform.hpp"
+#include "jsl.hpp" // Using this to get dualsense controllers
+#include "win32.hpp"
 #include <malloc.h>
 
 // Engine layer headers
-#include "engine.h"
-#include "platform_engine_api.h"
+#include "engine.hpp"
+#include "platform_engine_api.hpp"
 
 
 // TOOD(Ed): Redo these macros properly later.

@@ -1,6 +1,6 @@
 // Joyshock grime wrapper
 
-#include "grime.h"
+#include "grime.hpp"
 
 #ifdef COMPILER_CLANG
 #	pragma clang diagnostic push

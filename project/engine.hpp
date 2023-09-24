@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "platform/platform.h"
+#include "platform/platform.hpp"
 
 #define NS_ENGINE_BEGIN namespace engine {
 #define NS_ENGINE_END }
