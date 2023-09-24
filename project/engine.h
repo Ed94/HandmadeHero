@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "platform.h"
+#include "platform/platform.h"
 
 #define NS_ENGINE_BEGIN namespace engine {
 #define NS_ENGINE_END }
@@ -58,8 +58,6 @@ struct DigitalBtn
 	s32 HalfTransitions;
 	b32 EndedDown;
 };
-#define DigitalBtn_Up   0
-#define DigitalBtn_Down 1
 
 struct AnalogAxis
 {
@@ -196,10 +194,6 @@ struct InputMode
 
 void input_mode_pop( InputMode* mode );
 void input_mode_pop( InputMode* mode );
-
-// Needs a contextual reference to four things:
-// Timing, Input, Bitmap Buffer, Sound Buffer
-void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer* sound_buffer, Memory* memory );
 
 NS_ENGINE_END
 

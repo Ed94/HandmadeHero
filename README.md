@@ -25,5 +25,5 @@ The build is done in two stages:
 
 ## Gallery
 
-![img](https://files.catbox.moe/fwjm1m.png)
+![img](https://files.catbox.moe/xyh7u7.png)
 ![img](https://files.catbox.moe/b7ifa8.png)

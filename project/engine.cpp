@@ -1,5 +1,5 @@
 #include "engine.h"
-#include "win32.h"
+//#include "win32.h"
 
 NS_ENGINE_BEGIN
 
@@ -109,13 +109,11 @@ b32 input_using_analog()
 	return false;
 }
 
-internal void
-startup()
+void startup()
 {
 }
 
-internal void
-shutdown()
+void shutdown()
 {
 }
 
@@ -146,17 +144,17 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBu
 		assert( sizeof(EngineState) <= memory->PersistentSize );
 
 		state->ToneVolume = 1000;
-		state->WaveToneHz = 262;
+		state->WaveToneHz = 120;
 		state->WavePeriod = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 
 		state->XOffset = 0;
 		state->YOffset = 0;
 
-		#if Build_Debug
+		#if Build_Debug && 0
 		{
 			using namespace platform;
 
-			char* file_path = __FILE__;
+			char const* file_path = __FILE__;
 			Debug_FileContent file_content = debug_file_read_content( file_path );
 			if ( file_content.Size )
 			{
@@ -282,3 +280,4 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBu
 }
 
 NS_ENGINE_END
+

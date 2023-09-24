@@ -10,7 +10,7 @@
 #	pragma warning( disable: 4820 )
 #endif
 
-#include "JoyShockLibrary/JoyShockLibrary.h"
+#include "dependencies/JoyShockLibrary/JoyShockLibrary.h"
 
 #ifdef COMPILER_CLANG
 #	pragma clang diagnostic pop

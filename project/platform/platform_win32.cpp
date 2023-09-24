@@ -17,22 +17,6 @@
 	- GetKeyboardLayout (for French keyboards, international WASD support)
 */
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-const-variable"
-#pragma clang diagnostic ignored "-Wswitch"
-#pragma clang diagnostic ignored "-Wunused-variable"
-#pragma clang diagnostic ignored "-Wunknown-pragmas"
-#pragma clang diagnostic ignored "-Wvarargs"
-#pragma clang diagnostic ignored "-Wunused-function"
-#pragma clang diagnostic ignored "-Wunused-but-set-variable"
-#endif
-
-#include <math.h> // TODO : Implement math ourselves
-#include <stdio.h> // TODO : Implement output logging ourselves
-#include "engine.cpp"
-
-
 // Platform Layer headers
 #include "platform.h"
 #include "jsl.h" // Using this to get dualsense controllers
@@ -41,10 +25,12 @@
 
 // Engine layer headers
 #include "engine.h"
+#include "platform_engine_api.h"
 
 
 // TOOD(Ed): Redo these macros properly later.
 
+#if 1
 #define congrats( message ) do {                                               \
 	JslSetLightColour( 0, (255 << 16) | (215 << 8) );                          \
 	MessageBoxA( 0, message, "Congratulations!", MB_OK | MB_ICONEXCLAMATION ); \
@@ -67,13 +53,10 @@ ensure_impl( bool condition, char const* message ) {
 	MessageBoxA( 0, message, "Fatal Error", MB_OK | MB_ICONERROR ); \
 	JslSetLightColour( 0, (255 << 8 ) );                            \
 } while (0)
+#endif
 
 NS_PLATFORM_BEGIN
 using namespace win32;
-
-// TODO(Ed) : This is a global for now.
-global bool Running;
-
 
 struct OffscreenBuffer
 {
@@ -93,33 +76,57 @@ struct WinDimensions
 };
 
 // TODO : This will def need to be looked over.
-struct SoundOutput
+struct DirectSoundBuffer
 {
-	DWORD IsPlaying;
-	u32   RunningSampleIndex;
-	s32   LatencySampleCount;
+	LPDIRECTSOUNDBUFFER SecondaryBuffer;
+	s16*                Samples;
+	u32                 SecondaryBufferSize;
+	u32                 SamplesPerSecond;
+	u32                 BytesPerSample;
+
+	DWORD               IsPlaying;
+	u32                 RunningSampleIndex;
+	u32                 LatencySampleCount;
 };
 
-// HRESULT WINAPI DirectSoundCreate(LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
+
+#pragma region Static Data
+// TODO(Ed) : This is a global for now.
+global bool Running;
+
+// Max controllers for the platform layer and thus for all other layers is 4. (Sanity and xinput limit)
+constexpr u32 Max_Controllers = 4;
+
+global WinDimensions   Window_Dimensions;
+global OffscreenBuffer Surface_Back_Buffer;
+
 using DirectSoundCreateFn = HRESULT WINAPI (LPGUID lpGuid, LPDIRECTSOUND* ppDS, LPUNKNOWN  pUnkOuter );
 global DirectSoundCreateFn* direct_sound_create;
-
-global OffscreenBuffer BackBuffer;
-global WinDimensions   WindowDimensions;
-
-global LPDIRECTSOUNDBUFFER DS_SecondaryBuffer;
-global s32                 DS_SecondaryBuffer_Size;
-global s32                 DS_SecondaryBuffer_SamplesPerSecond;
-global s32                 DS_SecondaryBuffer_BytesPerSample;
-
-global s16* SoundBufferSamples;
 
 constexpr u64 Tick_To_Millisecond = 1000;
 constexpr u64 Tick_To_Microsecond = 1000 * 1000;
 
 global u64 Performance_Counter_Frequency;
- 
+
+// As of 2023 the highest refreshrate on the market is 500 hz. I'll just make this higher if something comes out beyond that...
+constexpr u32 Monitor_Refresh_Max_Supported = 500;
+
+// Anything at or below the high performance frame-time is too low latency to sleep against the window's scheduler.
+constexpr f32 High_Perf_Frametime_MS = 1000.f / 240.f;
+
+global u32 Monitor_Refresh_Hz     = 60;
+global u32 Engine_Refresh_Hz      = Monitor_Refresh_Hz / 2;
+global f32 Engine_Frame_Target_MS = 1000.f / scast(f32, Engine_Refresh_Hz);
+#pragma endregion Static Data
+
+
 #if Build_Debug
+struct DebugTimeMarker
+{
+	DWORD PlayCursor;
+	DWORD WriteCursor;
+};
+
 void debug_file_free_content( Debug_FileContent* content )
 {
 	if ( content->Data)
@@ -129,7 +136,7 @@ void debug_file_free_content( Debug_FileContent* content )
 	}
 }
 
-Debug_FileContent debug_file_read_content( char* file_path )
+Debug_FileContent debug_file_read_content( char const* file_path )
 {
 	Debug_FileContent result {};
 
@@ -168,7 +175,7 @@ Debug_FileContent debug_file_read_content( char* file_path )
 	return result;
 }
 
-b32 debug_file_write_content( char* file_path, u32 content_size, void* content_memory )
+b32 debug_file_write_content( char const* file_path, u32 content_size, void* content_memory )
 {
 	HANDLE file_handle = CreateFileA( file_path
 		, GENERIC_WRITE, 0, 0
@@ -190,6 +197,54 @@ b32 debug_file_write_content( char* file_path, u32 content_size, void* content_m
 	CloseHandle( file_handle );
 	return true;
 }
+
+internal void
+debug_draw_vertical( u32 x_pos, u32 top, u32 bottom, u32 color )
+{
+	u8*
+	pixel_byte  = rcast(u8*, Surface_Back_Buffer.Memory);
+	pixel_byte += x_pos * Surface_Back_Buffer.BytesPerPixel;
+	pixel_byte += top   * Surface_Back_Buffer.Pitch;
+
+	for ( u32 y = top; y < bottom; ++ y )
+	{
+		u32* pixel = rcast(u32*, pixel_byte);
+		*pixel = color;
+
+		pixel_byte += Surface_Back_Buffer.Pitch;
+	}
+}
+
+inline void
+debug_draw_sound_buffer_marker( DirectSoundBuffer* sound_buffer, f32 coefficient
+	, u32 pad_x, u32 pad_y
+	, u32 top, u32 bottom
+	, DWORD value, u32 color )
+{
+		assert( value < sound_buffer->SecondaryBufferSize );
+		u32 x = pad_x + scast(u32, coefficient * scast(f32, value ));
+		debug_draw_vertical( x, top, bottom, color );
+}
+
+internal void
+debug_sync_display( DirectSoundBuffer* sound_buffer
+                   , u32 num_markers, DebugTimeMarker* markers
+                   , f32 ms_per_frame )
+{
+	u32 pad_x       = 16;
+	u32 pad_y       = 16;
+	f32 coefficient = scast(f32, Surface_Back_Buffer.Width) / scast(f32, sound_buffer->SecondaryBufferSize);
+
+	u32 top    = pad_y;
+	u32 bottom = Surface_Back_Buffer.Height - pad_y;
+
+	for ( u32 marker_index = 0; marker_index < num_markers; ++ marker_index )
+	{
+		DebugTimeMarker* marker = & markers[marker_index];
+		debug_draw_sound_buffer_marker( sound_buffer, coefficient, pad_x, pad_y, top, bottom, marker->PlayCursor, 0xFFFFFFFF );
+		debug_draw_sound_buffer_marker( sound_buffer, coefficient, pad_x, pad_y, top, bottom, marker->WriteCursor, 0xFFFF0000 );
+	}
+}
 #endif
 
 inline u64
@@ -205,6 +260,7 @@ timing_get_seconds_elapsed( u64 start, u64 end )
 {
 	u64 delta = end - start;
 	f32 result = scast(f32, delta) / scast(f32, Performance_Counter_Frequency);
+	return result;
 }
 
 inline f32
@@ -269,16 +325,13 @@ input_process_axis_value( f32 value, f32 deadzone_threshold )
 }
 
 internal void
-input_process_keyboard_key( engine::DigitalBtn* key, b32 is_down )
+poll_input( engine::InputState* input )
 {
-	// This assert fails all the time, have no idea why. I'm just going to use GetAsyncKeyState instead, using the messaging events is horrible.
-	// assert( key->EndedDown != is_down )
-	key->EndedDown        = is_down;
-	key->HalfTransitions += is_down;
+
 }
 
 internal void
-init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
+init_sound(HWND window_handle, DirectSoundBuffer* sound_buffer )
 {
 	// Load library
 	HMODULE sound_library = LoadLibraryA( "dsound.dll" );
@@ -313,7 +366,7 @@ init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
 	wave_format {};
 	wave_format.wFormatTag      = WAVE_FORMAT_PCM;  /* format type */
 	wave_format.nChannels       = 2;  /* number of channels (i.e. mono, stereo...) */
-	wave_format.nSamplesPerSec  = scast(u32, samples_per_second);  /* sample rate */
+	wave_format.nSamplesPerSec  = scast(u32, sound_buffer->SamplesPerSecond);  /* sample rate */
 	wave_format.wBitsPerSample  = 16;  /* number of bits per sample of mono data */
 	wave_format.nBlockAlign     = wave_format.nChannels      * wave_format.wBitsPerSample / 8 ;  /* block size of data */
 	wave_format.nAvgBytesPerSec = wave_format.nSamplesPerSec * wave_format.nBlockAlign;  /* for buffer estimation */
@@ -338,29 +391,29 @@ init_sound(HWND window_handle, s32 samples_per_second, s32 buffer_size )
 
 	DSBUFFERDESC
 	buffer_description { sizeof(buffer_description) };
-	buffer_description.dwFlags       = 0;
-	buffer_description.dwBufferBytes = buffer_size;
+	buffer_description.dwFlags       = DSBCAPS_GETCURRENTPOSITION2;
+	buffer_description.dwBufferBytes = sound_buffer->SecondaryBufferSize;
 	buffer_description.lpwfxFormat   = & wave_format;
 
-	if ( ! SUCCEEDED( direct_sound->CreateSoundBuffer( & buffer_description, & DS_SecondaryBuffer, 0 ) ))
+	if ( ! SUCCEEDED( direct_sound->CreateSoundBuffer( & buffer_description, & sound_buffer->SecondaryBuffer, 0 ) ))
 	{
 		// TODO : Diagnostic
 	}
-	if ( ! SUCCEEDED( DS_SecondaryBuffer->SetFormat( & wave_format ) ) )
+	if ( ! SUCCEEDED( sound_buffer->SecondaryBuffer->SetFormat( & wave_format ) ) )
 	{
 		// TODO : Diagnostic
 	}
 }
 
 internal void
-ds_clear_sound_buffer( SoundOutput* sound_output )
+ds_clear_sound_buffer( DirectSoundBuffer* sound_buffer )
 {
 	LPVOID region_1;
 	DWORD  region_1_size;
 	LPVOID region_2;
 	DWORD  region_2_size;
 
-	HRESULT ds_lock_result = DS_SecondaryBuffer->Lock( 0, DS_SecondaryBuffer_Size
+	HRESULT ds_lock_result = sound_buffer->SecondaryBuffer->Lock( 0, sound_buffer->SecondaryBufferSize
 		, & region_1, & region_1_size
 		, & region_2, & region_2_size
 		, 0 );
@@ -383,21 +436,21 @@ ds_clear_sound_buffer( SoundOutput* sound_output )
 		++ sample_out;
 	}
 
-	if ( ! SUCCEEDED( DS_SecondaryBuffer->Unlock( region_1, region_1_size, region_2, region_2_size ) ))
+	if ( ! SUCCEEDED( sound_buffer->SecondaryBuffer->Unlock( region_1, region_1_size, region_2, region_2_size ) ))
 	{
 		return;
 	}
 }
 
 internal void
-ds_fill_sound_buffer( SoundOutput* sound_output, DWORD byte_to_lock, DWORD bytes_to_write, engine::SoundBuffer* sound_buffer )
+ds_fill_sound_buffer( DirectSoundBuffer* sound_buffer, DWORD byte_to_lock, DWORD bytes_to_write )
 {
 	LPVOID region_1;
 	DWORD  region_1_size;
 	LPVOID region_2;
 	DWORD  region_2_size;
 
-	HRESULT ds_lock_result = DS_SecondaryBuffer->Lock( byte_to_lock, bytes_to_write
+	HRESULT ds_lock_result = sound_buffer->SecondaryBuffer->Lock( byte_to_lock, bytes_to_write
 		, & region_1, & region_1_size
 		, & region_2, & region_2_size
 		, 0 );
@@ -408,7 +461,7 @@ ds_fill_sound_buffer( SoundOutput* sound_output, DWORD byte_to_lock, DWORD bytes
 
 	// TODO : Assert that region sizes are valid
 
-	DWORD region_1_sample_count = region_1_size / DS_SecondaryBuffer_BytesPerSample;
+	DWORD region_1_sample_count = region_1_size / sound_buffer->BytesPerSample;
 	s16*  sample_out            = rcast( s16*, region_1 );
 	s16*  sample_in 		    = sound_buffer->Samples;
 	for ( DWORD sample_index = 0; sample_index < region_1_sample_count; ++ sample_index )
@@ -421,10 +474,10 @@ ds_fill_sound_buffer( SoundOutput* sound_output, DWORD byte_to_lock, DWORD bytes
 		++ sample_out;
 		++ sample_in;
 
-		++ sound_output->RunningSampleIndex;
+		++ sound_buffer->RunningSampleIndex;
 	}
 
-	DWORD region_2_sample_count = region_2_size / DS_SecondaryBuffer_BytesPerSample;
+	DWORD region_2_sample_count = region_2_size / sound_buffer->BytesPerSample;
 	      sample_out            = rcast( s16*, region_2 );
 	for ( DWORD sample_index = 0; sample_index < region_2_sample_count; ++ sample_index )
 	{
@@ -436,10 +489,10 @@ ds_fill_sound_buffer( SoundOutput* sound_output, DWORD byte_to_lock, DWORD bytes
 		++ sample_out;
 		++ sample_in;
 
-		++ sound_output->RunningSampleIndex;
+		++ sound_buffer->RunningSampleIndex;
 	}
 
-	if ( ! SUCCEEDED( DS_SecondaryBuffer->Unlock( region_1, region_1_size, region_2, region_2_size ) ))
+	if ( ! SUCCEEDED( sound_buffer->SecondaryBuffer->Unlock( region_1, region_1_size, region_2, region_2_size ) ))
 	{
 		return;
 	}
@@ -512,12 +565,10 @@ display_buffer_in_window( HDC device_context, u32 window_width, u32 window_heigh
 }
 
 internal LRESULT CALLBACK
-main_window_callback(
-	HWND   handle,
-	UINT   system_messages,
-	WPARAM w_param,
-	LPARAM l_param
-)
+main_window_callback( HWND handle
+	, UINT   system_messages
+	, WPARAM w_param
+	, LPARAM l_param )
 {
 	LRESULT result = 0;
 
@@ -554,7 +605,7 @@ main_window_callback(
 
 			WinDimensions dimensions = get_window_dimensions( handle );
 
-			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &BackBuffer
+			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &Surface_Back_Buffer
 				, x, y
 				, width, height );
 			EndPaint( handle, & info );
@@ -617,16 +668,10 @@ process_pending_window_messages( engine::KeyboardState* keyboard )
 		}
 	}
 }
-
 NS_PLATFORM_END
 
 int CALLBACK
-WinMain(
-	HINSTANCE instance,
-	HINSTANCE prev_instance,
-	LPSTR     commandline,
-	int       show_command
-)
+WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int show_command )
 {
 	using namespace win32;
 	using namespace platform;
@@ -637,20 +682,12 @@ WinMain(
 	u64 launch_cycle = __rdtsc();
 #endif
 
-	// TODO(Ed): Make this more flexible later
-	f32 monitor_refresh_hz     = 165.f;
-	f32 engine_update_hz       
-		// = monitor_refresh_hz / 2.f;
-		= monitor_refresh_hz;
-	f32 engine_frame_target_ms = 1000.f / engine_update_hz;
-
 	// Sets the windows scheduler granulaity for this process to 1 ms
-	u32 desired_scheduler_ms = 1;
+	constexpr u32 desired_scheduler_ms = 1;
 	b32 sleep_is_granular = ( timeBeginPeriod( desired_scheduler_ms ) == TIMERR_NOERROR );
-	
-	// Anything at or below the high performance frame-time is too low latency to sleep against the window's scheduler.
-	f32 high_perf_frametime_ms      = 1000.f / 120.f;
-	b32 sub_ms_granularity_required = engine_frame_target_ms <= high_perf_frametime_ms;
+
+	// If its a high-perofmrance frame-time (a refresh rate that produces a target frametime at or below 4.16~ ms, we cannot allow the scheduler to mess things up)
+	b32 sub_ms_granularity_required = scast(f32, Engine_Refresh_Hz) <= High_Perf_Frametime_MS;
 
 	QueryPerformanceFrequency( rcast(LARGE_INTEGER*, & Performance_Counter_Frequency) );
 
@@ -666,13 +703,12 @@ WinMain(
 			+ engine_memory.TransientSize;
 
 	#if Build_Debug
-		void* Base_Address = rcast(void*, terabytes( 1 ));
+		void* base_address = rcast(void*, terabytes( 1 ));
 	#else
-		void* Base_Address = 0;
+		void* base_address = 0;
 	#endif
 
-		engine_memory.Persistent = VirtualAlloc( Base_Address, total_size
-			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+		engine_memory.Persistent = VirtualAlloc( base_address, total_size , MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
 		engine_memory.Transient = rcast( u8*, engine_memory.Persistent ) + engine_memory.PersistentSize;
 
 		if (	engine_memory.Persistent == nullptr
@@ -721,32 +757,48 @@ WinMain(
 		}
 	}
 	// WinDimensions dimensions = get_window_dimensions( window_handle );
-	resize_dib_section( &BackBuffer, 1280, 720 );
+	resize_dib_section( &Surface_Back_Buffer, 1280, 720 );
 
-	SoundOutput sound_output;
+	DWORD last_play_cursor = 0;
+	b32   sound_is_valid   = false;
+	DirectSoundBuffer ds_sound_buffer;
 	{
-		sound_output.IsPlaying              = 0;
-		DS_SecondaryBuffer_SamplesPerSecond = 48000;
-		DS_SecondaryBuffer_BytesPerSample   = sizeof(s16) * 2;
+		ds_sound_buffer.IsPlaying        = 0;
+		ds_sound_buffer.SamplesPerSecond = 48000;
+		ds_sound_buffer.BytesPerSample   = sizeof(s16) * 2;
 
-		DS_SecondaryBuffer_Size = DS_SecondaryBuffer_SamplesPerSecond * DS_SecondaryBuffer_BytesPerSample;
-		init_sound( window_handle, DS_SecondaryBuffer_SamplesPerSecond, DS_SecondaryBuffer_Size );
+		ds_sound_buffer.SecondaryBufferSize = ds_sound_buffer.SamplesPerSecond * ds_sound_buffer.BytesPerSample;
+		init_sound( window_handle, & ds_sound_buffer );
 
-		SoundBufferSamples = rcast( s16*, VirtualAlloc( 0, 48000 * 2 * sizeof(s16)
+		ds_sound_buffer.Samples = rcast( s16*, VirtualAlloc( 0, 48000 * 2 * sizeof(s16)
 			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write ));
 
-		assert( SoundBufferSamples );
-
-		sound_output.RunningSampleIndex = 0;
-		sound_output.LatencySampleCount = DS_SecondaryBuffer_SamplesPerSecond / 15;
+		assert( ds_sound_buffer.Samples );
+		ds_sound_buffer.RunningSampleIndex = 0;
 		// ds_clear_sound_buffer( & sound_output );
-		DS_SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
-	}
+		ds_sound_buffer.SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
 
-	constexpr u32 Max_Controllers = 4;
-	// Max controllers for the platform layer and thus for all other layers is 4. (Sanity and xinput limit)
+		// Direct sound requires 3 frames of audio latency for no bugs to show u
+		constexpr u32 frames_of_audio_latency = 3;
+		ds_sound_buffer.LatencySampleCount = frames_of_audio_latency * ( ds_sound_buffer.SamplesPerSecond / Engine_Refresh_Hz );
+	}
+#if Build_Development
+	u32             debug_marker_index = 0;
+	DebugTimeMarker debug_markers[ Monitor_Refresh_Max_Supported ] {};
+	u32             debug_marker_history_size = Engine_Refresh_Hz / 2;
+	assert( debug_marker_history_size <= Monitor_Refresh_Max_Supported )
+#endif
 
 	engine::InputState input {};
+
+	// There can be 4 of any of each input API type : KB & Mouse, XInput, JSL.
+
+#if 0
+	using EngineKeyboardStates = engine::KeyboardState[ Max_Controllers ];
+	EngineKeyboardStates keyboard_states[2] {};
+	EngineKeyboardStates* old_keyboards = & keyboard_states[0];
+	EngineKeyboardStates* new_keyboards = & keyboard_states[1];
+#endif
 
 	engine::KeyboardState  keyboard_states[2] {};
 	engine::KeyboardState* old_keyboard = & keyboard_states[0];
@@ -801,14 +853,37 @@ WinMain(
 	f32 startup_ms     = timing_get_ms_elapsed( launch_clock, last_frame_clock );
 #endif
 
+
 	Running = true;
+#if 0
+// This tests the play & write cursor update frequency.
+	while ( Running )
+	{
+		DWORD play_cursor;
+		DWORD write_cursor;
+
+		ds_sound_buffer.SecondaryBuffer->GetCurrentPosition( & play_cursor, & write_cursor );
+		char text_buffer[256];
+		sprintf_s( text_buffer, sizeof(text_buffer), "PC:%u WC:%u\n", (u32)play_cursor, (u32)write_cursor );
+		OutputDebugStringA( text_buffer );
+	}
+#endif
 	while( Running )
 	{
 		process_pending_window_messages( new_keyboard );
 
+		// TODO(Ed): Offload polling to these functions later.
+		// poll_xinput( & input, old_xpads, new_xpads );
+		// poll_jsl( & input, old_jsl_pads, new_jsl_pads );
+
+		// or
+		// poll_input();
+
 		// Input
-		// TODO(Ed) : Setup user definable deadzones for triggers and sticks.
+		// void poll_input();
 		{
+			// TODO(Ed) : Setup user definable deadzones for triggers and sticks.
+
 			// Swapping at the beginning of the input frame instead of the end.
 			swap( old_keyboard, new_keyboard );
 			swap( old_xpads,    new_xpads );
@@ -941,21 +1016,21 @@ WinMain(
 		}
 
 		// Pain...
-		b32 sound_is_valid = false;
-		DWORD ds_play_cursor;
-		DWORD ds_write_cursor;
+		// DWORD ds_play_cursor;
+		// DWORD ds_write_cursor;
 		DWORD byte_to_lock   = 0;
 		DWORD bytes_to_write = 0;
-		if ( SUCCEEDED( DS_SecondaryBuffer->GetCurrentPosition( & ds_play_cursor, & ds_write_cursor ) ))
+		DWORD target_cursor  = 0;
+		// if ( SUCCEEDED( ds_sound_buffer.SecondaryBuffer->GetCurrentPosition( & ds_play_cursor, & ds_write_cursor ) ))
+		if ( sound_is_valid )
 		{
-
-			byte_to_lock        = (sound_output.RunningSampleIndex * DS_SecondaryBuffer_BytesPerSample) % DS_SecondaryBuffer_Size;
-			DWORD target_cursor = (ds_play_cursor + (sound_output.LatencySampleCount * DS_SecondaryBuffer_BytesPerSample)) % DS_SecondaryBuffer_Size;
+			byte_to_lock  = (ds_sound_buffer.RunningSampleIndex * ds_sound_buffer.BytesPerSample) % ds_sound_buffer.SecondaryBufferSize;
+			target_cursor = (last_play_cursor + (ds_sound_buffer.LatencySampleCount * ds_sound_buffer.BytesPerSample)) % ds_sound_buffer.SecondaryBufferSize;
 
 			if ( byte_to_lock > target_cursor)
 			{
 				// Infront of play cursor |--play--byte_to_write-->--|
-				bytes_to_write =  DS_SecondaryBuffer_Size - byte_to_lock;
+				bytes_to_write =  ds_sound_buffer.SecondaryBufferSize - byte_to_lock;
 				bytes_to_write += target_cursor;
 			}
 			else
@@ -963,40 +1038,72 @@ WinMain(
 				// Behind play cursor |--byte_to_write-->--play--|
 				bytes_to_write = target_cursor - byte_to_lock;
 			}
-
-			sound_is_valid = true;
+			// sound_is_valid = true;
 		}
 
 		// s16 samples[ 48000 * 2 ];
 		engine::SoundBuffer sound_buffer {};
-		sound_buffer.NumSamples         = bytes_to_write / DS_SecondaryBuffer_BytesPerSample;
-		sound_buffer.RunningSampleIndex = sound_output.RunningSampleIndex;
-		sound_buffer.SamplesPerSecond   = DS_SecondaryBuffer_SamplesPerSecond;
-		sound_buffer.Samples            = SoundBufferSamples;
+		sound_buffer.NumSamples         = bytes_to_write / ds_sound_buffer.BytesPerSample;
+		sound_buffer.RunningSampleIndex = ds_sound_buffer.RunningSampleIndex;
+		sound_buffer.SamplesPerSecond   = ds_sound_buffer.SamplesPerSecond;
+		sound_buffer.Samples            = ds_sound_buffer.Samples;
 
-		engine::update_and_render( & input, rcast(engine::OffscreenBuffer*, & BackBuffer.Memory), & sound_buffer, & engine_memory );
+		engine::update_and_render( & input, rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.Memory), & sound_buffer, & engine_memory );
+
+		// Update audio buffer
+		do {
+			DWORD ds_status = 0;
+			if ( SUCCEEDED( ds_sound_buffer.SecondaryBuffer->GetStatus( & ds_status ) ) )
+			{
+				ds_sound_buffer.IsPlaying = ds_status & DSBSTATUS_PLAYING;
+			}
+
+			if ( ! sound_is_valid )
+				break;
+
+			ds_fill_sound_buffer( & ds_sound_buffer, byte_to_lock, bytes_to_write  );
+
+		#if Build_Development && 0
+			DWORD play_cursor;
+			DWORD write_cursor;
+
+			ds_sound_buffer.SecondaryBuffer->GetCurrentPosition( & play_cursor, & write_cursor );
+			char text_buffer[256];
+			sprintf_s( text_buffer, sizeof(text_buffer), "LPC:%u BTL:%u TC:%u BTW:%u - PC:%u WC:%u\n"
+				, (u32)last_play_cursor, (u32)byte_to_lock, (u32)target_cursor, (u32)bytes_to_write, (u32)play_cursor, (u32)write_cursor );
+			OutputDebugStringA( text_buffer );
+		#endif
+
+			if ( ds_sound_buffer.IsPlaying )
+				break;
+
+			ds_sound_buffer.SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
+		} while(0);
 
 		u64 work_frame_end_cycle = __rdtsc();
 		u64 work_frame_end_clock = timing_get_wall_clock();
 
-		f32 work_frame_ms  = timing_get_ms_elapsed( last_frame_clock, work_frame_end_clock );
+		f32 work_frame_ms  = timing_get_ms_elapsed( last_frame_clock, work_frame_end_clock );  // WorkSecondsElapsed
 		f32 work_cycles    = timing_get_ms_elapsed( last_frame_cycle, work_frame_end_cycle );
 
-		f32 frame_elapsed_ms = work_frame_ms;
-		if ( frame_elapsed_ms < engine_frame_target_ms )
+		f32 frame_elapsed_ms = work_frame_ms; // SecondsElapsedForFrame
+		if ( frame_elapsed_ms < Engine_Frame_Target_MS )
 		{
-			
-			DWORD sleep_ms = scast(DWORD, (engine_frame_target_ms - frame_elapsed_ms)) - 1;
-			if ( ! sub_ms_granularity_required && sleep_is_granular )
+			s32 sleep_ms = scast(DWORD, (Engine_Frame_Target_MS - frame_elapsed_ms)) - 1;
+			if ( sleep_ms > 0 && ! sub_ms_granularity_required && sleep_is_granular )
 			{
-				Sleep( sleep_ms );
+				Sleep( scast(DWORD, sleep_ms) );
 			}
 
 			u64 frame_clock  = timing_get_wall_clock();
 			frame_elapsed_ms = timing_get_ms_elapsed( last_frame_clock, frame_clock );
-			
-			assert( frame_elapsed_ms < engine_frame_target_ms );
-			while ( frame_elapsed_ms < engine_frame_target_ms )
+			if ( frame_elapsed_ms < Engine_Frame_Target_MS )
+			{
+				// TODO(Ed) : Log ms discrepancy here.
+			}
+
+			assert( frame_elapsed_ms < Engine_Frame_Target_MS );
+			while ( frame_elapsed_ms < Engine_Frame_Target_MS )
 			{
 				frame_clock      = timing_get_wall_clock();
 				frame_elapsed_ms = timing_get_ms_elapsed( last_frame_clock, frame_clock );
@@ -1007,39 +1114,53 @@ WinMain(
 			// TODO(Ed) : Missed the display sync window!
 		}
 
-		// Update audio buffer
-		do {
-			DWORD ds_status = 0;
-			if ( SUCCEEDED( DS_SecondaryBuffer->GetStatus( & ds_status ) ) )
-			{
-				sound_output.IsPlaying = ds_status & DSBSTATUS_PLAYING;
-			}
+		last_frame_clock = timing_get_wall_clock(); // LastCouner
+		last_frame_cycle = __rdtsc();
 
-			if ( ! sound_is_valid )
-				break;
-
-			ds_fill_sound_buffer( & sound_output, byte_to_lock, bytes_to_write, & sound_buffer );
-
-			if ( sound_output.IsPlaying )
-				break;
-
-			DS_SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
-		} while(0);
-		
-		// Update framebuffer
+		// Update surface back buffer
 		{
 			WinDimensions dimensions     = get_window_dimensions( window_handle );
 			HDC           device_context = GetDC( window_handle );
-			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &BackBuffer
+
+		#if Build_Development
+			debug_sync_display( & ds_sound_buffer, debug_marker_history_size, debug_markers, Engine_Frame_Target_MS );
+		#endif
+
+			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &Surface_Back_Buffer
 				, 0, 0
 				, dimensions.Width, dimensions.Height );
 		}
 
-		printf("%f\n", frame_elapsed_ms );
+		{
+			DWORD play_cursor  = 0;
+			DWORD write_cursor = 0;
 
-		last_frame_clock = timing_get_wall_clock();
-		last_frame_cycle = __rdtsc();
+			if ( SUCCEEDED( ds_sound_buffer.SecondaryBuffer->GetCurrentPosition( & play_cursor, & write_cursor ) ) )
+			{
+				last_play_cursor = play_cursor;
+				if ( ! sound_is_valid )
+				{
+					ds_sound_buffer.RunningSampleIndex = write_cursor / ds_sound_buffer.BytesPerSample;
+					sound_is_valid = true;
+				}
+			}
+			else
+			{
+				sound_is_valid = false;
+			}
+
+		#if Build_Development
+			assert( debug_marker_index < debug_marker_history_size )
+			debug_markers[debug_marker_index] = { play_cursor, write_cursor };
+			debug_marker_index++;
+
+			if ( debug_marker_index >= debug_marker_history_size )
+				debug_marker_index = 0;
+		#endif
+		}
 	}
+
+	engine::shutdown();
 
 	if ( jsl_num_devices > 0 )
 	{

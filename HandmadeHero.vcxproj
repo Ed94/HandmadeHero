@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{E1CF01B8-BB9F-42F4-9EDB-9F1274D3685A}</ProjectGuid>
+    <RootNamespace>HandmadeHero</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>HandmadeHero</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <!-- Development Configuration for x64 -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Development|x64">
+      <Configuration>Development</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
+    <IncludePath>$(ProjectDir)project;$(IncludePath)</IncludePath>
+    <LibraryPath>$(ProjectDir)data;$(windir)System32;$(LibraryPath)</LibraryPath>
+    <NMakeBuildCommandLine>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(ProjectDir)scripts\build.ps1 msvc dev</NMakeBuildCommandLine>
+    <NMakeCleanCommandLine>pwsh ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(ProjectDir)scripts\clean.ps1</NMakeCleanCommandLine>
+    <NMakePreprocessorDefinitions>GEN_TIME;Build_Development;Build_Debug;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <ExternalIncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath)</ExternalIncludePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ClInclude Include="project\engine.h" />
+    <ClInclude Include="project\platform\generics.h" />
+    <ClInclude Include="project\platform\grime.h" />
+    <ClInclude Include="project\platform\jsl.h" />
+    <ClInclude Include="project\platform\macros.h" />
+    <ClInclude Include="project\platform\math_constants.h" />
+    <ClInclude Include="project\platform\platform.h" />
+    <ClInclude Include="project\platform\platform_engine_api.h" />
+    <ClInclude Include="project\platform\types.h" />
+    <ClInclude Include="project\platform\win32.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="project\engine.cpp" />
+    <ClCompile Include="project\handmade.cpp" />
+    <ClCompile Include="project\handmade_win32.cpp" />
+    <ClCompile Include="project\platform\platform_win32.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="docs\Day 001.md" />
+    <None Include="docs\Day 002.md" />
+    <None Include="docs\Day 003.md" />
+    <None Include="docs\Day 004.md" />
+    <None Include="docs\Day 011.md" />
+    <None Include="docs\Day 012.md" />
+    <None Include="docs\Day 013.md" />
+    <None Include="docs\Day 014.md" />
+    <None Include="docs\Day 015.md" />
+    <None Include="docs\Day 016.md" />
+    <None Include="docs\Day 017.md" />
+    <None Include="docs\Day 019.md" />
+    <None Include="scripts\build.ps1" />
+    <None Include="scripts\clean.ps1" />
+    <None Include="scripts\helpers\devshell.ps1" />
+    <None Include="scripts\helpers\target_arch.psm1" />
+    <None Include="scripts\update_deps.ps1" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Targets" />
+</Project>

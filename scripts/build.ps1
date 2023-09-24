@@ -1,8 +1,10 @@
 Clear-Host
 
-Import-Module ./helpers/target_arch.psm1
-$devshell  = Join-Path $PSScriptRoot 'helpers/devshell.ps1'
-$path_root = git rev-parse --show-toplevel
+$target_arch = Join-Path $PSScriptRoot 'helpers/target_arch.psm1'
+$devshell    = Join-Path $PSScriptRoot 'helpers/devshell.ps1'
+$path_root   = git rev-parse --show-toplevel
+
+Import-Module $target_arch
 
 Push-Location $path_root
 
@@ -30,8 +32,7 @@ if ( $args ) { $args | ForEach-Object {
 
 #region Configuration
 if ($IsWindows) {
-	# This library was really designed to only run on 64-bit systems.
-	# (Its a development tool after all)
+	# This HandmadeHero implementation is only designed for 64-bit systems
     & $devshell -arch amd64
 }
 
@@ -154,12 +155,14 @@ if ( $vendor -match "clang" )
 	$flag_warnings_as_errors         = '-Werror'
 	$flag_win_nologo 			     = '/nologo'
 
-	$ignore_warning_ms_include = 'no-microsoft-include'
+	$ignore_warning_ms_include            = 'no-microsoft-include'
+	$ignore_warning_return_type_c_linkage = 'no-return-type-c-linkage'
 
 	$target_arch = Get-TargetArchClang
 
 	$warning_ignores = @(
-		$ignore_warning_ms_include
+		$ignore_warning_ms_include,
+		$ignore_warning_return_type_c_linkage
 	)
 
 	# https://learn.microsoft.com/en-us/cpp/c-runtime-library/crt-library-features?view=msvc-170
@@ -216,7 +219,7 @@ if ( $vendor -match "clang" )
 		if ( $debug ) {
 			$linker_args += $flag_link_win_debug
 			$linker_args += $flag_link_win_pdb + $pdb
-			$linker_args += $flag_link_mapfile + $map
+			# $linker_args += $flag_link_mapfile + $map
 		}
 
 		$libraries | ForEach-Object {
@@ -338,7 +341,7 @@ if ( $vendor -match "msvc" )
 		if ( $debug ) {
 			$linker_args += $flag_link_win_debug
 			$linker_args += $flag_link_win_pdb + $pdb
-			$linker_args += $flag_link_mapfile + $map
+			# $linker_args += $flag_link_mapfile + $map
 		}
 		else {
 		}
@@ -376,7 +379,7 @@ if ( (Test-Path $path_deps) -eq $false ) {
 $includes = @(
 	$path_project,
 	$path_gen,
-	$path_deps,
+	# $path_deps,
 	$path_platform
 )
 $compiler_args = @()
@@ -420,8 +423,8 @@ $lib_winmm  = 'Winmm.lib'
 # Github
 $lib_jsl = Join-Path $path_deps 'JoyShockLibrary/x64/JoyShockLibrary.lib'
 
-$unit       = Join-Path $path_platform 'handmade_win32.cpp'
-$executable = Join-Path $path_build    'handmade_win32.exe'
+$unit       = Join-Path $path_project 'handmade_win32.cpp'
+$executable = Join-Path $path_build   'handmade_win32.exe'
 
 $stack_size = 1024 * 1024 * 4
 
@@ -434,6 +437,9 @@ $compiler_args = @(
 	$flag_optimize_intrinsics
 
 	($flag_define + 'Build_DLL=0' )
+
+	# For now this script only supports unity builds... (for the full binary)
+	($flag_define + 'Build_Unity=1' )
 )
 
 if ( $dev ) {

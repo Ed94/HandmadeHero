@@ -8,10 +8,10 @@
 		<ShowEmptyFolders>true</ShowEmptyFolders>
 		<IsVirtual>false</IsVirtual>
 		<IsFolder>false</IsFolder>
-		<BuildCommand>pwsh $(WorkspaceDirectory)/scripts/build.ps1 msvc dev debug</BuildCommand>
-		<RebuildCommand>pwsh $(WorkspaceDirectory)/scripts/clean.ps1; $(WorkspaceDirectory)scripts/build.ps1 msvc dev debug</RebuildCommand>
+		<BuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev optimized</BuildCommand>
+		<RebuildCommand></RebuildCommand>
 		<BuildFileCommand></BuildFileCommand>
-		<CleanCommand>pwsh $(WorkspaceDirectory)/scripts/clean.ps1</CleanCommand>
+		<CleanCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/clean.ps1</CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
 		<RunCommand>$(WorkspaceDirectory)/build/handmade_win32.exe</RunCommand>
@@ -19,10 +19,10 @@
 		<DebugCommand>$(WorkspaceDirectory)/build/handmade_win32.exe</DebugCommand>
 		<ExePathCommand>$(WorkspaceDirectory)/build/handmade_win32.exe</ExePathCommand>
 		<DebugSln></DebugSln>
-		<UseVisualStudioEnvBat>false</UseVisualStudioEnvBat>
+		<UseVisualStudioEnvBat>true</UseVisualStudioEnvBat>
 		<Configurations>
 			<Configuration>Dev Optimzied</Configuration>
-			<Configuration>Dev </Configuration>
+			<Configuration>Dev</Configuration>
 			<Configuration>Optimized</Configuration>
 		</Configurations>
 		<Platforms>
@@ -31,11 +31,11 @@
 		<AdditionalIncludePaths>
 			<AdditionalIncludePath>C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.34.31933\include</AdditionalIncludePath>
 			<AdditionalIncludePath>C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\VS\include</AdditionalIncludePath>
-			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\include\10.0.22621.0\ucrt</AdditionalIncludePath>
-			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.22621.0\\um</AdditionalIncludePath>
-			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.22621.0\\shared</AdditionalIncludePath>
-			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.22621.0\\winrt</AdditionalIncludePath>
-			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.22621.0\\cppwinrt</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\ucrt</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.19041.0\\um</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.19041.0\\shared</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.19041..0\\winrt</AdditionalIncludePath>
+			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\10\\include\10.0.19041.0\\cppwinrt</AdditionalIncludePath>
 			<AdditionalIncludePath>C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um</AdditionalIncludePath>
 		</AdditionalIncludePaths>
 		<Defines>
@@ -51,8 +51,26 @@
 				<Defines></Defines>
 				<ForceIncludes></ForceIncludes>
 			</ConfigAndPlatform>
+			<ConfigAndPlatform>
+				<Name>Dev :x64</Name>
+				<Defines></Defines>
+				<ForceIncludes></ForceIncludes>
+			</ConfigAndPlatform>
+			<ConfigAndPlatform>
+				<Name>Dev Optimzied:x64</Name>
+				<Defines></Defines>
+				<ForceIncludes></ForceIncludes>
+			</ConfigAndPlatform>
 			<Config>
 				<Name>Debug</Name>
+				<Defines></Defines>
+			</Config>
+			<Config>
+				<Name>Dev</Name>
+				<Defines></Defines>
+			</Config>
+			<Config>
+				<Name>Dev Optimzied</Name>
 				<Defines></Defines>
 			</Config>
 			<Platform>
