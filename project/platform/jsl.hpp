@@ -2,6 +2,7 @@
 
 #include "grime.hpp"
 
+// JoyShock does not provide a proper c-linkage definition for its structs, so we have to push this warning ignore.
 #ifdef COMPILER_CLANG
 #	pragma clang diagnostic push
 #	pragma clang diagnostic ignored "-Wreturn-type-c-linkage"

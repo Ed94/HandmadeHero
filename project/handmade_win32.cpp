@@ -12,5 +12,5 @@
 #if Build_Unity
 #include "handmade.cpp"
 #include "engine.cpp"
-#include "platform/platform_win32.cpp"
+#include "platform/win32_platform.cpp"
 #endif

@@ -30,7 +30,7 @@
 #	define SWORD_MIN S64_MIN
 #	define SWORD_MAX S64_MAX
 #else
-#	error Unknown architecture size. This library only supports 64 bit architectures.
+#	error Unknown architecture size. This platform only supports 64 bit architectures.
 #endif
 
 #define F32_MIN 1.17549435e-38f

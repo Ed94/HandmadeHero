@@ -5,39 +5,47 @@ NS_ENGINE_BEGIN
 
 struct EngineState
 {
-	s32 WavePeriod;
+	s32 WaveSwitch;
 	s32 WaveToneHz;
 	s32 ToneVolume;
 	s32 XOffset;
 	s32 YOffset;
 };
 
-using GetSoundSampleValueFn = s16( EngineState* state, SoundBuffer* sound_buffer );
+using GetSoundSampleValueFn = s16( EngineState* state, AudioBuffer* sound_buffer );
 
 internal s16
-square_wave_sample_value( EngineState* state, SoundBuffer* sound_buffer )
+square_wave_sample_value( EngineState* state, AudioBuffer* sound_buffer )
 {
-	s32 sample_value = (sound_buffer->RunningSampleIndex /  (state->WavePeriod / 2) ) % 2 ?
+	s32 wave_period = sound_buffer->SamplesPerSecond / state->WaveToneHz;
+
+	s32 sample_value = (sound_buffer->RunningSampleIndex /  (wave_period / 2) ) % 2 ?
 		state->ToneVolume : - state->ToneVolume;
 
 	return scast(s16, sample_value);
 }
 
 internal s16
-sine_wave_sample_value( EngineState* state, SoundBuffer* sound_buffer )
+sine_wave_sample_value( EngineState* state, AudioBuffer* sound_buffer )
 {
 	local_persist f32 time = 0.f;
+
+	s32 wave_period = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 
 	// time =  TAU * (f32)sound_buffer->RunningSampleIndex / (f32)SoundTest_WavePeriod;
 	f32 sine_value   = sinf( time );
 	s16 sample_value = scast(s16, sine_value * scast(f32, state->ToneVolume));
 
-	time += TAU * 1.0f / scast(f32, state->WavePeriod );
+	time += TAU * 1.0f / scast(f32, wave_period );
+	if ( time > TAU )
+	{
+		time -= TAU;
+	}
 	return sample_value;
 }
 
 internal void
-output_sound( EngineState* state, SoundBuffer* sound_buffer, GetSoundSampleValueFn* get_sample_value )
+output_sound( EngineState* state, AudioBuffer* sound_buffer, GetSoundSampleValueFn* get_sample_value )
 {
 	s16* sample_out = sound_buffer->Samples;
 	for ( s32 sample_index = 0; sample_index < sound_buffer->NumSamples; ++ sample_index )
@@ -118,7 +126,7 @@ void shutdown()
 }
 
 // TODO : I rather expose the back_buffer and sound_buffer using getters for access in any function.
-void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBuffer* sound_buffer, Memory* memory )
+void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory* memory )
 {
 	// Graphics & Input Test
 	local_persist u32 x_offset = 0;
@@ -145,10 +153,10 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBu
 
 		state->ToneVolume = 1000;
 		state->WaveToneHz = 120;
-		state->WavePeriod = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 
-		state->XOffset = 0;
-		state->YOffset = 0;
+		state->XOffset    = 0;
+		state->YOffset    = 0;
+		state->WaveSwitch = false;
 
 		#if Build_Debug && 0
 		{
@@ -186,7 +194,12 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBu
 
 	b32 toggle_wave_tone = false;
 
+	b32 pause_renderer  = false;
+	local_persist b32 renderer_paused = false;
+
 	f32 analog_threshold = 0.5f;
+
+	#define pressed( btn ) (btn.EndedDown && btn.HalfTransitions < 1)
 
 	if ( controller->DSPad )
 	{
@@ -203,7 +216,7 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBu
 		raise_tone_hz |= pad->Square.EndedDown;
 		lower_tone_hz |= pad->X.EndedDown;
 
-		toggle_wave_tone |= pad->Options.EndedDown;
+		toggle_wave_tone |= pressed( pad->Options );
 	}
 	if ( controller->XPad )
 	{
@@ -220,7 +233,7 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBu
 		raise_tone_hz |= pad->X.EndedDown;
 		lower_tone_hz |= pad->A.EndedDown;
 
-		toggle_wave_tone |= pad->Start.EndedDown;
+		toggle_wave_tone |= pressed( pad->Start );
 	}
 	if ( controller->Keyboard )
 	{
@@ -237,7 +250,9 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBu
 		raise_tone_hz |= keyboard->Right.EndedDown;
 		lower_tone_hz |= keyboard->Left.EndedDown;
 
-		toggle_wave_tone |= keyboard->Space.EndedDown;
+		pause_renderer |= pressed( keyboard->Pause );
+
+		toggle_wave_tone |= pressed( keyboard->Space );
 	}
 
 	x_offset += 3 * move_right;
@@ -252,31 +267,54 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, SoundBu
 	if ( lower_volume )
 	{
 		state->ToneVolume -= 10;
+		if ( state->ToneVolume <= 0 )
+			state->ToneVolume = 0;
 	}
 
 	if ( raise_tone_hz )
 	{
 		state->WaveToneHz += 1;
-		state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 	}
 	if ( lower_tone_hz )
 	{
 		state->WaveToneHz -= 1;
-		state->WavePeriod  = sound_buffer->SamplesPerSecond / state->WaveToneHz;
+		if ( state->WaveToneHz <= 0 )
+			state->WaveToneHz = 1;
 	}
 
 	if ( toggle_wave_tone )
 	{
-		wave_switch ^= true;
+		state->WaveSwitch ^= true;
 	}
+	render_weird_graident( back_buffer, x_offset, y_offset );
+
+	if ( pause_renderer )
+	{
+		if ( renderer_paused )
+		{
+			platform::set_pause_rendering(false);
+			renderer_paused = false;
+		}
+		else
+		{
+			platform::set_pause_rendering(true);
+			renderer_paused = true;
+		}
+	}
+}
+
+void update_audio( AudioBuffer* audio_buffer, Memory* memory )
+{
+	EngineState* state = rcast( EngineState*, memory->Persistent );
+	do_once_start
+
+	do_once_end
 
 	// TODO(Ed) : Allow sample offsets here for more robust platform options
-	if ( ! wave_switch )
-		output_sound( state, sound_buffer, sine_wave_sample_value );
+	if ( ! state->WaveSwitch )
+		output_sound( state, audio_buffer, sine_wave_sample_value );
 	else
-		output_sound( state, sound_buffer, square_wave_sample_value );
-
-	render_weird_graident( back_buffer, x_offset, y_offset );
+		output_sound( state, audio_buffer, square_wave_sample_value );
 }
 
 NS_ENGINE_END

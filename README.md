@@ -6,7 +6,7 @@ Any code I do for this [series](https://handmadehero.org) will be here.
 
 ## Scripts
 
-* `build.ps1` - Builds the project use `.\scripts\build msvc debug` or `.\scripts\build clang debug`. 
+* `build.ps1` - Builds the project use `.\scripts\build msvc debug` or `.\scripts\build clang debug`.
   * `optimize` for optimized builds.
   * `dev` for development builds. ( Dev memory layout and code paths compiled ).
 * `clean.ps1` - Cleans the project
@@ -25,5 +25,5 @@ The build is done in two stages:
 
 ## Gallery
 
-![img](https://files.catbox.moe/xyh7u7.png)
+![img](https://files.catbox.moe/9zau4s.png)
 ![img](https://files.catbox.moe/b7ifa8.png)

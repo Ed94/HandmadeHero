@@ -44,7 +44,7 @@ struct OffscreenBuffer
 };
 
 // TODO : Will be gutting this once we have other stuff lifted.
-struct SoundBuffer
+struct AudioBuffer
 {
 	s16* Samples;
 	u32  RunningSampleIndex;
@@ -93,6 +93,7 @@ union KeyboardState
 		DigitalBtn Left;
 		DigitalBtn Right;
 		DigitalBtn Space;
+		DigitalBtn Pause;
 	};
 };
 
