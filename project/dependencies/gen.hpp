@@ -3319,6 +3319,14 @@ inline char const* to_str( AccessSpec type )
 	return lookup[ ( u32 )type ];
 }
 
+enum CodeFlag : u32
+{
+	FunctionType  = bit( 0 ),
+	ParamPack     = bit( 1 ),
+	Module_Export = bit( 2 ),
+	Module_Import = bit( 3 ),
+};
+
 // Used to indicate if enum definitoin is an enum class or regular enum.
 enum class EnumT : u8
 {
@@ -3334,11 +3342,24 @@ enum class ModuleFlag : u32
 	None   = 0,
 	Export = bit( 0 ),
 	Import = bit( 1 ),
-	// Private = bit(2),
 
 	Num_ModuleFlags,
 	Invalid,
 };
+
+StrC to_str( ModuleFlag flag )
+{
+	local_persist StrC lookup[ ( u32 )ModuleFlag::Num_ModuleFlags ] = {
+		{sizeof( "__none__" ), "__none__"},
+		{ sizeof( "export" ),  "export"  },
+		{ sizeof( "import" ),  "import"  },
+	};
+
+	if ( flag > ModuleFlag::Import )
+		return { sizeof( "invalid" ), "invalid" };
+
+	return lookup[ ( u32 )flag ];
+}
 
 ModuleFlag operator|( ModuleFlag A, ModuleFlag B )
 {
@@ -3731,10 +3752,10 @@ struct CodeBody;
 // These are to offer ease of use and optionally strong type safety for the AST.
 struct CodeAttributes;
 struct CodeComment;
-struct CodeConstructor;
-struct CodeDestructor;
 struct CodeClass;
+struct CodeConstructor;
 struct CodeDefine;
+struct CodeDestructor;
 struct CodeEnum;
 struct CodeExec;
 struct CodeExtern;
@@ -3756,6 +3777,11 @@ struct CodeTypedef;
 struct CodeUnion;
 struct CodeUsing;
 struct CodeVar;
+
+namespace Parser
+{
+	struct Token;
+}
 
 /*
     AST* wrapper
@@ -3800,7 +3826,7 @@ struct Code
 
 	Code& operator++();
 
-	Code& operator*()
+	auto& operator*()
 	{
 		return *this;
 	}
@@ -3849,7 +3875,7 @@ struct Code_POD
 static_assert( sizeof( Code ) == sizeof( Code_POD ), "ERROR: Code is not POD" );
 
 // Desired width of the AST data structure.
-constexpr u32 AST_POD_Size = 128;
+constexpr int const AST_POD_Size = 128;
 
 /*
     Simple AST POD with functionality to seralize into C++ syntax.
@@ -3905,9 +3931,9 @@ struct AST
 	operator CodeVar();
 #pragma endregion Member Functions
 
-	constexpr static uw ArrSpecs_Cap =
-	( AST_POD_Size - sizeof( AST* ) * 3 - sizeof( StringCached ) - sizeof( CodeT ) - sizeof( ModuleFlag ) - sizeof( u32 ) - sizeof( s32 ) )
-	/ sizeof( SpecifierT )
+	constexpr static int ArrSpecs_Cap =
+	( AST_POD_Size - sizeof( AST* ) * 3 - sizeof( Parser::Token* ) - sizeof( AST* ) - sizeof( StringCached ) - sizeof( CodeT ) - sizeof( ModuleFlag ) - sizeof( int ) )
+	/ sizeof( int )
 	- 1;    // -1 for 4 extra bytes
 
 	union
@@ -3945,12 +3971,17 @@ struct AST
 			{
 				AST* NextVar;    // Variable; Possible way to handle comma separated variables declarations. ( , NextVar->Specs NextVar->Name NextVar->ArrExpr =
 				                 // NextVar->Value )
-				AST* SpecsFuncSuffix;    // Only used with typenames, to store the function suffix if typename is function signature.
+				AST* SuffixSpecs;    // Only used with typenames, to store the function suffix if typename is function signature. ( May not be needed )
 			};
 		};
 
-		StringCached Content;                          // Attributes, Comment, Execution, Include
-		SpecifierT   ArrSpecs[ AST::ArrSpecs_Cap ];    // Specifiers
+		StringCached Content;    // Attributes, Comment, Execution, Include
+
+		struct
+		{
+			SpecifierT ArrSpecs[ ArrSpecs_Cap ];    // Specifiers
+			AST*       NextSpecs;                   // Specifiers; If ArrSpecs is full, then NextSpecs is used.
+		};
 	};
 
 	union
@@ -3966,10 +3997,11 @@ struct AST
 		AST* Back;
 	};
 
-	AST*         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
+	Parser::Token* Token;    // Reference to starting token, only avaialble if it was derived from parsing.
+	AST*           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
 
 	union
 	{
@@ -3979,8 +4011,6 @@ struct AST
 		AccessSpec ParentAccess;
 		s32        NumEntries;
 	};
-
-	s32 Token;    // Handle to the token, stored in the CodeFile (Otherwise unretrivable)
 };
 
 struct AST_POD
@@ -4020,12 +4050,17 @@ struct AST_POD
 			{
 				AST* NextVar;    // Variable; Possible way to handle comma separated variables declarations. ( , NextVar->Specs NextVar->Name NextVar->ArrExpr =
 				                 // NextVar->Value )
-				AST* SpecsFuncSuffix;    // Only used with typenames, to store the function suffix if typename is function signature.
+				AST* SuffixSpecs;    // Only used with typenames, to store the function suffix if typename is function signature. ( May not be needed )
 			};
 		};
 
-		StringCached Content;                          // Attributes, Comment, Execution, Include
-		SpecifierT   ArrSpecs[ AST::ArrSpecs_Cap ];    // Specifiers
+		StringCached Content;    // Attributes, Comment, Execution, Include
+
+		struct
+		{
+			SpecifierT ArrSpecs[ AST::ArrSpecs_Cap ];    // Specifiers
+			AST*       NextSpecs;                        // Specifiers; If ArrSpecs is full, then NextSpecs is used.
+		};
 	};
 
 	union
@@ -4041,10 +4076,11 @@ struct AST_POD
 		AST* Back;
 	};
 
-	AST*         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
+	Parser::Token* Token;    // Reference to starting token, only avaialble if it was derived from parsing.
+	AST*           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
 
 	union
 	{
@@ -4054,9 +4090,15 @@ struct AST_POD
 		AccessSpec ParentAccess;
 		s32        NumEntries;
 	};
-
-	s32 Token;    // Handle to the token, stored in the CodeFile (Otherwise unretrivable)
 };
+
+struct test
+{
+	SpecifierT ArrSpecs[ AST::ArrSpecs_Cap ];    // Specifiers
+	AST*       NextSpecs;                        // Specifiers; If ArrSpecs is full, then NextSpecs is used.
+};
+
+constexpr int pls = sizeof( test );
 
 // Its intended for the AST to have equivalent size to its POD.
 // All extra functionality within the AST namespace should just be syntatic sugar.
@@ -4366,34 +4408,34 @@ Define_CodeType( Var );
 
 struct AST_Body
 {
-	char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
-	Code         Front;
-	Code         Back;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) ];
-	s32          NumEntries;
-	s32          Token;
+	char           _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
+	Code           Front;
+	Code           Back;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) ];
+	s32            NumEntries;
 };
 
-static_assert( sizeof( AST_Body ) == sizeof( AST ), "ERROR: AST_Filtered is not the same size as AST" );
+static_assert( sizeof( AST_Body ) == sizeof( AST ), "ERROR: AST_Body is not the same size as AST" );
 
 struct AST_Attributes
 {
 	union
 	{
-		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 		StringCached Content;
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Attributes ) == sizeof( AST ), "ERROR: AST_Attributes is not the same size as AST" );
@@ -4402,17 +4444,17 @@ struct AST_Comment
 {
 	union
 	{
-		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 		StringCached Content;
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Comment ) == sizeof( AST ), "ERROR: AST_Comment is not the same size as AST" );
@@ -4421,7 +4463,7 @@ struct AST_Class
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4435,14 +4477,14 @@ struct AST_Class
 		};
 	};
 
-	CodeType     Last;
-	CodeType     Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	AccessSpec   ParentAccess;
-	s32          Token;
+	CodeType       Prev;
+	CodeType       Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	AccessSpec     ParentAccess;
 };
 
 static_assert( sizeof( AST_Class ) == sizeof( AST ), "ERROR: AST_Class is not the same size as AST" );
@@ -4451,7 +4493,7 @@ struct AST_Constructor
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4465,13 +4507,13 @@ struct AST_Constructor
 		};
 	};
 
-	Code  Prev;
-	Code  Next;
-	Code  Parent;
-	char  _PAD_NAME_[ sizeof( StringCached ) ];
-	CodeT Type;
-	char  _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32   Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	char           _PAD_NAME_[ sizeof( StringCached ) ];
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Constructor ) == sizeof( AST ), "ERROR: AST_Constructor is not the same size as AST" );
@@ -4480,17 +4522,17 @@ struct AST_Define
 {
 	union
 	{
-		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 		StringCached Content;
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Define ) == sizeof( AST ), "ERROR: AST_Define is not the same size as AST" );
@@ -4499,7 +4541,7 @@ struct AST_Destructor
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4512,13 +4554,13 @@ struct AST_Destructor
 		};
 	};
 
-	Code  Prev;
-	Code  Next;
-	Code  Parent;
-	char  _PAD_NAME_[ sizeof( StringCached ) ];
-	CodeT Type;
-	char  _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32   Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	char           _PAD_NAME_[ sizeof( StringCached ) ];
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Destructor ) == sizeof( AST ), "ERROR: AST_Destructor is not the same size as AST" );
@@ -4527,7 +4569,7 @@ struct AST_Enum
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4541,14 +4583,14 @@ struct AST_Enum
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	char         _PAD_UNUSED_[ sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	char           _PAD_UNUSED_[ sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Enum ) == sizeof( AST ), "ERROR: AST_Enum is not the same size as AST" );
@@ -4557,17 +4599,17 @@ struct AST_Exec
 {
 	union
 	{
-		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 		StringCached Content;
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Exec ) == sizeof( AST ), "ERROR: AST_Exec is not the same size as AST" );
@@ -4576,7 +4618,7 @@ struct AST_Extern
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4586,13 +4628,13 @@ struct AST_Extern
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Extern ) == sizeof( AST ), "ERROR: AST_Extern is not the same size as AST" );
@@ -4601,17 +4643,17 @@ struct AST_Include
 {
 	union
 	{
-		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 		StringCached Content;
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Include ) == sizeof( AST ), "ERROR: AST_Include is not the same size as AST" );
@@ -4620,7 +4662,7 @@ struct AST_Friend
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4631,13 +4673,13 @@ struct AST_Friend
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Friend ) == sizeof( AST ), "ERROR: AST_Friend is not the same size as AST" );
@@ -4646,7 +4688,7 @@ struct AST_Fn
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4660,29 +4702,29 @@ struct AST_Fn
 		};
 	};
 
-	Code         Prev;
-	Code         Parent;
-	Code         Next;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	char         _PAD_UNUSED_[ sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	char           _PAD_UNUSED_[ sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Fn ) == sizeof( AST ), "ERROR: AST_Fn is not the same size as AST" );
 
 struct AST_Module
 {
-	char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	char         _PAD_UNUSED_[ sizeof( u32 ) ];
-	s32          Token;
+	char           _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	char           _PAD_UNUSED_[ sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Module ) == sizeof( AST ), "ERROR: AST_Module is not the same size as AST" );
@@ -4691,7 +4733,7 @@ struct AST_NS
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4701,14 +4743,14 @@ struct AST_NS
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	char         _PAD_UNUSED_[ sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	char           _PAD_UNUSED_[ sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_NS ) == sizeof( AST ), "ERROR: AST_NS is not the same size as AST" );
@@ -4717,7 +4759,7 @@ struct AST_Operator
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4731,14 +4773,14 @@ struct AST_Operator
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	OperatorT    Op;
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	OperatorT      Op;
 };
 
 static_assert( sizeof( AST_Operator ) == sizeof( AST ), "ERROR: AST_Operator is not the same size as AST" );
@@ -4747,7 +4789,7 @@ struct AST_OpCast
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4761,13 +4803,13 @@ struct AST_OpCast
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_OpCast ) == sizeof( AST ), "ERROR: AST_OpCast is not the same size as AST" );
@@ -4776,7 +4818,7 @@ struct AST_Param
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4788,14 +4830,14 @@ struct AST_Param
 		};
 	};
 
-	CodeParam    Last;
-	CodeParam    Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) ];
-	s32          NumEntries;
-	s32          Token;
+	CodeParam      Last;
+	CodeParam      Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) ];
+	s32            NumEntries;
 };
 
 static_assert( sizeof( AST_Param ) == sizeof( AST ), "ERROR: AST_Param is not the same size as AST" );
@@ -4804,17 +4846,17 @@ struct AST_Pragma
 {
 	union
 	{
-		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 		StringCached Content;
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Pragma ) == sizeof( AST ), "ERROR: AST_Pragma is not the same size as AST" );
@@ -4823,32 +4865,33 @@ struct AST_PreprocessCond
 {
 	union
 	{
-		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char         _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 		StringCached Content;
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) + sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_PreprocessCond ) == sizeof( AST ), "ERROR: AST_PreprocessCond is not the same size as AST" );
 
 struct AST_Specifiers
 {
-	SpecifierT   ArrSpecs[ AST::ArrSpecs_Cap ];
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) ];
-	s32          NumEntries;
-	s32          Token;
+	SpecifierT     ArrSpecs[ AST::ArrSpecs_Cap ];
+	CodeSpecifiers NextSpecs;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) ];
+	s32            NumEntries;
 };
 
 static_assert( sizeof( AST_Specifiers ) == sizeof( AST ), "ERROR: AST_Specifier is not the same size as AST" );
@@ -4857,7 +4900,7 @@ struct AST_Struct
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4871,14 +4914,14 @@ struct AST_Struct
 		};
 	};
 
-	CodeType     Last;
-	CodeType     Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	AccessSpec   ParentAccess;
-	s32          Token;
+	CodeType       Prev;
+	CodeType       Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	AccessSpec     ParentAccess;
 };
 
 static_assert( sizeof( AST_Struct ) == sizeof( AST ), "ERROR: AST_Struct is not the same size as AST" );
@@ -4887,7 +4930,7 @@ struct AST_Template
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4898,14 +4941,14 @@ struct AST_Template
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	char         _PAD_UNUSED_[ sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	char           _PAD_UNUSED_[ sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Template ) == sizeof( AST ), "ERROR: AST_Template is not the same size as AST" );
@@ -4914,7 +4957,7 @@ struct AST_Type
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4928,14 +4971,14 @@ struct AST_Type
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	char         _PAD_UNUSED_[ sizeof( ModuleFlag ) ];
-	b32          IsParamPack;
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	char           _PAD_UNUSED_[ sizeof( ModuleFlag ) ];
+	b32            IsParamPack;
 };
 
 static_assert( sizeof( AST_Type ) == sizeof( AST ), "ERROR: AST_Type is not the same size as AST" );
@@ -4944,7 +4987,7 @@ struct AST_Typedef
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4955,14 +4998,14 @@ struct AST_Typedef
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	b32          IsFunction;
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	b32            IsFunction;
 };
 
 static_assert( sizeof( AST_Typedef ) == sizeof( AST ), "ERROR: AST_Typedef is not the same size as AST" );
@@ -4971,7 +5014,7 @@ struct AST_Union
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -4983,14 +5026,14 @@ struct AST_Union
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	char         _PAD_UNUSED_[ sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	char           _PAD_UNUSED_[ sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Union ) == sizeof( AST ), "ERROR: AST_Union is not the same size as AST" );
@@ -4999,7 +5042,7 @@ struct AST_Using
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -5011,14 +5054,14 @@ struct AST_Using
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	char         _PAD_UNUSED_[ sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	char           _PAD_UNUSED_[ sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Using ) == sizeof( AST ), "ERROR: AST_Using is not the same size as AST" );
@@ -5027,7 +5070,7 @@ struct AST_Var
 {
 	union
 	{
-		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap ];
+		char _PAD_[ sizeof( SpecifierT ) * AST::ArrSpecs_Cap + sizeof( AST* ) ];
 
 		struct
 		{
@@ -5041,14 +5084,14 @@ struct AST_Var
 		};
 	};
 
-	Code         Prev;
-	Code         Next;
-	Code         Parent;
-	StringCached Name;
-	CodeT        Type;
-	ModuleFlag   ModuleFlags;
-	char         _PAD_UNUSED_[ sizeof( u32 ) ];
-	s32          Token;
+	Code           Prev;
+	Code           Next;
+	Parser::Token* Token;
+	Code           Parent;
+	StringCached   Name;
+	CodeT          Type;
+	ModuleFlag     ModuleFlags;
+	char           _PAD_UNUSED_[ sizeof( u32 ) ];
 };
 
 static_assert( sizeof( AST_Var ) == sizeof( AST ), "ERROR: AST_Var is not the same size as AST" );
@@ -8543,6 +8586,7 @@ extern CodeSpecifiers spec_internal_linkage;
 extern CodeSpecifiers spec_local_persist;
 extern CodeSpecifiers spec_mutable;
 extern CodeSpecifiers spec_neverinline;
+extern CodeSpecifiers spec_noexcept;
 extern CodeSpecifiers spec_override;
 extern CodeSpecifiers spec_ptr;
 extern CodeSpecifiers spec_pure;
@@ -8669,6 +8713,7 @@ GEN_NS_END
 #ifndef GEN_ROLL_OWN_DEPENDENCIES
 
 GEN_NS_BEGIN
+
 
 #pragma region Macros and Includes
 
@@ -12280,6 +12325,7 @@ global CodeSpecifiers spec_inline;
 global CodeSpecifiers spec_internal_linkage;
 global CodeSpecifiers spec_local_persist;
 global CodeSpecifiers spec_mutable;
+global CodeSpecifiers spec_noexcept;
 global CodeSpecifiers spec_neverinline;
 global CodeSpecifiers spec_override;
 global CodeSpecifiers spec_ptr;
@@ -12407,31 +12453,354 @@ global CodeType t_f64;
 Code Code::Global;
 Code Code::Invalid;
 
+// This serializes all the data-members in a "debug" format, where each member is printed with its associated value.
 char const* AST::debug_str()
 {
-	if ( Parent )
-	{
-		String result = String::make_reserve( GlobalAllocator, kilobytes( 1 ) );
-		result.append_fmt(
-		"\n\tType    : %s"
-		"\n\tParent  : %s %s"
-		"\n\tName    : %s",
-		type_str(),
-		Parent->type_str(),
-		Parent->Name,
-		Name ? Name : ""
-		);
-
-		return result;
-	}
-
 	String result = String::make_reserve( GlobalAllocator, kilobytes( 1 ) );
-	result.append_fmt(
-	"\n\tType    : %s"
-	"\n\tName    : %s",
-	type_str(),
-	Name ? Name : ""
-	);
+
+	if ( Parent )
+		result.append_fmt( "\n\tParent       : %S %S", Parent->type_str(), Name ? Name : "" );
+	else
+		result.append_fmt( "\n\tParent       : %S", "Null" );
+
+	result.append_fmt( "\n\tName         : %S", Name ? Name : "Null" );
+	result.append_fmt( "\n\tType         : %S", type_str() );
+	result.append_fmt( "\n\tModule Flags : %S", to_str( ModuleFlags ) );
+
+	switch ( Type )
+	{
+		using namespace ECode;
+
+		case Invalid :
+		case NewLine :
+		case Access_Private :
+		case Access_Protected :
+		case Access_Public :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			break;
+
+		case Untyped :
+		case Execution :
+		case Comment :
+		case PlatformAttributes :
+		case Preprocess_Define :
+		case Preprocess_Include :
+		case Preprocess_Pragma :
+		case Preprocess_If :
+		case Preprocess_ElIf :
+		case Preprocess_Else :
+		case Preprocess_IfDef :
+		case Preprocess_IfNotDef :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tContent: %S", Content );
+			break;
+
+		case Class :
+		case Struct :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmd   : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tAttributes  : %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tParentAccess: %s", ParentType ? to_str( ParentAccess ) : "No Parent" );
+			result.append_fmt( "\n\tParentType  : %s", ParentType ? ParentType->type_str() : "Null" );
+			result.append_fmt( "\n\tBody        : %S", Body ? Body->debug_str() : "Null" );
+			break;
+
+		case Class_Fwd :
+		case Struct_Fwd :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmd   : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tAttributes  : %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tParentAccess: %s", ParentType ? to_str( ParentAccess ) : "No Parent" );
+			result.append_fmt( "\n\tParentType  : %s", ParentType ? ParentType->type_str() : "Null" );
+			break;
+
+		case Constructor :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt      : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tSpecs          : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tInitializerList: %S", InitializerList ? InitializerList->to_string() : "Null" );
+			result.append_fmt( "\n\tParams         : %S", Params ? Params->to_string() : "Null" );
+			result.append_fmt( "\n\tBody           : %S", Body ? Body->debug_str() : "Null" );
+			break;
+
+		case Constructor_Fwd :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt      : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tSpecs          : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tInitializerList: %S", InitializerList ? InitializerList->to_string() : "Null" );
+			result.append_fmt( "\n\tParams         : %S", Params ? Params->to_string() : "Null" );
+			break;
+
+		case Destructor :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt      : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tSpecs          : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tBody           : %S", Body ? Body->debug_str() : "Null" );
+			break;
+
+		case Destructor_Fwd :
+			break;
+
+		case Enum :
+		case Enum_Class :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt       : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tAttributes      : %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tUnderlying Type : %S", UnderlyingType ? UnderlyingType->to_string() : "Null" );
+			result.append_fmt( "\n\tBody            : %S", Body ? Body->debug_str() : "Null" );
+			break;
+
+		case Enum_Fwd :
+		case Enum_Class_Fwd :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt       : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tAttributes      : %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tUnderlying Type : %S", UnderlyingType ? UnderlyingType->to_string() : "Null" );
+			break;
+
+		case Extern_Linkage :
+		case Namespace :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tBody: %S", Body ? Body->debug_str() : "Null" );
+			break;
+
+		case Friend :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt  : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tDeclaration: %S", Declaration ? Declaration->to_string() : "Null" );
+			break;
+
+		case Function :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tAttributes: %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tSpecs     : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tReturnType: %S", ReturnType ? ReturnType->to_string() : "Null" );
+			result.append_fmt( "\n\tParams    : %S", Params ? Params->to_string() : "Null" );
+			result.append_fmt( "\n\tBody      : %S", Body ? Body->debug_str() : "Null" );
+			break;
+
+		case Function_Fwd :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tAttributes: %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tSpecs     : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tReturnType: %S", ReturnType ? ReturnType->to_string() : "Null" );
+			result.append_fmt( "\n\tParams    : %S", Params ? Params->to_string() : "Null" );
+			break;
+
+		case Module :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			break;
+
+		case Operator :
+		case Operator_Member :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tAttributes: %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tSpecs     : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tReturnType: %S", ReturnType ? ReturnType->to_string() : "Null" );
+			result.append_fmt( "\n\tParams    : %S", Params ? Params->to_string() : "Null" );
+			result.append_fmt( "\n\tBody      : %S", Body ? Body->debug_str() : "Null" );
+			result.append_fmt( "\n\tOp        : %S", to_str( Op ) );
+			break;
+
+		case Operator_Fwd :
+		case Operator_Member_Fwd :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tAttributes: %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tSpecs     : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tReturnType: %S", ReturnType ? ReturnType->to_string() : "Null" );
+			result.append_fmt( "\n\tParams    : %S", Params ? Params->to_string() : "Null" );
+			result.append_fmt( "\n\tOp        : %S", to_str( Op ) );
+			break;
+
+		case Operator_Cast :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tSpecs     : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tValueType : %S", ValueType ? ValueType->to_string() : "Null" );
+			result.append_fmt( "\n\tBody      : %S", Body ? Body->debug_str() : "Null" );
+			break;
+
+		case Operator_Cast_Fwd :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tSpecs     : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tValueType : %S", ValueType ? ValueType->to_string() : "Null" );
+			break;
+
+		case Parameters :
+			result.append_fmt( "\n\tNumEntries: %d", NumEntries );
+			result.append_fmt( "\n\tLast      : %S", Last->Name );
+			result.append_fmt( "\n\tNext      : %S", Next->Name );
+			result.append_fmt( "\n\tValueType : %S", ValueType ? ValueType->to_string() : "Null" );
+			result.append_fmt( "\n\tValue     : %S", Value ? Value->to_string() : "Null" );
+			break;
+
+		case Specifiers :
+		{
+			result.append_fmt( "\n\tNumEntries: %d", NumEntries );
+			result.append( "\n\tArrSpecs: " );
+
+			s32 idx  = 0;
+			s32 left = NumEntries;
+			while ( left-- )
+			{
+				StrC spec = ESpecifier::to_str( ArrSpecs[ idx ] );
+				result.append_fmt( "%.*s, ", spec.Len, spec.Ptr );
+				idx++;
+			}
+			result.append_fmt( "\n\tNextSpecs: %S", NextSpecs ? NextSpecs->debug_str() : "Null" );
+		}
+		break;
+
+		case Template :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tParams     : %S", Params ? Params->to_string() : "Null" );
+			result.append_fmt( "\n\tDeclaration: %S", Declaration ? Declaration->to_string() : "Null" );
+			break;
+
+		case Typedef :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt     : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tUnderlyingType: %S", UnderlyingType ? UnderlyingType->to_string() : "Null" );
+			break;
+
+		case Typename :
+			result.append_fmt( "\n\tAttributes     : %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tSpecs          : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tReturnType     : %S", ReturnType ? ReturnType->to_string() : "Null" );
+			result.append_fmt( "\n\tParams         : %S", Params ? Params->to_string() : "Null" );
+			result.append_fmt( "\n\tArrExpr        : %S", ArrExpr ? ArrExpr->to_string() : "Null" );
+			break;
+
+		case Union :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tAttributes: %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tBody      : %S", Body ? Body->debug_str() : "Null" );
+			break;
+
+		case Using :
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt     : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tAttributes    : %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tUnderlyingType: %S", UnderlyingType ? UnderlyingType->to_string() : "Null" );
+			break;
+
+		case Variable :
+
+			if ( Parent && Parent->Type == Variable )
+			{
+				// Its a NextVar
+				result.append_fmt( "\n\tSpecs       : %S", Specs ? Specs->to_string() : "Null" );
+				result.append_fmt( "\n\tValue       : %S", Value ? Value->to_string() : "Null" );
+				result.append_fmt( "\n\tBitfieldSize: %S", BitfieldSize ? BitfieldSize->to_string() : "Null" );
+				result.append_fmt( "\n\tNextVar     : %S", NextVar ? NextVar->debug_str() : "Null" );
+				break;
+			}
+
+			if ( Prev )
+				result.append_fmt( "\n\tPrev: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+			if ( Next )
+				result.append_fmt( "\n\tNext: %S %S", Prev->type_str(), Prev->Name ? Prev->Name : "Null" );
+
+			result.append_fmt( "\n\tInlineCmt   : %S", InlineCmt ? InlineCmt->Content : "Null" );
+			result.append_fmt( "\n\tAttributes  : %S", Attributes ? Attributes->to_string() : "Null" );
+			result.append_fmt( "\n\tSpecs       : %S", Specs ? Specs->to_string() : "Null" );
+			result.append_fmt( "\n\tValueType   : %S", ValueType ? ValueType->to_string() : "Null" );
+			result.append_fmt( "\n\tBitfieldSize: %S", BitfieldSize ? BitfieldSize->to_string() : "Null" );
+			result.append_fmt( "\n\tValue       : %S", Value ? Value->to_string() : "Null" );
+			result.append_fmt( "\n\tNextVar     : %S", NextVar ? NextVar->debug_str() : "Null" );
+			break;
+	}
 
 	return result;
 }
@@ -12460,7 +12829,11 @@ String AST::to_string()
 		using namespace ECode;
 
 		case Invalid :
+#ifdef GEN_DONT_ALLOW_INVALID_CODE
 			log_failure( "Attempted to serialize invalid code! - %S", Parent ? Parent->debug_str() : Name );
+#else
+			result.append_fmt( "Invalid Code!" );
+#endif
 			break;
 
 		case NewLine :
@@ -12470,6 +12843,7 @@ String AST::to_string()
 		case Untyped :
 		case Execution :
 		case Comment :
+		case PlatformAttributes :
 			result.append( Content );
 			break;
 
@@ -12479,50 +12853,45 @@ String AST::to_string()
 			result.append( Name );
 			break;
 
-		case PlatformAttributes :
-			result.append( Content );
-
 		case Class :
 		{
 			if ( bitfield_is_equal( u32, ModuleFlags, ModuleFlag::Export ) )
 				result.append( "export " );
 
-			if ( Attributes || ParentType )
+			result.append( "class " );
+
+			if ( Attributes )
 			{
-				result.append( "class " );
+				result.append_fmt( "%S ", Attributes->to_string() );
+			}
 
-				if ( Attributes )
+			if ( ParentType )
+			{
+				char const* access_level = to_str( ParentAccess );
+
+				result.append_fmt( "%S : %s %S", Name, access_level, ParentType );
+
+				CodeType interface = ParentType->Next->cast< CodeType >();
+				if ( interface )
+					result.append( "\n" );
+
+				while ( interface )
 				{
-					result.append_fmt( "%S ", Attributes->to_string() );
-				}
-
-				if ( ParentType )
-				{
-					char const* access_level = to_str( ParentAccess );
-
-					result.append_fmt( "%S : %s %S", Name, access_level, ParentType );
-
-					CodeType interface = ParentType->Next->cast< CodeType >();
-					if ( interface )
-						result.append( "\n" );
-
-					while ( interface )
-					{
-						result.append_fmt( ", %S", interface.to_string() );
-						interface = interface->Next ? interface->Next->cast< CodeType >() : Code { nullptr };
-					}
-
-					result.append_fmt( "\n{\n%S\n}", Body->to_string() );
-				}
-				else
-				{
-					result.append_fmt( "%S \n{\n%S\n}", Name, Body->to_string() );
+					result.append_fmt( ", %S", interface.to_string() );
+					interface = interface->Next ? interface->Next->cast< CodeType >() : Code { nullptr };
 				}
 			}
-			else
+			else if ( Name )
 			{
-				result.append_fmt( "class %S\n{\n%S\n}", Name, Body->to_string() );
+				result.append( Name );
 			}
+
+			if ( InlineCmt )
+			{
+				result.append_fmt( " // %S", InlineCmt->Content );
+			}
+
+			result.append_fmt( "\n{\n%S\n}", Body->to_string() );
 
 			if ( Parent == nullptr || ( Parent->Type != ECode::Typedef && Parent->Type != ECode::Variable ) )
 				result.append( ";\n" );
@@ -12562,6 +12931,9 @@ String AST::to_string()
 
 			if ( InitializerList )
 				result.append_fmt( " : %S", InitializerList->to_string() );
+
+			if ( InlineCmt )
+				result.append_fmt( " // %S", InlineCmt->Content );
 
 			result.append_fmt( "\n{\n%S\n}\n", Body->to_string() );
 		}
@@ -12763,13 +13135,25 @@ String AST::to_string()
 		case Function :
 		{
 			if ( bitfield_is_equal( u32, ModuleFlags, ModuleFlag::Export ) )
-				result.append( "export " );
+				result.append( "export" );
 
 			if ( Attributes )
-				result.append_fmt( "%S ", Attributes->to_string() );
+				result.append_fmt( " %S ", Attributes->to_string() );
 
 			if ( Specs )
-				result.append_fmt( "%S", Specs->to_string() );
+			{
+				for ( SpecifierT spec : Specs->cast< CodeSpecifiers >() )
+				{
+					if ( ! ESpecifier::is_trailing( spec ) )
+					{
+						StrC spec_str = ESpecifier::to_str( spec );
+						result.append_fmt( " %.*s", spec_str.Len, spec_str.Ptr );
+					}
+				}
+			}
+
+			if ( Attributes || Specs )
+				result.append( "\n" );
 
 			if ( ReturnType )
 				result.append_fmt( "%S %S(", ReturnType->to_string(), Name );
@@ -12808,7 +13192,21 @@ String AST::to_string()
 				result.append_fmt( "%S ", Attributes->to_string() );
 
 			if ( Specs )
-				result.append_fmt( "%S", Specs->to_string() );
+			{
+				for ( SpecifierT spec : Specs->cast< CodeSpecifiers >() )
+				{
+					if ( ! ESpecifier::is_trailing( spec ) )
+					{
+						StrC spec_str = ESpecifier::to_str( spec );
+						result.append_fmt( " %.*s", spec_str.Len, spec_str.Ptr );
+					}
+				}
+			}
+
+			if ( Attributes || Specs )
+			{
+				result.append( "\n" );
+			}
 
 			if ( ReturnType )
 				result.append_fmt( "%S %S(", ReturnType->to_string(), Name );
@@ -12868,7 +13266,24 @@ String AST::to_string()
 				result.append_fmt( "%S ", Attributes->to_string() );
 
 			if ( Attributes )
-				result.append_fmt( "%S\n", Attributes->to_string() );
+				result.append_fmt( "%S ", Attributes->to_string() );
+
+			if ( Specs )
+			{
+				for ( SpecifierT spec : Specs->cast< CodeSpecifiers >() )
+				{
+					if ( ! ESpecifier::is_trailing( spec ) )
+					{
+						StrC spec_str = ESpecifier::to_str( spec );
+						result.append_fmt( " %.*s", spec_str.Len, spec_str.Ptr );
+					}
+				}
+			}
+
+			if ( Attributes || Specs )
+			{
+				result.append( "\n" );
+			}
 
 			if ( ReturnType )
 				result.append_fmt( "%S %S (", ReturnType->to_string(), Name );
@@ -12905,7 +13320,21 @@ String AST::to_string()
 				result.append_fmt( "%S\n", Attributes->to_string() );
 
 			if ( Specs )
-				result.append_fmt( "%S\n", Specs->to_string() );
+			{
+				for ( SpecifierT spec : Specs->cast< CodeSpecifiers >() )
+				{
+					if ( ! ESpecifier::is_trailing( spec ) )
+					{
+						StrC spec_str = ESpecifier::to_str( spec );
+						result.append_fmt( " %.*s", spec_str.Len, spec_str.Ptr );
+					}
+				}
+			}
+
+			if ( Attributes || Specs )
+			{
+				result.append( "\n" );
+			}
 
 			result.append_fmt( "%S %S (", ReturnType->to_string(), Name );
 
@@ -13062,12 +13491,6 @@ String AST::to_string()
 			s32 left = NumEntries;
 			while ( left-- )
 			{
-				if ( ESpecifier::is_trailing( ArrSpecs[ idx ] ) && ArrSpecs[ idx ] != ESpecifier::Const )
-				{
-					idx++;
-					continue;
-				}
-
 				StrC spec = ESpecifier::to_str( ArrSpecs[ idx ] );
 				result.append_fmt( "%.*s ", spec.Len, spec.Ptr );
 				idx++;
@@ -13080,56 +13503,43 @@ String AST::to_string()
 			if ( bitfield_is_equal( u32, ModuleFlags, ModuleFlag::Export ) )
 				result.append( "export " );
 
-			if ( Name == nullptr )
+			result.append( "struct " );
+
+			if ( Attributes )
 			{
-				result.append_fmt( "struct\n{\n%S\n};\n", Body->to_string() );
-				break;
+				result.append_fmt( "%S ", Attributes->to_string() );
 			}
 
-			if ( Attributes || ParentType )
+			if ( ParentType )
 			{
-				result.append( "struct " );
+				char const* access_level = to_str( ParentAccess );
 
-				if ( Attributes )
-					result.append_fmt( "%S ", Attributes->to_string() );
+				result.append_fmt( "%S : %s %S", Name, access_level, ParentType );
 
-				if ( ParentType )
+				CodeType interface = ParentType->Next->cast< CodeType >();
+				if ( interface )
+					result.append( "\n" );
+
+				while ( interface )
 				{
-					char const* access_level = to_str( ParentAccess );
-
-					result.append_fmt( "%S : %s %S", Name, access_level, ParentType );
-
-					CodeType interface = ParentType->Next->cast< CodeType >();
-					if ( interface )
-						result.append( "\n" );
-
-					while ( interface )
-					{
-						result.append_fmt( ", %S", interface.to_string() );
-
-						interface = interface->Next ? interface->Next->cast< CodeType >() : Code { nullptr };
-					}
-
-					result.append_fmt( "\n{\n%S\n}", Body->to_string() );
-				}
-				else
-				{
-					if ( Name )
-						result.append_fmt( "%S \n{\n%S\n}", Name, Body->to_string() );
+					result.append_fmt( ", %S", interface.to_string() );
+					interface = interface->Next ? interface->Next->cast< CodeType >() : Code { nullptr };
 				}
 			}
-			else
+			else if ( Name )
 			{
-				result.append_fmt( "struct %S\n{\n%S\n}", Name, Body->to_string() );
+				result.append( Name );
 			}
+
+			if ( InlineCmt )
+			{
+				result.append_fmt( " // %S", InlineCmt->Content );
+			}
+
+			result.append_fmt( "\n{\n%S\n}", Body->to_string() );
 
 			if ( Parent == nullptr || ( Parent->Type != ECode::Typedef && Parent->Type != ECode::Variable ) )
-			{
-				if ( InlineCmt )
-					result.append_fmt( ";  %S", InlineCmt->Content );
-				else
-					result.append( ";\n" );
-			}
+				result.append( ";\n" );
 		}
 		break;
 
@@ -14314,6 +14724,7 @@ internal void define_constants()
 	def_constant_spec( local_persist, ESpecifier::Local_Persist );
 	def_constant_spec( mutable, ESpecifier::Mutable );
 	def_constant_spec( neverinline, ESpecifier::NeverInline );
+	def_constant_spec( noexcept, ESpecifier::NoExceptions );
 	def_constant_spec( override, ESpecifier::Override );
 	def_constant_spec( ptr, ESpecifier::Ptr );
 	def_constant_spec( pure, ESpecifier::Pure ) def_constant_spec( ref, ESpecifier::Ref );
@@ -14526,12 +14937,12 @@ Code make_code()
 	result->Content     = { nullptr };
 	result->Prev        = { nullptr };
 	result->Next        = { nullptr };
+	result->Token       = nullptr;
 	result->Parent      = { nullptr };
 	result->Name        = { nullptr };
 	result->Type        = ECode::Invalid;
 	result->ModuleFlags = ModuleFlag::Invalid;
 	result->NumEntries  = 0;
-	result->Token       = -1;
 
 	return result;
 }
@@ -15407,7 +15818,7 @@ CodeInclude def_include( StrC path, bool foreign )
 		return CodeInvalid;
 	}
 
-	StrC content    = foreign ? to_str( str_fmt_buf( "<%.*s>\n", path.Len, path.Ptr ) ) : to_str( str_fmt_buf( "\"%.*s\"\n", path.Len, path.Ptr ) );
+	StrC content    = foreign ? to_str( str_fmt_buf( "<%.*s>", path.Len, path.Ptr ) ) : to_str( str_fmt_buf( "\"%.*s\"", path.Len, path.Ptr ) );
 
 	Code result     = make_code();
 	result->Type    = ECode::Preprocess_Include;
@@ -17137,6 +17548,18 @@ namespace Parser
 
 namespace Parser
 {
+	enum TokFlags : u32
+	{
+		TF_Operator        = bit( 0 ),
+		TF_Assign          = bit( 0 ),
+		TF_Preprocess      = bit( 1 ),
+		TF_Comment         = bit( 2 ),
+		TF_Attribute       = bit( 3 ),
+		TF_AccessSpecifier = bit( 4 ),
+		TF_Specifier       = bit( 5 ),
+		TF_EndDefinition   = bit( 6 ),    // Either ; or }
+	};
+
 	struct Token
 	{
 		char const* Text;
@@ -17375,11 +17798,6 @@ namespace Parser
 		Idx++;
 		return true;
 	}
-
-	enum TokFlags : u32
-	{
-		IsAssign = bit( 0 ),
-	};
 
 	global Array< Token > Tokens;
 
@@ -18760,6 +19178,7 @@ internal inline CodeAttributes parse_attributes()
 	{
 		eat( TokType::Attribute_Open );
 
+		start = currtok;
 		while ( left && currtok.Type != TokType::Attribute_Close )
 		{
 			eat( currtok.Type );
@@ -18775,6 +19194,7 @@ internal inline CodeAttributes parse_attributes()
 		eat( TokType::Capture_Start );
 		eat( TokType::Capture_Start );
 
+		start = currtok;
 		while ( left && currtok.Type != TokType::Capture_End )
 		{
 			eat( currtok.Type );
@@ -18791,6 +19211,7 @@ internal inline CodeAttributes parse_attributes()
 		eat( TokType::Decl_MSVC_Attribute );
 		eat( TokType::Capture_Start );
 
+		start = currtok;
 		while ( left && currtok.Type != TokType::Capture_End )
 		{
 			eat( currtok.Type );
@@ -18818,6 +19239,7 @@ internal inline CodeAttributes parse_attributes()
 		result->Type         = ECode::PlatformAttributes;
 		result->Name         = get_cached_string( name_stripped );
 		result->Content      = result->Name;
+		// result->Token   =
 
 		return ( CodeAttributes )result;
 	}
@@ -18836,6 +19258,7 @@ internal CodeComment parse_comment()
 	result->Type       = ECode::Comment;
 	result->Content    = get_cached_string( currtok_noskip );
 	result->Name       = result->Content;
+	// result->Token   = currtok_noskip;
 	eat( TokType::Comment );
 
 	Context.pop();
@@ -19390,6 +19813,7 @@ parse_function_after_name( ModuleFlag mflags, CodeAttributes attributes, CodeSpe
 
 	CodeParam params = parse_params();
 
+	// These have to be kept separate from the return type's specifiers.
 	while ( left && currtok.is_specifier() )
 	{
 		if ( specifiers.ast == nullptr )
@@ -20963,7 +21387,7 @@ internal CodeEnum parse_enum( bool inplace_def )
 
 		while ( left && currtok_noskip.Type != TokType::BraceCurly_Close )
 		{
-			if ( currtok.Type == TokType::Preprocess_Hash )
+			if ( currtok_noskip.Type == TokType::Preprocess_Hash )
 				eat( TokType::Preprocess_Hash );
 
 			switch ( currtok_noskip.Type )
@@ -21814,7 +22238,7 @@ internal CodeType parse_type( bool* typedef_is_function )
 #if 0
 	else if ( currtok.Type == TokType::DeclType )
 	{
-		// Will have a capture and its own parsing rules, were going to just shove everything in a string.
+		// Will have a capture and its own parsing rules, were going to just shove everything in a string (for now).
 		name = currtok;
 		eat( TokType::DeclType );
 
@@ -22088,6 +22512,7 @@ internal CodeType parse_type( bool* typedef_is_function )
 
 	CodeType result = ( CodeType )make_code();
 	result->Type    = Typename;
+	// result->Token = Context.Scope->Start;
 
 	// Need to wait until were using the new parsing method to do this.
 	String name_stripped = strip_formatting( name, strip_formatting_dont_preserve_newlines );
@@ -23045,48 +23470,43 @@ Code scan_file( char const* path )
 }
 
 #if 0
-struct Policy
+struct CodeFile
 {
-	// Nothing for now.
+	using namespace Parser;
+
+	String              FilePath;
+	TokArray            Tokens;
+	Array<ParseFailure> ParseFailures;
+	Code                CodeRoot;
 };
 
-struct SymbolInfo
+namespace Parser
 {
-	StringCached File;
-	char const*  Marker;
-	Code         Signature;
-};
-
-struct Scanner
-{
-	struct RequestEntry
+	struct ParseFailure
 	{
-		SymbolInfo Info;
+		String Reason;
+		Code   Node;
 	};
+}
 
-	struct Receipt
-	{
-		StringCached File;
-		Code         Defintion;
-		bool         Result;
-	};
+CodeFile scan_file( char const* path )
+{
+	using namespace Parser;
 
-	AllocatorInfo MemAlloc;
+	CodeFile
+	result = {};
+	result.FilePath = String::make( GlobalAllocator, path );
 
-	static void set_allocator( AllocatorInfo allocator );
+	Code code = scan_file( path );
+	result.CodeRoot = code;
 
-	Array<FileInfo>     Files;
-	String              Buffer;
-	Array<RequestEntry> Requests;
+	ParseContext context = parser_get_last_context();
+	result.Tokens        = context.Tokens;
+	result.ParseFailures = context.Failures;
 
-	void add_files( s32 num, char const** files );
-
-	void add( SymbolInfo signature, Policy policy );
-
-	bool process_requests( Array<Receipt> out_receipts );
-};
+	return result;
+}
 #endif
-
 #pragma endregion Scanner
 
 GEN_NS_END
