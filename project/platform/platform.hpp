@@ -32,7 +32,11 @@
 
 NS_PLATFORM_BEGIN
 
-#if Build_Debug
+// On-Demand platform interface.
+// Everything exposed here should be based on a feature a game may want to provide a user
+// (Example: Letting the user change the refresh-rate of the monitor or the engine's target frame-rate)
+
+#if Build_Development
 /*
 	IMPORTANT : These are not for shipping code - they are blocking and the write isn't protected.
 */
@@ -44,34 +48,42 @@ struct Debug_FileContent
 	char  _PAD_[4];
 };
 
-void              debug_file_free_content ( Debug_FileContent* file_content );
-Debug_FileContent debug_file_read_content ( char const* file_path );
-b32               debug_file_write_content( char const* file_path, u32 content_size, void* content_memory );
+using DebugFileFreeContentFn  = void ( Debug_FileContent* file_content );
+using DebugFileReadContentFn  = Debug_FileContent ( char const* file_path );
+using DebugFileWriteContentFn = b32 ( char const* file_path, u32 content_size, void* content_memory );
 
-// Allows the engine or game to pause the renderering of any next frames.
-// ( Prevents blipping of the black buffer )
-void set_pause_rendering( b32 value );
-
+using DebugSetPauseRenderingFn = void (b32 value);
 #endif
-
-// On-Demand platform interface.
-// Everything exposed here should be based on a feature a game may want to provide a user
-// (Example: Letting the user change the refresh-rate of the monitor or the engine's target frame-rate)
 
 // TODO(Ed) : Implement this later when settings UI is setup.
 #pragma region Settings Exposure
 // Exposing specific properties for user configuration in settings
 
 // Returns the current monitor refresh rate.
-u32 get_monitor_refresh_rate();
-
+using GetMonitorRefreshRateFn = u32();
 // Sets the monitor refresh rate
-// Must be of the compatiable listing for the monitor the window surface is presenting to.
-void set_monitor_refresh_rate( u32 rate_in_hz );
+// Must be of the compatiable listing for the monitor the window surface is presenting to
+using SetMonitorRefreshRateFn = void ( u32 rate_in_hz );
 
-u32 get_engine_frame_target();
+using GetEngineFrameTargetFn = u32 ();
+using SetEngineFrameTargetFn = void ( u32 rate_in_hz );
 
-void set_engine_frame_target( u32 rate_in_hz );
+struct ModuleAPI
+{
+#if Build_Development
+	DebugFileFreeContentFn*  debug_file_free_content;
+	DebugFileReadContentFn*  debug_file_read_content;
+	DebugFileWriteContentFn* debug_file_write_content;
+
+	DebugSetPauseRenderingFn* debug_set_pause_rendering;
+#endif
+
+	GetMonitorRefreshRateFn* get_monitor_refresh_rate;
+	SetMonitorRefreshRateFn* set_monitor_refresh_rate;
+
+	GetEngineFrameTargetFn* get_engine_frame_target;
+	SetEngineFrameTargetFn* set_engine_frame_target;
+};
 
 #pragma endregion Settings Exposure
 

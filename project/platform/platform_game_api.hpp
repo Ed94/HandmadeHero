@@ -1,0 +1,3 @@
+/*
+	This represents the API only accessible to the platform layer to fullfill for the game layer.
+*/

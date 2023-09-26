@@ -8,7 +8,7 @@
 			"type":"cppvsdbg",
 			"request": "launch",
 			"name" : "Debug handmade win32 msvc",
-			"program": "${workspaceFolder}/build/handmade_win32.exe",
+			"program": "${workspaceFolder}/data/handmade_win32.exe",
 			"args": [],
 			"cwd": "${workspaceFolder}/data",
 			"visualizerFile": "${workspaceFolder}/scripts/handmade.natvis"

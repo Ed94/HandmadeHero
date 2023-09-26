@@ -1,15 +1,21 @@
-#include "engine.hpp"
 //#include "win32.h"
+#include "engine.hpp"
+#include "platform/platform_engine_api.hpp"
+#include "handmade.hpp"
 
 NS_ENGINE_BEGIN
 
 struct EngineState
 {
-	s32 WaveSwitch;
 	s32 WaveToneHz;
 	s32 ToneVolume;
 	s32 XOffset;
 	s32 YOffset;
+
+	b32 RendererPaused;
+
+	f32 SampleWaveSineTime;
+	b32 SampleWaveSwitch;
 };
 
 using GetSoundSampleValueFn = s16( EngineState* state, AudioBuffer* sound_buffer );
@@ -28,7 +34,7 @@ square_wave_sample_value( EngineState* state, AudioBuffer* sound_buffer )
 internal s16
 sine_wave_sample_value( EngineState* state, AudioBuffer* sound_buffer )
 {
-	local_persist f32 time = 0.f;
+	f32& time = state->SampleWaveSineTime;
 
 	s32 wave_period = sound_buffer->SamplesPerSecond / state->WaveToneHz;
 
@@ -104,7 +110,6 @@ render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
 			u8 red   = 0;
 		#endif
 
-
 			*pixel++ = u32(red << 16) | u32(green << 8) | blue;
 		}
 		wildcard += 0.5375f;
@@ -112,66 +117,55 @@ render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
 	}
 }
 
-b32 input_using_analog()
+Engine_API
+void on_module_reload( Memory* memory, platform::ModuleAPI* platfom_api )
 {
-	return false;
+
 }
 
-void startup()
+Engine_API
+void startup( Memory* memory, platform::ModuleAPI* platform_api )
 {
-}
-
-void shutdown()
-{
-}
-
-// TODO : I rather expose the back_buffer and sound_buffer using getters for access in any function.
-void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory* memory )
-{
-	// Graphics & Input Test
-	local_persist u32 x_offset = 0;
-	local_persist u32 y_offset = 0;
-
-	// Wave Sound Test
-	local_persist bool wave_switch = false;
-
-#if 0
-	if ( input_using_analog() )
-	{
-		// TODO(Ed) : Use analog movement tuning
-	}
-	else
-	{
-		// TODO(Ed) : Use digital movement tuning
-	}
-#endif
-
 	EngineState* state = rcast( EngineState*, memory->Persistent );
+	assert( sizeof(EngineState) <= memory->PersistentSize );
 
-	do_once_start
-		assert( sizeof(EngineState) <= memory->PersistentSize );
+	state->ToneVolume = 1000;
 
-		state->ToneVolume = 1000;
-		state->WaveToneHz = 120;
+	state->XOffset = 0;
+	state->YOffset = 0;
 
-		state->XOffset    = 0;
-		state->YOffset    = 0;
-		state->WaveSwitch = false;
+	state->SampleWaveSwitch = false;
+	state->WaveToneHz = 120;
+	state->SampleWaveSineTime = 0.f;
 
-		#if Build_Debug && 0
+	state->RendererPaused = false;
+
+	#if Build_Debug && 0
+	{
+		using namespace platform;
+
+		char const* file_path = __FILE__;
+		Debug_FileContent file_content = platform_api->debug_file_read_content( file_path );
+		if ( file_content.Size )
 		{
-			using namespace platform;
-
-			char const* file_path = __FILE__;
-			Debug_FileContent file_content = debug_file_read_content( file_path );
-			if ( file_content.Size )
-			{
-				debug_file_write_content( "test.out", file_content.Size, file_content.Data );
-				debug_file_free_content( & file_content );
-			}
+			platform_api->debug_file_write_content( "test.out", file_content.Size, file_content.Data );
+			platform_api->debug_file_free_content( & file_content );
 		}
-		#endif
-	do_once_end
+	}
+	#endif
+}
+
+Engine_API
+void shutdown( Memory* memory, platform::ModuleAPI* platform_api )
+{
+}
+
+Engine_API
+// TODO : I rather expose the back_buffer and sound_buffer using getters for access in any function.
+void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI* platform_api )
+{
+	EngineState* state = rcast( EngineState*, memory->Persistent );
+	assert( sizeof(EngineState) <= memory->PersistentSize );
 
 	ControllerState* controller = & input->Controllers[0];
 
@@ -195,7 +189,6 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 	b32 toggle_wave_tone = false;
 
 	b32 pause_renderer  = false;
-	local_persist b32 renderer_paused = false;
 
 	f32 analog_threshold = 0.5f;
 
@@ -255,10 +248,10 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 		toggle_wave_tone |= pressed( keyboard->Space );
 	}
 
-	x_offset += 3 * move_right;
-	x_offset -= 3 * move_left;
-	y_offset += 3 * move_down;
-	y_offset -= 3 * move_up;
+	state->XOffset += 3 * move_right;
+	state->XOffset -= 3 * move_left;
+	state->YOffset += 3 * move_down;
+	state->YOffset -= 3 * move_up;
 
 	if ( raise_volume )
 	{
@@ -284,26 +277,27 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 
 	if ( toggle_wave_tone )
 	{
-		state->WaveSwitch ^= true;
+		state->SampleWaveSwitch ^= true;
 	}
-	render_weird_graident( back_buffer, x_offset, y_offset );
+	render_weird_graident( back_buffer, state->XOffset, state->YOffset );
 
 	if ( pause_renderer )
 	{
-		if ( renderer_paused )
+		if ( state->RendererPaused )
 		{
-			platform::set_pause_rendering(false);
-			renderer_paused = false;
+			platform_api->debug_set_pause_rendering(false);
+			state->RendererPaused = false;
 		}
 		else
 		{
-			platform::set_pause_rendering(true);
-			renderer_paused = true;
+			platform_api->debug_set_pause_rendering(true);
+			state->RendererPaused = true;
 		}
 	}
 }
 
-void update_audio( AudioBuffer* audio_buffer, Memory* memory )
+Engine_API
+void update_audio( AudioBuffer* audio_buffer, Memory* memory, platform::ModuleAPI* platform_api )
 {
 	EngineState* state = rcast( EngineState*, memory->Persistent );
 	do_once_start
@@ -311,11 +305,10 @@ void update_audio( AudioBuffer* audio_buffer, Memory* memory )
 	do_once_end
 
 	// TODO(Ed) : Allow sample offsets here for more robust platform options
-	if ( ! state->WaveSwitch )
+	if ( ! state->SampleWaveSwitch )
 		output_sound( state, audio_buffer, sine_wave_sample_value );
 	else
 		output_sound( state, audio_buffer, square_wave_sample_value );
 }
 
 NS_ENGINE_END
-

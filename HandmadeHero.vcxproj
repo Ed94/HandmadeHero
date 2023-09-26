@@ -17,28 +17,43 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <IncludePath>$(ProjectDir)project;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProjectDir)data;$(windir)System32;$(LibraryPath)</LibraryPath>
-    <NMakeBuildCommandLine>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(ProjectDir)scripts\build.ps1 msvc dev</NMakeBuildCommandLine>
+    <NMakeBuildCommandLine>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(ProjectDir)scripts\build.ps1 msvc dev engine</NMakeBuildCommandLine>
     <NMakeCleanCommandLine>pwsh ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(ProjectDir)scripts\clean.ps1</NMakeCleanCommandLine>
     <NMakePreprocessorDefinitions>GEN_TIME;Build_Development;Build_Debug;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <ExternalIncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath)</ExternalIncludePath>
+    <NMakeReBuildCommandLine>
+    </NMakeReBuildCommandLine>
   </PropertyGroup>
   <ItemGroup>
     <ClInclude Include="project\engine.h" />
+    <ClInclude Include="project\handmade.hpp" />
     <ClInclude Include="project\platform\generics.h" />
+    <ClInclude Include="project\platform\generics.hpp" />
     <ClInclude Include="project\platform\grime.h" />
+    <ClInclude Include="project\platform\grime.hpp" />
     <ClInclude Include="project\platform\jsl.h" />
+    <ClInclude Include="project\platform\jsl.hpp" />
     <ClInclude Include="project\platform\macros.h" />
+    <ClInclude Include="project\platform\macros.hpp" />
     <ClInclude Include="project\platform\math_constants.h" />
+    <ClInclude Include="project\platform\math_constants.hpp" />
     <ClInclude Include="project\platform\platform.h" />
+    <ClInclude Include="project\platform\platform.hpp" />
     <ClInclude Include="project\platform\platform_engine_api.h" />
+    <ClInclude Include="project\platform\platform_engine_api.hpp" />
+    <ClInclude Include="project\platform\platform_game_api.hpp" />
     <ClInclude Include="project\platform\types.h" />
+    <ClInclude Include="project\platform\types.hpp" />
     <ClInclude Include="project\platform\win32.h" />
+    <ClInclude Include="project\platform\win32.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="project\engine.cpp" />
     <ClCompile Include="project\handmade.cpp" />
+    <ClCompile Include="project\handmade_engine.cpp" />
     <ClCompile Include="project\handmade_win32.cpp" />
     <ClCompile Include="project\platform\platform_win32.cpp" />
+    <ClCompile Include="project\platform\win32_platform.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="docs\Day 001.md" />

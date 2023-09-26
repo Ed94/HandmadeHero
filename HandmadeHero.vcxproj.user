@@ -6,6 +6,6 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)data</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommand>$(ProjectDir)build\handmade_win32.exe</LocalDebuggerCommand>
+    <LocalDebuggerCommand>$(ProjectDir)data\handmade_win32.exe</LocalDebuggerCommand>
   </PropertyGroup>
 </Project>

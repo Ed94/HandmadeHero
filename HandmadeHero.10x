@@ -8,16 +8,16 @@
 		<ShowEmptyFolders>true</ShowEmptyFolders>
 		<IsVirtual>false</IsVirtual>
 		<IsFolder>false</IsFolder>
-		<BuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev optimized</BuildCommand>
-		<RebuildCommand></RebuildCommand>
+		<BuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev debug engine</BuildCommand>
+		<RebuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev debug platform</RebuildCommand>
 		<BuildFileCommand></BuildFileCommand>
 		<CleanCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/clean.ps1</CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
-		<RunCommand>$(WorkspaceDirectory)/build/handmade_win32.exe</RunCommand>
+		<RunCommand>$(WorkspaceDirectory)/data/handmade_win32.exe</RunCommand>
 		<RunCommandWorkingDirectory>$(WorkspaceDirectory)/data</RunCommandWorkingDirectory>
-		<DebugCommand>$(WorkspaceDirectory)/build/handmade_win32.exe</DebugCommand>
-		<ExePathCommand>$(WorkspaceDirectory)/build/handmade_win32.exe</ExePathCommand>
+		<DebugCommand>$(WorkspaceDirectory)/data/handmade_win32.exe</DebugCommand>
+		<ExePathCommand>$(WorkspaceDirectory)/data/handmade_win32.exe</ExePathCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>true</UseVisualStudioEnvBat>
 		<Configurations>

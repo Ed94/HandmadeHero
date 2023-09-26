@@ -61,6 +61,12 @@
 #	define assert( expression )
 #endif
 
+#ifdef COMPILER_CLANG
+#	define compiler_decorated_func_name __PRETTY_NAME__
+#elif defined(COMPILER_MSVC)
+#	define compiler_decorated_func_name __FUNCDNAME__
+#endif
+
 // TODO(Ed) : Add this sauce later
 #if 0
 #define congrats( message )

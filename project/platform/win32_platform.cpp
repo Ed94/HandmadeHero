@@ -23,7 +23,7 @@
 #include "win32.hpp"
 
 // Engine layer headers
-#include "engine.hpp"
+#include "engine/engine.hpp"
 #include "platform_engine_api.hpp"
 
 // Standard-Library stand-ins
@@ -216,7 +216,7 @@ b32 debug_file_write_content( char const* file_path, u32 content_size, void* con
 	return true;
 }
 
-void set_pause_rendering( b32 value )
+void debug_set_pause_rendering( b32 value )
 {
 	Pause_Rendering = value;
 }
@@ -425,15 +425,12 @@ init_sound(HWND window_handle, DirectSoundBuffer* sound_buffer )
 	}
 
 	// Get direct sound object
-#pragma warning( push )
-#pragma warning( disable: 4191 )
-	direct_sound_create = rcast( DirectSoundCreateFn*, GetProcAddress( sound_library, "DirectSoundCreate" ));
+	direct_sound_create = get_procedure_from_library< DirectSoundCreateFn >( sound_library, "DirectSoundCreate" );
 	if ( ! ensure( direct_sound_create, "Failed to get direct_sound_create_procedure" ) )
 	{
 		// TOOD : Diagnostic
 		return;
 	}
-#pragma warning( pop )
 
 	LPDIRECTSOUND direct_sound;
 	if ( ! SUCCEEDED(direct_sound_create( 0, & direct_sound, 0 )) )
@@ -751,6 +748,131 @@ process_pending_window_messages( engine::KeyboardState* keyboard )
 		}
 	}
 }
+
+#pragma region Platfom API
+u32 get_monitor_refresh_rate();
+
+#pragma endregion Platform API
+
+// TODO(Ed): This also assumes the symbol name is always within size of the provided buffer, needs to fail if not.
+void get_symbol_from_module_table( Debug_FileContent symbol_table, u32 symbol_ID, char* symbol_name )
+{
+	struct Token
+	{
+		char const* Ptr;
+		u32         Len;
+		char _PAD_[4];
+	};
+
+	Token tokens[256] = {};
+	s32 idx = 0;
+
+	char const* scanner = rcast( char const*, symbol_table.Data );
+	u32 left = symbol_table.Size;
+	while ( left )
+	{
+		if ( *scanner == '\n' || *scanner == '\r' )
+		{
+			++ scanner;
+			-- left;
+		}
+		else
+		{
+			tokens[idx].Ptr = scanner;
+			while ( left && *scanner != '\r' && *scanner != '\n' )
+			{
+				-- left;
+				++ scanner;
+				++ tokens[idx].Len;
+			}
+			++ idx;
+		}
+	}
+
+	Token& token = tokens[symbol_ID];
+	while ( token.Len -- )
+	{
+		*symbol_name = *token.Ptr;
+		++ symbol_name;
+		++ token.Ptr;
+	}
+	*symbol_name = '\0';
+}
+
+// Right now they are just the data directory
+#define Path_To_Symbol_Tables
+
+global HMODULE Lib_Handmade_Engine = nullptr;
+
+engine::ModuleAPI load_engine_module_api()
+{
+	using ModuleAPI = engine::ModuleAPI;
+
+	// TODO(Ed) : Need proper paything to the dll (not assume is in the base directory).
+
+	CopyFileA( "handmade_engine.dll", "handmade_engine_temp.dll", FALSE );
+
+	// Engine
+	Lib_Handmade_Engine = LoadLibraryA( "handmade_engine_temp.dll" );
+	if ( ! Lib_Handmade_Engine )
+	{
+		return {};
+	}
+
+	constexpr char const*
+	handmade_engine_symbols = Path_To_Symbol_Tables "handmade_engine.symbols";
+
+	Debug_FileContent symbol_table = debug_file_read_content( handmade_engine_symbols );
+	if ( symbol_table.Size == 0 )
+	{
+		fatal( "Failed to laod symbol table for handmade engine module!" );
+		return {};
+	}
+
+	// TODO(Ed) : Clean this up later when Casey makes strings. (If he doesn't we'll do it)
+	char symbol_on_module_reload[256];
+	char symboL_startup[256];
+	char symboL_shutdown[256];
+	char symboL_update_and_render[256];
+	char symbol_update_audio[256];
+	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_OnModuleReload,  symbol_on_module_reload );
+	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_Startup,         symboL_startup );
+	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_Shutdown,        symboL_shutdown );
+	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_UpdateAndRender, symboL_update_and_render );
+	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_UpdateAudio,     symbol_update_audio );
+
+	debug_file_free_content( & symbol_table );
+
+	engine::ModuleAPI engine_api {};
+	engine_api.on_module_reload  = get_procedure_from_library< engine::OnModuleRelaodFn > ( Lib_Handmade_Engine, symbol_on_module_reload );
+	engine_api.startup           = get_procedure_from_library< engine::StartupFn >        ( Lib_Handmade_Engine, symboL_startup );
+	engine_api.shutdown          = get_procedure_from_library< engine::ShutdownFn >       ( Lib_Handmade_Engine, symboL_shutdown );
+	engine_api.update_and_render = get_procedure_from_library< engine::UpdateAndRenderFn >( Lib_Handmade_Engine, symboL_update_and_render );
+	engine_api.update_audio      = get_procedure_from_library< engine::UpdateAudioFn >    ( Lib_Handmade_Engine, symbol_update_audio );
+
+	engine_api.IsValid =
+			engine_api.on_module_reload
+		&&	engine_api.startup
+		&&	engine_api.shutdown
+		&&	engine_api.update_and_render
+		&&	engine_api.update_audio;
+	if ( engine_api.IsValid )
+	{
+		OutputDebugStringA( "Loaded engine module API\n" );
+	}
+	return engine_api;
+}
+
+void unload_engine_module_api( engine::ModuleAPI* engine_api )
+{
+	if ( engine_api->IsValid )
+	{
+		FreeLibrary( Lib_Handmade_Engine );
+		*engine_api = {};
+		OutputDebugStringA( "Unloaded engine module API\n" );
+	}
+}
+
 NS_PLATFORM_END
 
 int CALLBACK
@@ -773,6 +895,22 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	b32 sub_ms_granularity_required = scast(f32, Engine_Refresh_Hz) <= High_Perf_Frametime_MS;
 
 	QueryPerformanceFrequency( rcast(LARGE_INTEGER*, & Performance_Counter_Frequency) );
+
+	// Prepare platform API
+	ModuleAPI platform_api {};
+	{
+	#if Build_Development
+		platform_api.debug_file_free_content  = & debug_file_free_content;
+		platform_api.debug_file_read_content  = & debug_file_read_content;
+		platform_api.debug_file_write_content = & debug_file_write_content;
+
+		platform_api.debug_set_pause_rendering = & debug_set_pause_rendering;
+	#endif
+		platform_api.get_monitor_refresh_rate = nullptr;
+		platform_api.set_monitor_refresh_rate = nullptr;
+		platform_api.get_engine_frame_target  = nullptr;
+		platform_api.set_engine_frame_target  = nullptr;
+	}
 
 	// Memory
 	engine::Memory engine_memory {};
@@ -801,6 +939,9 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			return -1;
 		}
 	}
+
+	// Load engine module
+	engine::ModuleAPI engine_api = load_engine_module_api();
 
 	WNDCLASSW window_class {};
 	HWND window_handle = nullptr;
@@ -935,6 +1076,8 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 	}
 
+	engine_api.startup( & engine_memory, & platform_api );
+
 	u64 last_frame_clock = timing_get_wall_clock();
 	u64 last_frame_cycle = __rdtsc();
 	u64 flip_wall_clock = last_frame_clock;
@@ -942,7 +1085,13 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 #if Build_Development
 	u64 startup_cycles = last_frame_cycle - launch_cycle;
 	f32 startup_ms     = timing_get_ms_elapsed( launch_clock, last_frame_clock );
+
+	char text_buffer[256];
+	sprintf_s( text_buffer, sizeof(text_buffer), "Startup MS: %f\n", startup_ms );
+	OutputDebugStringA( text_buffer );
 #endif
+
+	u64 module_reload_counter = 0;
 
 	Running = true;
 #if 0
@@ -960,6 +1109,14 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 #endif
 	while( Running )
 	{
+		if ( module_reload_counter > 120 )
+		{
+			unload_engine_module_api( & engine_api );
+			engine_api = load_engine_module_api();
+			module_reload_counter = 0;
+		}
+		++ module_reload_counter;
+
 		process_pending_window_messages( new_keyboard );
 
 		// TODO(Ed): Offload polling to these functions later.
@@ -1107,7 +1264,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 
 		// Engine's logical iteration and rendering process
-		engine::update_and_render( & input, rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.Memory), & engine_memory );
+		engine_api.update_and_render( & input, rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.Memory), & engine_memory, & platform_api );
 
 		u64   audio_frame_start = timing_get_wall_clock();
 		f32   flip_to_audio_ms  = timing_get_ms_elapsed( flip_wall_clock, audio_frame_start );
@@ -1194,7 +1351,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			sound_buffer.RunningSampleIndex = ds_sound_buffer.RunningSampleIndex;
 			sound_buffer.SamplesPerSecond   = ds_sound_buffer.SamplesPerSecond;
 			sound_buffer.Samples            = ds_sound_buffer.Samples;
-			engine::update_audio( & sound_buffer, & engine_memory );
+			engine_api.update_audio( & sound_buffer, & engine_memory, & platform_api );
 
 			DebugTimeMarker* marker = & debug_markers[ debug_marker_index ];
 			marker->OutputPlayCusror   = ds_play_cursor;
@@ -1331,7 +1488,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		#endif
 	}
 
-	engine::shutdown();
+	engine_api.shutdown( & engine_memory, & platform_api );
 
 	if ( jsl_num_devices > 0 )
 	{

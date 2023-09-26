@@ -9,6 +9,11 @@
 #pragma clang diagnostic ignored "-Wunused-but-set-variable"
 #endif
 
+#include "platform/grime.hpp"
+
 #if Build_Unity
-#include "platform/win32_platform.cpp"
+#	include "engine/engine.cpp"
+#	if SYSTEM_WINDOWS
+#		include "engine/win32_engine.cpp"
+#	endif
 #endif

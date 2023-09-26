@@ -14,6 +14,9 @@ Push-Location $path_root
 	   $debug 	     = $null
 	   $analysis	 = $false
 	   $dev          = $false
+	   $platform     = $null
+	   $engine       = $null
+	   $game         = $null
 
 [array] $vendors = @( "clang", "msvc" )
 
@@ -26,11 +29,14 @@ if ( $args ) { $args | ForEach-Object {
 		"debug"               { $debug     = $true }
 		"analysis"            { $analysis  = $true }
 		"dev"                 { $dev       = $true }
+		"platform"            { $platform  = $true }
+		"engine"              { $engine    = $true }
+		"game"                { $game      = $true }
 	}
 }}
 #endregion Argument
 
-#region Configuration
+#region Toolchain Configuration
 if ($IsWindows) {
 	# This HandmadeHero implementation is only designed for 64-bit systems
     & $devshell -arch amd64
@@ -45,7 +51,7 @@ write-host "Building HandmadeHero with $vendor"
 
 if ( $dev ) {
 	if ( $debug -eq $null ) {
-		$debug = $true
+		# $debug = $true
 	}
 
 	if ( $optimize -eq $null ) {
@@ -118,42 +124,52 @@ function run-linker
 if ( $vendor -match "clang" )
 {
 	# https://clang.llvm.org/docs/ClangCommandLineReference.html
-	$flag_all_c 					 = '/TC'
-	$flag_all_cpp                    = '/TP'
-	$flag_compile                    = '-c'
-	$flag_color_diagnostics          = '-fcolor-diagnostics'
-	$flag_no_color_diagnostics       = '-fno-color-diagnostics'
-	$flag_debug                      = '-g'
-	$flag_debug_codeview             = '-gcodeview'
-	$flag_define                     = '-D'
-	$flag_exceptions_disabled		 = '-fno-exceptions'
-	$flag_preprocess 			     = '-E'
-	$flag_include                    = '-I'
-	$flag_library					 = '-l'
-	$flag_library_path				 = '-L'
-	$flag_linker                     = '-Wl,'
-	$flag_link_mapfile 				 = '-Map'
-	$flag_link_win_subsystem_console = '/SUBSYSTEM:CONSOLE'
-	$flag_link_win_subsystem_windows = '/SUBSYSTEM:WINDOWS'
-	$flag_link_win_machine_32        = '/MACHINE:X86'
-	$flag_link_win_machine_64        = '/MACHINE:X64'
-	$flag_link_win_debug             = '/DEBUG'
-	$flag_link_win_pdb 			     = '/PDB:'
-	$flag_link_win_path_output       = '/OUT:'
-	$flag_no_optimization 		     = '-O0'
-	$flag_optimize_fast 		     = '-O2'
-	$flag_optimize_size 		     = '-O1'
-	$flag_optimize_intrinsics		 = '-Oi'
-	$flag_path_output                = '-o'
-	$flag_preprocess_non_intergrated = '-no-integrated-cpp'
-	$flag_profiling_debug            = '-fdebug-info-for-profiling'
-	$flag_set_stack_size			 = '-stack='
-	$flag_syntax_only				 = '-fsyntax-only'
-	$flag_target_arch				 = '-target'
-	$flag_wall 					     = '-Wall'
-	$flag_warning 					 = '-W'
-	$flag_warnings_as_errors         = '-Werror'
-	$flag_win_nologo 			     = '/nologo'
+	$flag_all_c 					   = '/TC'
+	$flag_all_cpp                      = '/TP'
+	$flag_compile                      = '-c'
+	$flag_color_diagnostics            = '-fcolor-diagnostics'
+	$flag_no_color_diagnostics         = '-fno-color-diagnostics'
+	$flag_debug                        = '-g'
+	$flag_debug_codeview               = '-gcodeview'
+	$flag_define                       = '-D'
+	$flag_exceptions_disabled		   = '-fno-exceptions'
+	$flag_preprocess 			       = '-E'
+	$flag_include                      = '-I'
+	$flag_section_data                 = '-fdata-sections'
+	$flag_section_functions            = '-ffunction-sections'
+	$flag_library					   = '-l'
+	$flag_library_path				   = '-L'
+	$flag_linker                       = '-Wl,'
+	if ( $IsWindows ) {
+		$flag_link_dll                 = '/DLL'
+		$flag_link_mapfile 		       = '/MAP:'
+		$flag_link_optimize_references = '/OPT:REF'
+	}
+	if ( $IsLinux ) {
+		$flag_link_mapfile              = '--Map='
+		$flag_link_optimize_references  = '--gc-sections'
+	}
+	$flag_link_win_subsystem_console    = '/SUBSYSTEM:CONSOLE'
+	$flag_link_win_subsystem_windows    = '/SUBSYSTEM:WINDOWS'
+	$flag_link_win_machine_32           = '/MACHINE:X86'
+	$flag_link_win_machine_64           = '/MACHINE:X64'
+	$flag_link_win_debug                = '/DEBUG'
+	$flag_link_win_pdb 			        = '/PDB:'
+	$flag_link_win_path_output          = '/OUT:'
+	$flag_no_optimization 		        = '-O0'
+	$flag_optimize_fast 		        = '-O2'
+	$flag_optimize_size 		        = '-O1'
+	$flag_optimize_intrinsics		    = '-Oi'
+	$flag_path_output                   = '-o'
+	$flag_preprocess_non_intergrated    = '-no-integrated-cpp'
+	$flag_profiling_debug               = '-fdebug-info-for-profiling'
+	$flag_set_stack_size			    = '-stack='
+	$flag_syntax_only				    = '-fsyntax-only'
+	$flag_target_arch				    = '-target'
+	$flag_wall 					        = '-Wall'
+	$flag_warning 					    = '-W'
+	$flag_warnings_as_errors            = '-Werror'
+	$flag_win_nologo 			        = '/nologo'
 
 	$ignore_warning_ms_include            = 'no-microsoft-include'
 	$ignore_warning_return_type_c_linkage = 'no-return-type-c-linkage'
@@ -175,12 +191,12 @@ if ( $vendor -match "clang" )
 
 	function build-simple
 	{
-		param( [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$executable )
+		param( [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )
 		Write-Host "build-simple: clang"
 
-		$object = $executable -replace '\.exe', '.obj'
-		$pdb    = $executable -replace '\.exe', '.pdb'
-		$map    = $executable -replace '\.exe', '.map'
+		$object = $binary -replace '\.exe', '.obj'
+		$pdb    = $binary -replace '\.exe', '.pdb'
+		$map    = $binary -replace '\.exe', '.map'
 
 		$compiler_args += @(
 			$flag_no_color_diagnostics,
@@ -188,6 +204,8 @@ if ( $vendor -match "clang" )
 			$flag_target_arch, $target_arch,
 			$flag_wall,
 			$flag_preprocess_non_intergrated,
+			$flag_section_data,
+			$flag_section_functions,
 			( $flag_path_output + $object )
 		)
 		if ( $optimized ) {
@@ -214,12 +232,12 @@ if ( $vendor -match "clang" )
 
 		$linker_args += @(
 			$flag_link_win_machine_64,
-			$( $flag_link_win_path_output + $executable )
+			$( $flag_link_win_path_output + $binary )
 		)
 		if ( $debug ) {
 			$linker_args += $flag_link_win_debug
 			$linker_args += $flag_link_win_pdb + $pdb
-			# $linker_args += $flag_link_mapfile + $map
+			$linker_args += $flag_link_mapfile + $map
 		}
 
 		$libraries | ForEach-Object {
@@ -227,7 +245,7 @@ if ( $vendor -match "clang" )
 		}
 
 		$linker_args += $object
-		run-linker $linker $executable $linker_args
+		run-linker $linker $binary $linker_args
 
 		# $compiler_args += $unit
 		# $linker_args | ForEach-Object {
@@ -256,6 +274,7 @@ if ( $vendor -match "msvc" )
 	$flag_dll 				         = '/LD'
 	$flag_dll_debug 			     = '/LDd'
 	$flag_linker 		             = '/link'
+	$flag_link_dll                   = '/DLL'
 	$flag_link_mapfile 				 = '/MAP:'
 	$flag_link_optimize_references   = '/OPT:REF'
 	$flag_link_win_debug 	         = '/DEBUG'
@@ -287,12 +306,12 @@ if ( $vendor -match "msvc" )
 	# This works because this project uses a single unit to build
 	function build-simple
 	{
-		param( [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$executable )
+		param( [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )
 		Write-Host "build-simple: msvc"
 
-		$object = $executable -replace '\.exe', '.obj'
-		$pdb    = $executable -replace '\.exe', '.pdb'
-		$map    = $executable -replace '\.exe', '.map'
+		$object = $binary -replace '\.(exe|dll)$', '.obj'
+		$pdb    = $binary -replace '\.(exe|dll)$', '.pdb'
+		$map    = $binary -replace '\.(exe|dll)$', '.map'
 
 		$compiler_args += @(
 			$flag_nologo,
@@ -336,18 +355,18 @@ if ( $vendor -match "msvc" )
 		$linker_args += @(
 			$flag_nologo,
 			$flag_link_win_machine_64,
-			( $flag_link_win_path_output + $executable )
+			( $flag_link_win_path_output + $binary )
 		)
 		if ( $debug ) {
 			$linker_args += $flag_link_win_debug
 			$linker_args += $flag_link_win_pdb + $pdb
-			# $linker_args += $flag_link_mapfile + $map
+			$linker_args += $flag_link_mapfile + $map
 		}
 		else {
 		}
 
 		$linker_args += $object
-		run-linker $linker $executable $linker_args
+		run-linker $linker $binary $linker_args
 
 		# $compiler_args += $unit
 		# $compiler_args += $flag_linker
@@ -360,11 +379,14 @@ if ( $vendor -match "msvc" )
 }
 #endregion Configuration
 
+#region Building
 $path_project  = Join-Path $path_root    'project'
 $path_build    = Join-Path $path_root    'build'
+$path_data     = Join-Path $path_root	 'data'
 $path_deps     = Join-Path $path_project 'dependencies'
 $path_gen      = Join-Path $path_project 'gen'
 $path_platform = Join-Path $path_project 'platform'
+$path_engine   = Join-Path $path_project 'engine'
 
 $update_deps = Join-Path $PSScriptRoot 'update_deps.ps1'
 
@@ -376,21 +398,21 @@ if ( (Test-Path $path_deps) -eq $false ) {
 	& $update_deps
 }
 
-$includes = @(
-	$path_project,
-	$path_gen,
-	# $path_deps,
-	$path_platform
-)
-$compiler_args = @()
-$compiler_args += ( $flag_define + 'GEN_TIME' )
-
-$linker_args = @(
-	$flag_link_win_subsystem_console
-)
-
 #region Handmade Generate
 if ( $false ) {
+	$includes = @(
+		$path_project,
+		$path_gen,
+		# $path_deps,
+		$path_platform
+	)
+	$compiler_args = @()
+	$compiler_args += ( $flag_define + 'GEN_TIME' )
+
+	$linker_args = @(
+		$flag_link_win_subsystem_console
+	)
+
 	$unit       = Join-Path $path_gen   'handmade_gen.cpp'
 	$executable = Join-Path $path_build 'handmade_gen.exe'
 
@@ -408,10 +430,7 @@ if ( $false ) {
 
 #region Handmade Runtime
 $includes = @(
-	$path_project,
-	$path_gen,
-	$path_deps,
-	$path_platform
+	$path_project
 )
 
 # Microsoft
@@ -423,9 +442,6 @@ $lib_winmm  = 'Winmm.lib'
 # Github
 $lib_jsl = Join-Path $path_deps 'JoyShockLibrary/x64/JoyShockLibrary.lib'
 
-$unit       = Join-Path $path_project 'handmade_win32.cpp'
-$executable = Join-Path $path_build   'handmade_win32.exe'
-
 $stack_size = 1024 * 1024 * 4
 
 $compiler_args = @(
@@ -436,9 +452,6 @@ $compiler_args = @(
 	$flag_warnings_as_errors
 	$flag_optimize_intrinsics
 
-	($flag_define + 'Build_DLL=0' )
-
-	# For now this script only supports unity builds... (for the full binary)
 	($flag_define + 'Build_Unity=1' )
 )
 
@@ -449,19 +462,108 @@ else {
 	$compiler_args += ( $flag_define + 'Build_Development=0' )
 }
 
-$linker_args = @(
-	$lib_gdi32,
-	# $lib_xinput,
-	$lib_user32,
-	$lib_winmm,
+if ( $engine )
+{
+	$engine_compiler_args = $compiler_args
+	$engine_compiler_args += ($flag_define + 'Build_DLL=1' )
 
-	$lib_jsl,
+	if ( $vendor -eq 'msvc' )
+	{
+		$engine_compiler_args += ($flag_define + 'Engine_API=__declspec(dllexport)')
+	}
+	if ( $vendor -eq 'clang' )
+	{
+		$engine_compiler_args += ($flag_define + 'Engine_API=__attribute__((visibility("default")))')
+	}
 
-	$flag_link_win_subsystem_windows
-	$flag_link_optimize_references
-)
+	$linker_args = @(
+		$flag_link_dll,
+		$flag_link_optimize_references
+	)
 
-build-simple $includes $compiler_args $linker_args $unit $executable
+	$unit            = Join-Path $path_project 'handmade_engine.cpp'
+	$dynamic_library = Join-Path $path_build   'handmade_engine.dll'
+
+	build-simple $includes $engine_compiler_args $linker_args $unit $dynamic_library
+
+	if ( Test-Path $dynamic_library )
+	{
+		$data_path = Join-Path $path_data 'handmade_engine.dll'
+		move-item $dynamic_library $data_path -Force
+
+		# We need to generate the symbol table so that we can lookup the symbols we need when loading/reloading the library at runtime.
+		# This is done by sifting through the emitter.map file from the linker for the base symbol names
+		# and mapping them to their found decorated name
+
+		$engine_symbols = @(
+			'on_module_reload',
+			'startup',
+			'shutdown',
+			'update_and_render',
+			'update_audio'
+		)
+
+		$path_engine_map = Join-Path $path_build 'handmade_engine.map'
+
+		$engine_symbol_table = @()
+		$engine_symbol_list  = @()
+		Get-Content -Path $path_engine_map | ForEach-Object {
+			# Split each line by whitespace
+			$tokens = $_ -split '\s+', 3
+
+			# Extract only the decorated name using regex for both MSVC and Clang conventions
+			$decoratedName = ($tokens[2] -match '(\?[\w@]+|_Z[\w@]+)' ) ? $matches[1] : $null
+
+			# Check each regular name against the current line
+			foreach ($name in $engine_symbols) {
+				if ($decoratedName -like "*$name*") {
+					$engine_symbol_table += $name + ', ' + $decoratedName
+					$engine_symbol_list  += $decoratedName
+					$engine_symbols = $engine_symbols -ne $name  # Remove the found symbol from the array
+				}
+			}
+		}
+
+		write-host "Engine Symbol Table:" -ForegroundColor Green
+		$engine_symbol_table | ForEach-Object {
+			write-host "`t$_" -ForegroundColor Green
+		}
+
+		# Write the symbol table to a file
+		$path_engine_symbols = Join-Path $path_data 'handmade_engine.symbols'
+		$engine_symbol_list | Out-File -Path $path_engine_symbols
+	}
+}
+
+if ( $platform )
+{
+	$platform_compiler_args  = $compiler_args
+	$platform_compiler_args += ($flag_define + 'Build_DLL=0' )
+
+	$linker_args = @(
+		$lib_gdi32,
+		# $lib_xinput,
+		$lib_user32,
+		$lib_winmm,
+
+		$lib_jsl,
+
+		$flag_link_win_subsystem_windows
+		$flag_link_optimize_references
+	)
+
+	$unit       = Join-Path $path_project 'handmade_win32.cpp'
+	$executable = Join-Path $path_build   'handmade_win32.exe'
+
+	build-simple $includes $platform_compiler_args $linker_args $unit $executable
+
+	if ( Test-Path $executable )
+	{
+		$data_path = Join-Path $path_data 'handmade_win32.exe'
+		move-item $executable $data_path -Force
+	}
+}
 #endregion Handmade Runtime
 
 Pop-Location
+#endregion Building

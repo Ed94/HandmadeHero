@@ -113,6 +113,14 @@ enum XI_State : DWORD
 	XI_PluggedIn = ERROR_SUCCESS,
 };
 
+
+template< typename ProcSignature >
+ProcSignature* get_procedure_from_library( HMODULE library_module, char const* symbol )
+{
+	void* address = rcast( void*, GetProcAddress( library_module, symbol ) );
+	return rcast( ProcSignature*, address );
+}
+
 #pragma region XInput
 WIN_LIB_API DWORD WINAPI XInputGetState
 (
@@ -151,11 +159,14 @@ xinput_load_library_bindings()
 {
 	HMODULE xinput_lib = LoadLibraryA( XINPUT_DLL_A );
 
-#pragma warning( push )
-#pragma warning( disable: 4191 )
-	xinput_get_state = rcast( XInputGetStateFn*, GetProcAddress( xinput_lib, "XInputGetState" ));
-	xinput_set_state = rcast( XInputSetStateFn*, GetProcAddress( xinput_lib, "XInputSetState" ));
-#pragma warning( pop )
+	XInputGetStateFn* get_state = get_procedure_from_library< XInputGetStateFn >( xinput_lib, "XInputGetState" );
+	XInputSetStateFn* set_state = get_procedure_from_library< XInputSetStateFn >( xinput_lib, "XInputSetState" );
+
+	if ( get_state )
+		xinput_get_state = get_state;
+
+	if ( set_state )
+		xinput_set_state = set_state;
 }
 #pragma endregion XInput
 
