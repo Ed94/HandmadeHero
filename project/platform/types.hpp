@@ -97,6 +97,9 @@ static_assert( sizeof( uptr ) == sizeof( sptr ), "sizeof(uptr) != sizeof(sptr)" 
 typedef float  f32;
 typedef double f64;
 
+struct Byte {};
+static_assert( sizeof( Byte ) == 1, "Unit type must be 1 byte in size" );
+
 static_assert( sizeof( f32 ) == 4, "sizeof(f32) != 4" );
 static_assert( sizeof( f64 ) == 8, "sizeof(f64) != 8" );
 

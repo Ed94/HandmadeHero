@@ -42,7 +42,6 @@ struct ModuleAPI
 	UpdateAudioFn*     update_audio;
 
 	b32 IsValid;
-	char _PAD_[4];
 };
 
 NS_ENGINE_END

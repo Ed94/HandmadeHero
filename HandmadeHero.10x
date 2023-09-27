@@ -14,10 +14,10 @@
 		<CleanCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/clean.ps1</CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>
 		<CancelBuild></CancelBuild>
-		<RunCommand>$(WorkspaceDirectory)/data/handmade_win32.exe</RunCommand>
-		<RunCommandWorkingDirectory>$(WorkspaceDirectory)/data</RunCommandWorkingDirectory>
-		<DebugCommand>$(WorkspaceDirectory)/data/handmade_win32.exe</DebugCommand>
-		<ExePathCommand>$(WorkspaceDirectory)/data/handmade_win32.exe</ExePathCommand>
+		<RunCommand>$(WorkspaceDirectory)/data/binaries/handmade_win32.exe</RunCommand>
+		<RunCommandWorkingDirectory>$(WorkspaceDirectory)/data/binaries</RunCommandWorkingDirectory>
+		<DebugCommand>$(WorkspaceDirectory)/data/binaries/handmade_win32.exe</DebugCommand>
+		<ExePathCommand>$(WorkspaceDirectory)/data/binaries/handmade_win32.exe</ExePathCommand>
 		<DebugSln></DebugSln>
 		<UseVisualStudioEnvBat>true</UseVisualStudioEnvBat>
 		<Configurations>

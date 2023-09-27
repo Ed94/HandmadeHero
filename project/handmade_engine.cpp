@@ -13,7 +13,4 @@
 
 #if Build_Unity
 #	include "engine/engine.cpp"
-#	if SYSTEM_WINDOWS
-#		include "engine/win32_engine.cpp"
-#	endif
 #endif

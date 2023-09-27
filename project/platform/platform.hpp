@@ -16,6 +16,8 @@
 #pragma warning( disable: 4514 ) // Support for unused inline functions
 #pragma warning( disable: 4505 ) // Support for unused static functions
 #pragma warning( disable: 5045 ) // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
+#pragma warning( disable: 5264 ) // Support for 'const' variables unused
+#pragma warning( disable: 4820 ) // Support auto-adding padding to structs
 
 // TODO(Ed) : REMOVE THESE WHEN HE GETS TO THEM
 #include <math.h> // TODO : Implement math ourselves
@@ -26,6 +28,7 @@
 #include "generics.hpp"
 #include "math_constants.hpp"
 #include "types.hpp"
+#include "strings.hpp"
 
 #define NS_PLATFORM_BEGIN namespace platform {
 #define NS_PLATFORM_END }
@@ -45,7 +48,12 @@ struct Debug_FileContent
 {
 	void* Data;
 	u32   Size;
-	char  _PAD_[4];
+	Byte  _PAD_[4];
+};
+
+struct BinaryModule
+{
+	void* OpaqueHandle;
 };
 
 using DebugFileFreeContentFn  = void ( Debug_FileContent* file_content );
@@ -53,9 +61,54 @@ using DebugFileReadContentFn  = Debug_FileContent ( char const* file_path );
 using DebugFileWriteContentFn = b32 ( char const* file_path, u32 content_size, void* content_memory );
 
 using DebugSetPauseRenderingFn = void (b32 value);
+
+// TODO(Ed): This also assumes the symbol name is always within size of the provided buffer, needs to fail if not.
+// Note: This is a temporary solution until there is more infrastructure for the engine to use.
+void get_symbol_from_module_table( Debug_FileContent symbol_table, u32 symbol_ID, char* symbol_name )
+{
+	struct Token
+	{
+		char const* Ptr;
+		u32         Len;
+		char _PAD_[4];
+	};
+
+	Token tokens[256] = {};
+	s32 idx = 0;
+
+	char const* scanner = rcast( char const*, symbol_table.Data );
+	u32 left = symbol_table.Size;
+	while ( left )
+	{
+		if ( *scanner == '\n' || *scanner == '\r' )
+		{
+			++ scanner;
+			-- left;
+		}
+		else
+		{
+			tokens[idx].Ptr = scanner;
+			while ( left && *scanner != '\r' && *scanner != '\n' )
+			{
+				-- left;
+				++ scanner;
+				++ tokens[idx].Len;
+			}
+			++ idx;
+		}
+	}
+
+	Token& token = tokens[symbol_ID];
+	while ( token.Len -- )
+	{
+		*symbol_name = *token.Ptr;
+		++ symbol_name;
+		++ token.Ptr;
+	}
+	*symbol_name = '\0';
+}
 #endif
 
-// TODO(Ed) : Implement this later when settings UI is setup.
 #pragma region Settings Exposure
 // Exposing specific properties for user configuration in settings
 
@@ -67,6 +120,13 @@ using SetMonitorRefreshRateFn = void ( u32 rate_in_hz );
 
 using GetEngineFrameTargetFn = u32 ();
 using SetEngineFrameTargetFn = void ( u32 rate_in_hz );
+
+// This module api will be used to manage the editor and game modules from the engine side,
+// without the platform layer needing to know about it.
+
+using LoadBinaryModuleFn   = BinaryModule ( char const* module_path );
+using UnloadBinaryModuleFn = void ( BinaryModule* module );
+using GetModuleProcedureFn = void* ( BinaryModule module, char const* symbol );
 
 struct ModuleAPI
 {
@@ -83,6 +143,10 @@ struct ModuleAPI
 
 	GetEngineFrameTargetFn* get_engine_frame_target;
 	SetEngineFrameTargetFn* set_engine_frame_target;
+
+	LoadBinaryModuleFn*   load_binary_module;
+	UnloadBinaryModuleFn* unload_binary_module;
+	GetModuleProcedureFn* get_module_procedure;
 };
 
 #pragma endregion Settings Exposure

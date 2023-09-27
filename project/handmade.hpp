@@ -27,7 +27,6 @@ struct Actionable
 	char const*                Name;
 	engine::InputBindCallback* Binds;
 	s32                        NumBinds;
-	char _PAD_[4];
 };
 
 struct ActionableMode

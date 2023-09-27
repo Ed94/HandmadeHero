@@ -4,8 +4,8 @@
     <ShowAllFiles>true</ShowAllFiles>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
-    <LocalDebuggerWorkingDirectory>$(ProjectDir)data</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)data\binaries</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommand>$(ProjectDir)data\handmade_win32.exe</LocalDebuggerCommand>
+    <LocalDebuggerCommand>$(ProjectDir)data\binaries\handmade_win32.exe</LocalDebuggerCommand>
   </PropertyGroup>
 </Project>

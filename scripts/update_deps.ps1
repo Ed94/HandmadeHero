@@ -4,6 +4,7 @@ $path_root = & git rev-parse --show-toplevel
 $path_data         = Join-Path $path_root         "data"
 $path_project      = Join-Path $path_root         "project"
 $path_deps         = Join-Path $path_project      "dependencies"
+$path_binaries     = Join-Path $path_data         "binaries"
 $path_deps_windows = Join-Path $path_deps         "windows"
 $path_temp         = Join-Path $path_deps         "temp"
 $path_platform     = Join-Path $path_project      "platform"
@@ -14,6 +15,10 @@ if (Test-Path $path_deps) {
 	New-Item -ItemType Directory -Path $path_deps
 }
 New-Item -ItemType Directory -Path $path_temp
+
+if ( -not (Test-Path $path_binaries) ) {
+	New-Item -ItemType Directory -Path $path_binaries
+}
 
 $url_gencpp      = "https://github.com/Ed94/gencpp/releases/download/latest/gencpp_singleheader.zip"
 $path_gencpp_zip = Join-Path $path_temp "gencpp_singleheader.zip"
@@ -59,7 +64,7 @@ $jsl_lib_files = (Get-ChildItem (Join-Path $path_temp "JSL\x64") -Recurse -Inclu
 Move-Item $jsl_lib_files -Destination $path_jsl_lib -Force
 
 $path_jsl_dll  = Join-Path $path_jsl_lib "JoyShockLibrary.dll"
-Move-Item  $path_jsl_dll $path_data -Force
+Copy-Item  $path_jsl_dll $path_binaries -Force
 #endregion JoyShockLibrary
 
 Remove-Item $path_temp -Recurse -Force

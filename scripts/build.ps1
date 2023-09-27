@@ -51,7 +51,7 @@ write-host "Building HandmadeHero with $vendor"
 
 if ( $dev ) {
 	if ( $debug -eq $null ) {
-		# $debug = $true
+		$debug = $true
 	}
 
 	if ( $optimize -eq $null ) {
@@ -194,9 +194,12 @@ if ( $vendor -match "clang" )
 		param( [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )
 		Write-Host "build-simple: clang"
 
-		$object = $binary -replace '\.exe', '.obj'
-		$pdb    = $binary -replace '\.exe', '.pdb'
-		$map    = $binary -replace '\.exe', '.map'
+		$object = $unit -replace '\.cpp', '.obj'
+		$map    = $unit -replace '\.cpp', '.map'
+
+		# The PDB file has to also be time-stamped so that we can reload the DLL at runtime
+		$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+		$pdb       = $binary -replace '\.(exe|dll)$', "_$timestamp.pdb"
 
 		$compiler_args += @(
 			$flag_no_color_diagnostics,
@@ -275,6 +278,7 @@ if ( $vendor -match "msvc" )
 	$flag_dll_debug 			     = '/LDd'
 	$flag_linker 		             = '/link'
 	$flag_link_dll                   = '/DLL'
+	$flag_link_no_incremental 	     = '/INCREMENTAL:NO'
 	$flag_link_mapfile 				 = '/MAP:'
 	$flag_link_optimize_references   = '/OPT:REF'
 	$flag_link_win_debug 	         = '/DEBUG'
@@ -309,9 +313,14 @@ if ( $vendor -match "msvc" )
 		param( [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )
 		Write-Host "build-simple: msvc"
 
-		$object = $binary -replace '\.(exe|dll)$', '.obj'
-		$pdb    = $binary -replace '\.(exe|dll)$', '.pdb'
-		$map    = $binary -replace '\.(exe|dll)$', '.map'
+		$object = $unit -replace '\.(cpp)$', '.obj'
+		$map    = $unit -replace '\.(cpp)$', '.map'
+		$object = $object -replace '\bproject\b', 'build'
+		$map    = $map    -replace '\bproject\b', 'build'
+
+		# The PDB file has to also be time-stamped so that we can reload the DLL at runtime
+		$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+		$pdb       = $binary -replace '\.(exe|dll)$', "_$timestamp.pdb"
 
 		$compiler_args += @(
 			$flag_nologo,
@@ -355,6 +364,7 @@ if ( $vendor -match "msvc" )
 		$linker_args += @(
 			$flag_nologo,
 			$flag_link_win_machine_64,
+			$flag_link_no_incremental,
 			( $flag_link_win_path_output + $binary )
 		)
 		if ( $debug ) {
@@ -383,6 +393,7 @@ if ( $vendor -match "msvc" )
 $path_project  = Join-Path $path_root    'project'
 $path_build    = Join-Path $path_root    'build'
 $path_data     = Join-Path $path_root	 'data'
+$path_binaries = Join-Path $path_data    'binaries'
 $path_deps     = Join-Path $path_project 'dependencies'
 $path_gen      = Join-Path $path_project 'gen'
 $path_platform = Join-Path $path_project 'platform'
@@ -396,6 +407,10 @@ if ( (Test-Path $path_build) -eq $false ) {
 
 if ( (Test-Path $path_deps) -eq $false ) {
 	& $update_deps
+}
+
+if ( (Test-Path $path_binaries) -eq $false ) {
+	New-Item $path_binaries -ItemType Directory
 }
 
 #region Handmade Generate
@@ -464,6 +479,13 @@ else {
 
 if ( $engine )
 {
+	# Delete old PDBs 
+	$pdb_files = Get-ChildItem -Path $path_binaries -Filter "handmade_engine_*.pdb"
+	foreach ($file in $pdb_files) {
+		Remove-Item -Path $file.FullName -Force
+		Write-Host "Deleted $file" -ForegroundColor Green
+	}
+
 	$engine_compiler_args = $compiler_args
 	$engine_compiler_args += ($flag_define + 'Build_DLL=1' )
 
@@ -481,15 +503,19 @@ if ( $engine )
 		$flag_link_optimize_references
 	)
 
-	$unit            = Join-Path $path_project 'handmade_engine.cpp'
-	$dynamic_library = Join-Path $path_build   'handmade_engine.dll'
+	$unit            = Join-Path $path_project  'handmade_engine.cpp'
+	$dynamic_library = Join-Path $path_binaries 'handmade_engine.dll'
 
 	build-simple $includes $engine_compiler_args $linker_args $unit $dynamic_library
 
 	if ( Test-Path $dynamic_library )
 	{
-		$data_path = Join-Path $path_data 'handmade_engine.dll'
-		move-item $dynamic_library $data_path -Force
+		# $data_path = Join-Path $path_data 'handmade_engine.dll'
+		# move-item $dynamic_library $data_path -Force
+		$path_lib = $dynamic_library -replace '\.dll', '.lib'
+		$path_exp = $dynamic_library -replace '\.dll', '.exp'
+		Remove-Item $path_lib -Force
+		Remove-Item $path_exp -Force
 
 		# We need to generate the symbol table so that we can lookup the symbols we need when loading/reloading the library at runtime.
 		# This is done by sifting through the emitter.map file from the linker for the base symbol names
@@ -504,6 +530,8 @@ if ( $engine )
 		)
 
 		$path_engine_map = Join-Path $path_build 'handmade_engine.map'
+
+		$maxNameLength = ($engine_symbols | Measure-Object -Property Length -Maximum).Maximum
 
 		$engine_symbol_table = @()
 		$engine_symbol_list  = @()
@@ -526,17 +554,27 @@ if ( $engine )
 
 		write-host "Engine Symbol Table:" -ForegroundColor Green
 		$engine_symbol_table | ForEach-Object {
-			write-host "`t$_" -ForegroundColor Green
+			$split         = $_ -split ', ', 2
+			$paddedName    = $split[0].PadRight($maxNameLength)
+			$decoratedName = $split[1]
+			write-host "`t$paddedName, $decoratedName" -ForegroundColor Green
 		}
 
 		# Write the symbol table to a file
-		$path_engine_symbols = Join-Path $path_data 'handmade_engine.symbols'
+		$path_engine_symbols = Join-Path $path_binaries 'handmade_engine.symbols'
 		$engine_symbol_list | Out-File -Path $path_engine_symbols
 	}
 }
 
 if ( $platform )
 {
+	# Delete old PDBs 
+	$pdb_files = Get-ChildItem -Path $path_binaries -Filter "handmade_win32_*.pdb"
+	foreach ($file in $pdb_files) {
+		Remove-Item -Path $file.FullName -Force
+		Write-Host "Deleted $file" -ForegroundColor Green
+	}
+
 	$platform_compiler_args  = $compiler_args
 	$platform_compiler_args += ($flag_define + 'Build_DLL=0' )
 
@@ -552,16 +590,23 @@ if ( $platform )
 		$flag_link_optimize_references
 	)
 
-	$unit       = Join-Path $path_project 'handmade_win32.cpp'
-	$executable = Join-Path $path_build   'handmade_win32.exe'
+	$unit       = Join-Path $path_project  'handmade_win32.cpp'
+	$executable = Join-Path $path_binaries 'handmade_win32.exe'
 
 	build-simple $includes $platform_compiler_args $linker_args $unit $executable
 
-	if ( Test-Path $executable )
-	{
-		$data_path = Join-Path $path_data 'handmade_win32.exe'
-		move-item $executable $data_path -Force
-	}
+	# if ( Test-Path $executable )
+	# {
+	# 	$data_path = Join-Path $path_data 'handmade_win32.exe'
+	# 	move-item $executable $data_path -Force
+	# }
+}
+
+$path_jsl_dll = Join-Path $path_binaries 'JoyShockLibrary.dll'
+if ( (Test-Path $path_jsl_dll) -eq $false )
+{
+	$path_jsl_dep_dll = Join-Path $path_deps 'JoyShockLibrary/x64/JoyShockLibrary.dll'
+	Copy-Item $path_jsl_dep_dll $path_jsl_dll
 }
 #endregion Handmade Runtime
 

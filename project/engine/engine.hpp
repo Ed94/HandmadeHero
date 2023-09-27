@@ -50,7 +50,6 @@ struct AudioBuffer
 	u32  RunningSampleIndex;
 	s32  SamplesPerSecond;
 	s32  NumSamples;
-	char _PAD_[4];
 };
 
 struct DigitalBtn
@@ -190,7 +189,6 @@ struct InputMode
 {
 	InputBindCallback* Binds;
 	s32                NumBinds;
-	char _PAD_[4];
 };
 
 void input_mode_pop( InputMode* mode );

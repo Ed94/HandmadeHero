@@ -110,7 +110,7 @@ render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
 			u8 red   = 0;
 		#endif
 
-			*pixel++ = u32(red << 16) | u32(green << 8) | blue;
+			*pixel++ = u32(red << 16) | u32(green/2 << 16) | blue/2 << 0;
 		}
 		wildcard += 0.5375f;
 		row += buffer->Pitch;

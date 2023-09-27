@@ -101,6 +101,16 @@ struct DirectSoundBuffer
 
 
 #pragma region Static Data
+
+global StrFixed< S16_MAX > Path_Root;
+global StrFixed< S16_MAX > Path_Binaries;
+
+constexpr Str FName_Engine_DLL       = str_ascii("handmade_engine.dll");
+constexpr Str FName_Engine_DLL_InUse = str_ascii("handmade_engine_in_use.dll");
+
+global StrFixed< S16_MAX > Path_Engine_DLL;
+global StrFixed< S16_MAX > Path_Engine_DLL_InUse;
+
 // TODO(Ed) : This is a global for now.
 global b32 Running         = false;
 global b32 Pause_Rendering = false;
@@ -130,7 +140,7 @@ global u32 Engine_Refresh_Hz      = Monitor_Refresh_Hz / 2;
 global f32 Engine_Frame_Target_MS = 1000.f / scast(f32, Engine_Refresh_Hz);
 #pragma endregion Static Data
 
-
+#pragma region Internal
 #if Build_Debug
 struct DebugTimeMarker
 {
@@ -144,82 +154,6 @@ struct DebugTimeMarker
 
 	DWORD ExpectedFlipCursor;
 };
-
-void debug_file_free_content( Debug_FileContent* content )
-{
-	if ( content->Data)
-	{
-		VirtualFree( content->Data, 0, MEM_Release);
-		*content = {};
-	}
-}
-
-Debug_FileContent debug_file_read_content( char const* file_path )
-{
-	Debug_FileContent result {};
-
-	HANDLE file_handle = CreateFileA( file_path
-		, GENERIC_READ, FILE_SHARE_READ, 0
-		, OPEN_EXISTING, 0, 0
-	);
-	if ( file_handle == INVALID_HANDLE_VALUE )
-	{
-		// TODO(Ed) : Logging
-		return result;
-	}
-
-	GetFileSizeEx( file_handle, rcast(LARGE_INTEGER*, &result.Size) );
-	if ( result.Size == 0 )
-	{
-		// TODO(Ed) : Logging
-		return result;
-	}
-	result.Data = VirtualAlloc( 0, result.Size, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
-
-	u32 bytes_read;
-	if ( ReadFile( file_handle, result.Data, result.Size, rcast(LPDWORD, &bytes_read), 0 ) == false )
-	{
-		// TODO(Ed) : Logging
-		return {};
-	}
-
-	if ( bytes_read != result.Size )
-	{
-		// TODO : Logging
-		return {};
-	}
-
-	CloseHandle( file_handle );
-	return result;
-}
-
-b32 debug_file_write_content( char const* file_path, u32 content_size, void* content_memory )
-{
-	HANDLE file_handle = CreateFileA( file_path
-		, GENERIC_WRITE, 0, 0
-		, CREATE_ALWAYS, 0, 0
-	);
-	if ( file_handle == INVALID_HANDLE_VALUE )
-	{
-		// TODO : Logging
-		return false;
-	}
-
-	DWORD bytes_written;
-	if ( WriteFile( file_handle, content_memory, content_size, & bytes_written, 0 ) == false )
-	{
-		// TODO : Logging
-		return false;
-	}
-
-	CloseHandle( file_handle );
-	return true;
-}
-
-void debug_set_pause_rendering( b32 value )
-{
-	Pause_Rendering = value;
-}
 
 internal void
 debug_draw_vertical( s32 x_pos, s32 top, s32 bottom, s32 color )
@@ -748,84 +682,144 @@ process_pending_window_messages( engine::KeyboardState* keyboard )
 		}
 	}
 }
+#pragma endregion Internal
 
 #pragma region Platfom API
-u32 get_monitor_refresh_rate();
-
-#pragma endregion Platform API
-
-// TODO(Ed): This also assumes the symbol name is always within size of the provided buffer, needs to fail if not.
-void get_symbol_from_module_table( Debug_FileContent symbol_table, u32 symbol_ID, char* symbol_name )
+#if Build_Development
+void debug_file_free_content( Debug_FileContent* content )
 {
-	struct Token
+	if ( content->Data)
 	{
-		char const* Ptr;
-		u32         Len;
-		char _PAD_[4];
-	};
-
-	Token tokens[256] = {};
-	s32 idx = 0;
-
-	char const* scanner = rcast( char const*, symbol_table.Data );
-	u32 left = symbol_table.Size;
-	while ( left )
-	{
-		if ( *scanner == '\n' || *scanner == '\r' )
-		{
-			++ scanner;
-			-- left;
-		}
-		else
-		{
-			tokens[idx].Ptr = scanner;
-			while ( left && *scanner != '\r' && *scanner != '\n' )
-			{
-				-- left;
-				++ scanner;
-				++ tokens[idx].Len;
-			}
-			++ idx;
-		}
+		VirtualFree( content->Data, 0, MEM_Release);
+		*content = {};
 	}
-
-	Token& token = tokens[symbol_ID];
-	while ( token.Len -- )
-	{
-		*symbol_name = *token.Ptr;
-		++ symbol_name;
-		++ token.Ptr;
-	}
-	*symbol_name = '\0';
 }
 
-// Right now they are just the data directory
-#define Path_To_Symbol_Tables
+Debug_FileContent debug_file_read_content( char const* file_path )
+{
+	Debug_FileContent result {};
 
+	HANDLE file_handle = CreateFileA( file_path
+		, GENERIC_READ, FILE_SHARE_READ, 0
+		, OPEN_EXISTING, 0, 0
+	);
+	if ( file_handle == INVALID_HANDLE_VALUE )
+	{
+		// TODO(Ed) : Logging
+		return result;
+	}
+
+	GetFileSizeEx( file_handle, rcast(LARGE_INTEGER*, &result.Size) );
+	if ( result.Size == 0 )
+	{
+		// TODO(Ed) : Logging
+		return result;
+	}
+	result.Data = VirtualAlloc( 0, result.Size, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+
+	u32 bytes_read;
+	if ( ReadFile( file_handle, result.Data, result.Size, rcast(LPDWORD, &bytes_read), 0 ) == false )
+	{
+		// TODO(Ed) : Logging
+		return {};
+	}
+
+	if ( bytes_read != result.Size )
+	{
+		// TODO : Logging
+		return {};
+	}
+
+	CloseHandle( file_handle );
+	return result;
+}
+
+b32 debug_file_write_content( char const* file_path, u32 content_size, void* content_memory )
+{
+	HANDLE file_handle = CreateFileA( file_path
+		, GENERIC_WRITE, 0, 0
+		, CREATE_ALWAYS, 0, 0
+	);
+	if ( file_handle == INVALID_HANDLE_VALUE )
+	{
+		// TODO : Logging
+		return false;
+	}
+
+	DWORD bytes_written;
+	if ( WriteFile( file_handle, content_memory, content_size, & bytes_written, 0 ) == false )
+	{
+		// TODO : Logging
+		return false;
+	}
+
+	CloseHandle( file_handle );
+	return true;
+}
+
+void debug_set_pause_rendering( b32 value )
+{
+	Pause_Rendering = value;
+}
+#endif
+
+u32 get_monitor_refresh_rate();
+
+BinaryModule load_binary_module( char const* module_path )
+{
+	HMODULE lib = LoadLibraryA( module_path );
+	return BinaryModule { scast(void*, lib) };
+}
+
+void unload_binary_module( BinaryModule* module )
+{
+	FreeLibrary( scast(HMODULE, module->OpaqueHandle) );
+	*module = {};
+}
+
+void* get_binary_module_symbol( BinaryModule module, char const* symbol_name )
+{
+	return rcast(void*, GetProcAddress( scast(HMODULE, module.OpaqueHandle), symbol_name ));
+}
+#pragma endregion Platform API
+
+FILETIME file_get_last_write_time( char const* path )
+{
+	WIN32_FIND_DATAA dll_file_info = {};
+	HANDLE dll_file_handle = FindFirstFileA( path, & dll_file_info );
+	if ( dll_file_handle == INVALID_HANDLE_VALUE )
+	{
+		FindClose( dll_file_handle );
+	}
+
+	return dll_file_info.ftLastWriteTime;
+}
+
+#pragma region Engine Module API
 global HMODULE Lib_Handmade_Engine = nullptr;
 
 engine::ModuleAPI load_engine_module_api()
 {
 	using ModuleAPI = engine::ModuleAPI;
 
-	// TODO(Ed) : Need proper paything to the dll (not assume is in the base directory).
-
-	CopyFileA( "handmade_engine.dll", "handmade_engine_temp.dll", FALSE );
+	CopyFileA( Path_Engine_DLL, Path_Engine_DLL_InUse, FALSE );
 
 	// Engine
-	Lib_Handmade_Engine = LoadLibraryA( "handmade_engine_temp.dll" );
+	Lib_Handmade_Engine = LoadLibraryA( Path_Engine_DLL_InUse );
 	if ( ! Lib_Handmade_Engine )
 	{
 		return {};
 	}
 
-	constexpr char const*
-	handmade_engine_symbols = Path_To_Symbol_Tables "handmade_engine.symbols";
+	constexpr Str fname_handmade_engine_symbols = str_ascii("handmade_engine.symbols");
 
-	Debug_FileContent symbol_table = debug_file_read_content( handmade_engine_symbols );
+	StrFixed< S16_MAX > path_handmade_engine_symbols { 0, {} };
+	path_handmade_engine_symbols.concat( Path_Binaries, fname_handmade_engine_symbols );
+
+	Debug_FileContent symbol_table = debug_file_read_content( path_handmade_engine_symbols );
 	if ( symbol_table.Size == 0 )
 	{
-		fatal( "Failed to laod symbol table for handmade engine module!" );
+		fatal( "Failed to load symbol table for handmade engine module!" );
 		return {};
 	}
 
@@ -872,6 +866,7 @@ void unload_engine_module_api( engine::ModuleAPI* engine_api )
 		OutputDebugStringA( "Unloaded engine module API\n" );
 	}
 }
+#pragma endregion Engine Module API
 
 NS_PLATFORM_END
 
@@ -910,6 +905,10 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		platform_api.set_monitor_refresh_rate = nullptr;
 		platform_api.get_engine_frame_target  = nullptr;
 		platform_api.set_engine_frame_target  = nullptr;
+
+		platform_api.load_binary_module	  = & load_binary_module;
+		platform_api.unload_binary_module = & unload_binary_module;
+		platform_api.get_module_procedure = & get_binary_module_symbol;
 	}
 
 	// Memory
@@ -939,9 +938,6 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			return -1;
 		}
 	}
-
-	// Load engine module
-	engine::ModuleAPI engine_api = load_engine_module_api();
 
 	WNDCLASSW window_class {};
 	HWND window_handle = nullptr;
@@ -982,6 +978,41 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	}
 	// WinDimensions dimensions = get_window_dimensions( window_handle );
 	resize_dib_section( &Surface_Back_Buffer, 1280, 720 );
+
+	// Setup pathing
+	// TODO(Ed): This will not support long paths, NEEDS to be changed to support long paths.
+	{
+		char path_buffer[S16_MAX];
+		GetModuleFileNameA( 0, path_buffer, sizeof(path_buffer) );
+
+		if ( GetCurrentDirectoryA( S16_MAX, Path_Binaries ) == 0 )
+		{
+			fatal( "Failed to get the root directory!" );
+		}
+		Path_Binaries.Len = str_length( Path_Binaries );
+		Path_Binaries[ Path_Binaries.Len ] = '\\';
+		++ Path_Binaries.Len;
+
+		if ( SetCurrentDirectoryA( ".." ) == 0 )
+		{
+			fatal( "Failed to set current directory to root!");
+		}
+
+		if ( GetCurrentDirectoryA( S16_MAX, Path_Root.Data ) == 0 )
+		{
+			fatal( "Failed to get the root directory!" );
+		}
+		Path_Root.Len = str_length(Path_Root.Data);
+		Path_Root.Data[ Path_Root.Len ] = '\\';
+		++ Path_Root.Len;
+
+		Path_Engine_DLL.      concat( Path_Binaries, FName_Engine_DLL );
+		Path_Engine_DLL_InUse.concat( Path_Binaries, FName_Engine_DLL_InUse );
+	}
+
+	// Load engine module
+	FILETIME          engine_api_load_time = file_get_last_write_time( Path_Engine_DLL );
+	engine::ModuleAPI engine_api           = load_engine_module_api();
 
 	b32   sound_is_valid       = false;
 	DWORD ds_cursor_byte_delta = 0;
@@ -1091,8 +1122,6 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	OutputDebugStringA( text_buffer );
 #endif
 
-	u64 module_reload_counter = 0;
-
 	Running = true;
 #if 0
 // This tests the play & write cursor update frequency.
@@ -1109,13 +1138,13 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 #endif
 	while( Running )
 	{
-		if ( module_reload_counter > 120 )
+		FILETIME engine_api_current_time = file_get_last_write_time( Path_Engine_DLL );
+		if ( CompareFileTime( & engine_api_load_time, & engine_api_current_time ) != 0 )
 		{
+			engine_api_load_time = engine_api_current_time;
 			unload_engine_module_api( & engine_api );
 			engine_api = load_engine_module_api();
-			module_reload_counter = 0;
 		}
-		++ module_reload_counter;
 
 		process_pending_window_messages( new_keyboard );
 
@@ -1489,6 +1518,9 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	}
 
 	engine_api.shutdown( & engine_memory, & platform_api );
+
+	unload_engine_module_api( & engine_api );
+	DeleteFileA( Path_Engine_DLL_InUse );
 
 	if ( jsl_num_devices > 0 )
 	{
