@@ -138,8 +138,7 @@ FILETIME file_get_last_write_time( char const* path )
 	return dll_file_info.ftLastWriteTime;
 }
 
-#if Build_Debug
-struct DebugTimeMarker
+struct AudioTimeMarker
 {
 	DWORD OutputPlayCusror;
 	DWORD OutputWriteCursor;
@@ -152,6 +151,7 @@ struct DebugTimeMarker
 	DWORD ExpectedFlipCursor;
 };
 
+#if Build_Debug
 internal void
 debug_draw_vertical( s32 x_pos, s32 top, s32 bottom, s32 color )
 {
@@ -195,7 +195,7 @@ debug_draw_sound_buffer_marker( DirectSoundBuffer* sound_buffer, f32 ratio
 
 internal void
 debug_sync_display( DirectSoundBuffer* sound_buffer
-                   , u32 num_markers, DebugTimeMarker* markers
+                   , u32 num_markers, AudioTimeMarker* markers
 				   , u32 current_marker
                    , f32 ms_per_frame )
 {
@@ -206,7 +206,7 @@ debug_sync_display( DirectSoundBuffer* sound_buffer
 	u32 line_height = 64;
 	for ( u32 marker_index = 0; marker_index < num_markers; ++ marker_index )
 	{
-		DebugTimeMarker* marker = & markers[marker_index];
+		AudioTimeMarker* marker = & markers[marker_index];
 		assert( marker->OutputPlayCusror  < sound_buffer->SecondaryBufferSize );
 		assert( marker->OutputWriteCursor < sound_buffer->SecondaryBufferSize );
 		assert( marker->OutputLocation    < sound_buffer->SecondaryBufferSize );
@@ -843,6 +843,12 @@ process_pending_window_messages( engine::KeyboardState* keyboard )
 
 #pragma region Platfom API
 #if Build_Development
+void debug_set_pause_rendering( b32 value )
+{
+	Pause_Rendering = value;
+}
+#endif
+
 b32 file_check_exists( Str path )
 {
 	HANDLE file_handle = CreateFileA( path
@@ -1021,12 +1027,6 @@ u32 file_write_content( File* file, u32 content_size, void* content_memory )
 	}
 	return bytes_written;
 }
-
-void debug_set_pause_rendering( b32 value )
-{
-	Pause_Rendering = value;
-}
-#endif
 
 u32 get_monitor_refresh_rate()
 {
@@ -1223,7 +1223,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			L"Handmade Hero",
 			WS_Overlapped_Window | WS_Initially_Visible,
 			CW_Use_Default, CW_Use_Default, // x, y
-			CW_Use_Default, CW_Use_Default, // width, height
+			1100, 700, // width, height
 			0, 0,                         // parent, menu
 			instance, 0                   // instance, param
 		);
@@ -1303,10 +1303,14 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	FILETIME          engine_api_load_time = file_get_last_write_time( Path_Engine_DLL );
 	engine::ModuleAPI engine_api           = load_engine_module_api();
 
-	b32   sound_is_valid       = false;
-	DWORD ds_cursor_byte_delta = 0;
-	f32   ds_latency_ms        = 0;
+	b32               sound_is_valid       = false;
+	DWORD             ds_cursor_byte_delta = 0;
+	f32               ds_latency_ms        = 0;
 	DirectSoundBuffer ds_sound_buffer;
+	u32               audio_marker_index = 0;
+	AudioTimeMarker   audio_time_markers[ Monitor_Refresh_Max_Supported ] {};
+	u32               audio_time_markers_size = Engine_Refresh_Hz / 2;
+	assert( audio_time_markers_size <= Monitor_Refresh_Max_Supported )
 	{
 		ds_sound_buffer.IsPlaying        = 0;
 		ds_sound_buffer.SamplesPerSecond = 48000;
@@ -1333,12 +1337,6 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			ds_sound_buffer.GuardSampleBytes = min_guard_sample_bytes;
 		}
 	}
-#if Build_Development
-	u32             debug_marker_index = 0;
-	DebugTimeMarker debug_markers[ Monitor_Refresh_Max_Supported ] {};
-	u32             debug_marker_history_size = Engine_Refresh_Hz / 2;
-	assert( debug_marker_history_size <= Monitor_Refresh_Max_Supported )
-#endif
 
 	engine::InputState input {};
 
@@ -1546,7 +1544,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			sound_buffer.Samples            = ds_sound_buffer.Samples;
 			engine_api.update_audio( & sound_buffer, & engine_memory, & platform_api );
 
-			DebugTimeMarker* marker = & debug_markers[ debug_marker_index ];
+			AudioTimeMarker* marker = & audio_time_markers[ audio_marker_index ];
 			marker->OutputPlayCusror   = ds_play_cursor;
 			marker->OutputWriteCursor  = ds_write_cursor;
 			marker->OutputLocation     = byte_to_lock;
@@ -1642,7 +1640,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		#if Build_Development
 			// Note: debug_marker_index is wrong for the 0th index
 			debug_sync_display( & ds_sound_buffer
-				, debug_marker_history_size, debug_markers, debug_marker_index - 1
+				, audio_time_markers_size, audio_time_markers, audio_marker_index - 1
 				, Engine_Frame_Target_MS );
 		#endif
 
@@ -1666,8 +1664,8 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 					sound_is_valid = true;
 				}
 
-				assert( debug_marker_index < debug_marker_history_size )
-				DebugTimeMarker* marker = & debug_markers[ debug_marker_index ];
+				assert( audio_marker_index < audio_time_markers_size )
+				AudioTimeMarker* marker = & audio_time_markers[ audio_marker_index ];
 
 				marker->FlipPlayCursor  = play_cursor;
 				marker->FlipWriteCursor = write_cursor;
@@ -1676,9 +1674,9 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		#endif
 
 		#if Build_Development
-			debug_marker_index++;
-			if ( debug_marker_index >= debug_marker_history_size )
-				debug_marker_index = 0;
+			audio_marker_index++;
+			if ( audio_marker_index >= audio_time_markers_size )
+				audio_marker_index = 0;
 		#endif
 	}
 

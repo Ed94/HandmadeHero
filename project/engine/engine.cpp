@@ -26,7 +26,9 @@ struct EngineActions
 
 	b32 toggle_wave_tone = false;
 
+#if Build_Development
 	b32 pause_renderer  = false;
+#endif
 };
 
 struct PlayerActions
@@ -322,7 +324,9 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 	actions->raise_tone_hz |= keyboard->Right.EndedDown;
 	actions->lower_tone_hz |= keyboard->Left.EndedDown;
 
+#if Build_Development
 	actions->pause_renderer |= pressed( keyboard->Pause );
+#endif
 
 	actions->toggle_wave_tone |= pressed( keyboard->Q );
 
@@ -473,6 +477,7 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 			}
 		}
 
+	#if Build_Development
 		if ( engine_actions.pause_renderer )
 		{
 			if ( state->RendererPaused )
@@ -486,6 +491,7 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 				state->RendererPaused = true;
 			}
 		}
+	#endif
 	}
 
 	if ( state->InputRecordingIndex )

@@ -40,11 +40,8 @@ NS_PLATFORM_BEGIN
 // (Example: Letting the user change the refresh-rate of the monitor or the engine's target frame-rate)
 
 #if Build_Development
-/*
-	IMPORTANT : These are not for shipping code - they are blocking and the write isn't protected.
-*/
-
 using DebugSetPauseRenderingFn = void (b32 value);
+#endif
 
 struct File
 {
@@ -98,7 +95,6 @@ void get_symbol_from_module_table( File symbol_table, u32 symbol_ID, char* symbo
 	}
 	*symbol_name = '\0';
 }
-#endif
 
 #pragma region Settings Exposure
 // Exposing specific properties for user configuration in settings
@@ -128,6 +124,7 @@ using GetModuleProcedureFn = void* ( BinaryModule module, char const* symbol );
 // It will allow for only reading or writting to a file at a time.
 // Note: If anything more robust is needed, I'll grab it from the zpl-c library.
 
+// TODO(Ed) : These need to be converted to an async interface.
 using FileCheckExistsFn  = b32 ( Str const file_path );
 using FileCloseFn 		 = void ( File* file );
 using FileDelete         = b32 ( Str const file_path );
