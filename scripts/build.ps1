@@ -10,7 +10,7 @@ Push-Location $path_root
 
 #region Arguments
        $vendor       = $null
-       $optimized    = $null
+       $optimize     = $null
 	   $debug 	     = $null
 	   $analysis	 = $false
 	   $dev          = $false
@@ -25,7 +25,7 @@ Push-Location $path_root
 if ( $args ) { $args | ForEach-Object {
 	switch ($_){
 		{ $_ -in $vendors }   { $vendor    = $_; break }
-		"optimized"           { $optimized = $true }
+		"optimize"            { $optimize  = $true }
 		"debug"               { $debug     = $true }
 		"analysis"            { $analysis  = $true }
 		"dev"                 { $dev       = $true }
@@ -211,7 +211,7 @@ if ( $vendor -match "clang" )
 			$flag_section_functions,
 			( $flag_path_output + $object )
 		)
-		if ( $optimized ) {
+		if ( $optimize ) {
 			$compiler_args += $flag_optimize_fast
 		}
 		else {
@@ -348,7 +348,7 @@ if ( $vendor -match "msvc" )
 			$compiler_args += ( $flag_path_debug + $path_build + '\' )
 			$compiler_args += $flag_link_win_rt_static_debug
 
-			if ( $optimized ) {
+			if ( $optimize ) {
 				$compiler_args += $flag_optimized_debug
 			}
 		}
@@ -524,48 +524,60 @@ if ( $engine )
 		# This is done by sifting through the emitter.map file from the linker for the base symbol names
 		# and mapping them to their found decorated name
 
-		$engine_symbols = @(
-			'on_module_reload',
-			'startup',
-			'shutdown',
-			'update_and_render',
-			'update_audio'
-		)
+		# Initialize the hashtable with the desired order of symbols
+		$engine_symbols = [ordered]@{
+			'on_module_reload'   = $null
+			'startup'            = $null
+			'shutdown'           = $null
+			'update_and_render'  = $null
+			'update_audio'       = $null
+		}
 
+		$path_engine_obj = Join-Path $path_build 'handmade_engine.obj'
 		$path_engine_map = Join-Path $path_build 'handmade_engine.map'
+		$maxNameLength   = ($engine_symbols.Keys | Measure-Object -Property Length -Maximum).Maximum
 
-		$maxNameLength = ($engine_symbols | Measure-Object -Property Length -Maximum).Maximum
-
-		$engine_symbol_table = @()
-		$engine_symbol_list  = @()
 		Get-Content -Path $path_engine_map | ForEach-Object {
-			# Split each line by whitespace
-			$tokens = $_ -split '\s+', 3
-
+			# If all symbols are found, exit the loop
+			if ($engine_symbols.Values -notcontains $null) {
+				return
+			}
+			# Split the line into tokens
+			$tokens = $_ -split '\s+', 4
 			# Extract only the decorated name using regex for both MSVC and Clang conventions
-			$decoratedName = ($tokens[2] -match '(\?[\w@]+|_Z[\w@]+)' ) ? $matches[1] : $null
+			$decoratedName = ($tokens[2] -match '(\?[\w@]+|_Z[\w@]+)') ? $matches[1] : $null
 
-			# Check each regular name against the current line
-			foreach ($name in $engine_symbols) {
-				if ($decoratedName -like "*$name*") {
-					$engine_symbol_table += $name + ', ' + $decoratedName
-					$engine_symbol_list  += $decoratedName
-					$engine_symbols = $engine_symbols -ne $name  # Remove the found symbol from the array
+			# Check the origin of the symbol
+			# If the origin matches 'handmade_engine.obj', then process the symbol
+			$originParts = $tokens[3] -split '\s+'
+			$origin = if ($originParts.Count -eq 3) { $originParts[2] } else { $originParts[1] }
+
+			# Diagnostic output
+			if ( $false -and $decoratedName) {
+				write-host "Found decorated name: $decoratedName" -ForegroundColor Yellow
+				write-host "Origin              : $origin" -ForegroundColor Yellow
+			}
+
+			if ($origin -like 'handmade_engine.obj') {
+				# Check each regular name against the current line
+				$engine_symbols.Keys | Where-Object { $engine_symbols[$_] -eq $null } | ForEach-Object {
+					if ($decoratedName -like "*$_*") {
+						$engine_symbols[$_] = $decoratedName
+					}
 				}
 			}
 		}
 
 		write-host "Engine Symbol Table:" -ForegroundColor Green
-		$engine_symbol_table | ForEach-Object {
-			$split         = $_ -split ', ', 2
-			$paddedName    = $split[0].PadRight($maxNameLength)
-			$decoratedName = $split[1]
+		$engine_symbols.GetEnumerator() | ForEach-Object {
+			$paddedName    = $_.Key.PadRight($maxNameLength)
+			$decoratedName = $_.Value
 			write-host "`t$paddedName, $decoratedName" -ForegroundColor Green
 		}
 
 		# Write the symbol table to a file
 		$path_engine_symbols = Join-Path $path_binaries 'handmade_engine.symbols'
-		$engine_symbol_list | Out-File -Path $path_engine_symbols
+		$engine_symbols.Values | Out-File -Path $path_engine_symbols
 	}
 
 	Remove-Item $path_pdb_lock -Force -Verbose
@@ -592,7 +604,7 @@ if ( $platform )
 		$lib_jsl,
 
 		$flag_link_win_subsystem_windows
-		$flag_link_optimize_references
+		# $flag_link_optimize_references
 	)
 
 	$unit       = Join-Path $path_project  'handmade_win32.cpp'

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<NatStepFiltering xmlns="http://schemas.microsoft.com/vstudio/debugger/natstepfilter/2010">
+    <Function>
+        <Name>StrFixed&lt;*&gt;::concat</Name>
+        <Action>NoStepInto</Action>
+    </Function>
+</NatStepFiltering>

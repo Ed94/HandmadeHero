@@ -299,7 +299,6 @@ void play_input( EngineState* state, InputState* input, platform::ModuleAPI* pla
 		if ( controller->Keyboard )
 		{
 			*controller->Keyboard = new_input.Controllers[idx].Keyboard;
-			printf("keyboard D key: %d\n", controller->Keyboard->D.EndedDown );
 		}
 
 		if ( controller->Mouse )

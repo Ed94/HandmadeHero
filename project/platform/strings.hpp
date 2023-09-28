@@ -7,7 +7,7 @@ void str_concat( u32 dest_size, char* dest
 	, u32 str_b_len, char const* str_b );
 u32 str_length( char const* str );
 
-#define str_ascii( str ) { sizeof( str ) - 1, str }
+#define str_ascii( str ) { sizeof( str ) - 1, ccast( char*, str) }
 
 // Length tracked raw strings.
 struct Str
@@ -118,10 +118,10 @@ void str_concat( u32 dest_size, char* dest
 	char* dest_b = dest + str_a_len;
 	if ( str_a_len > str_b_len )
 	{
-		u32 left = str_a_len;
+		u32 left = str_b_len;
 		while ( left-- )
 		{
-			*dest_a   = *str_a;
+			*dest_a = *str_a;
 			*dest_b = *str_b;
 
 			++ dest_a;
@@ -133,14 +133,14 @@ void str_concat( u32 dest_size, char* dest
 		left = str_a_len - str_b_len;
 		while ( left-- )
 		{
-			*dest_b = *str_b;
-			++ dest_b;
-			++ str_b;
+			*dest_a = *str_a;
+			++ dest_a;
+			++ str_a;
 		}
 	}
 	else if ( str_a_len < str_b_len )
 	{
-		u32   left   = str_b_len;
+		u32 left = str_a_len;
 		while ( left-- )
 		{
 			*dest_a = *str_a;
@@ -154,9 +154,9 @@ void str_concat( u32 dest_size, char* dest
 		left = str_b_len - str_a_len;
 		while ( left-- )
 		{
-			*dest_a = *str_a;
-			++ dest_a;
-			++ str_a;
+			*dest_b = *str_b;
+			++ dest_b;
+			++ str_b;
 		}
 	}
 	else

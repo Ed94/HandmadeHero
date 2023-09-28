@@ -18,6 +18,8 @@
 #pragma warning( disable: 5045 ) // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
 #pragma warning( disable: 5264 ) // Support for 'const' variables unused
 #pragma warning( disable: 4820 ) // Support auto-adding padding to structs
+#pragma warning( disable: 4711 ) // Support automatic inline expansion
+#pragma warning( disable: 4710 ) // Support automatic inline expansion
 
 // TODO(Ed) : REMOVE THESE WHEN HE GETS TO THEM
 #include <math.h> // TODO : Implement math ourselves

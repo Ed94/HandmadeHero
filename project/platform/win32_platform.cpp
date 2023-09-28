@@ -1064,9 +1064,9 @@ void* get_binary_module_symbol( BinaryModule module, char const* symbol_name )
 
 #pragma region Engine Module API
 
-constexpr Str FName_Engine_DLL       = str_ascii("handmade_engine.dll");
-constexpr Str FName_Engine_DLL_InUse = str_ascii("handmade_engine_in_use.dll");
-constexpr Str FName_Engine_PDB_Lock  = str_ascii("handmade_engine.pdb.lock");
+constexpr const Str FName_Engine_DLL       = str_ascii("handmade_engine.dll");
+constexpr const Str FName_Engine_DLL_InUse = str_ascii("handmade_engine_in_use.dll");
+constexpr const Str FName_Engine_PDB_Lock  = str_ascii("handmade_engine.pdb.lock");
 
 global HMODULE             Lib_Handmade_Engine = nullptr;
 global StrFixed< S16_MAX > Path_Engine_DLL;
@@ -1093,7 +1093,7 @@ engine::ModuleAPI load_engine_module_api()
 
 	File symbol_table {};
 	symbol_table.Path = path_handmade_engine_symbols;
-	if ( ! file_read_content( & symbol_table ) )
+	if ( file_read_content( & symbol_table ), symbol_table.Size == 0 )
 	{
 		fatal( "Failed to load symbol table for handmade engine module!" );
 		return {};
@@ -1218,7 +1218,8 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 
 		window_handle = CreateWindowExW(
-			WS_EX_LAYERED | WS_EX_TOPMOST,
+			// WS_EX_LAYERED | WS_EX_TOPMOST,
+			WS_EX_LAYERED,
 			window_class.lpszClassName,
 			L"Handmade Hero",
 			WS_Overlapped_Window | WS_Initially_Visible,
