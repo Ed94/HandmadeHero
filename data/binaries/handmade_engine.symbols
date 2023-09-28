@@ -1,5 +1,0 @@
-?on_module_reload@engine@@YAXPEAUMemory@1@PEAUModuleAPI@platform@@@Z
-?startup@engine@@YAXPEAUMemory@1@PEAUModuleAPI@platform@@@Z
-?shutdown@engine@@YAXPEAUMemory@1@PEAUModuleAPI@platform@@@Z
-?update_and_render@engine@@YAXPEAUInputState@1@PEAUOffscreenBuffer@1@PEAUMemory@1@PEAUModuleAPI@platform@@@Z
-?update_audio@engine@@YAXPEAUAudioBuffer@1@PEAUMemory@1@PEAUModuleAPI@platform@@@Z
