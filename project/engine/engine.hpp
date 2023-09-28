@@ -79,12 +79,14 @@ union KeyboardState
 {
 	DigitalBtn Keys[12];
 	struct {
+		DigitalBtn Row_1;
 		DigitalBtn Q;
 		DigitalBtn E;
 		DigitalBtn W;
 		DigitalBtn A;
 		DigitalBtn S;
 		DigitalBtn D;
+		DigitalBtn L;
 		DigitalBtn Escape;
 		DigitalBtn Backspace;
 		DigitalBtn Up;
@@ -175,9 +177,22 @@ struct ControllerState
 	DualsensePadState* DSPad;
 };
 
+struct ControllerStateSnapshot
+{
+	KeyboardState     Keyboard;
+	MousesState       Mouse;
+	XInputPadState    XPad;
+	DualsensePadState DSPad;
+};
+
 struct InputState
 {
 	ControllerState Controllers[4];
+};
+
+struct InputStateSnapshot
+{
+	ControllerStateSnapshot Controllers[4];
 };
 
 using InputBindCallback             = void( void* );
@@ -193,5 +208,13 @@ struct InputMode
 
 void input_mode_pop( InputMode* mode );
 void input_mode_pop( InputMode* mode );
+
+#if 0
+struct RecordedInput
+{
+	s32         Num;
+	InputState* Stream;
+};
+#endif
 
 NS_ENGINE_END

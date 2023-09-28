@@ -23,7 +23,29 @@ The build is done in two stages:
 1. ~~Build and run metaprogram to scan and generate dependent code.~~ (Not needed yet)
 2. Build the handmade hero runtime.
 
+## Milestones
+
+## Win32 Platform Layer
+
+- [x] Day 001
+- [x] Day 002
+- [x] Day 003
+- [x] Day 004
+- [x] Day 005
+- [x] Day 006
+- [x] Day 007
+- [x] Day 008
+- [x] Day 009
+- [x] Day 010
+- [x] Day 011
+- [x] Day 012
+- [x] Day 013
+- [x] Day 014
+- [x] Day 015
+
+
 ## Gallery
 
+![img](https://files.catbox.moe/ruv97s.gif)
 ![img](https://files.catbox.moe/9zau4s.png)
 ![img](https://files.catbox.moe/b7ifa8.png)

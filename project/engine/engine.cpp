@@ -5,6 +5,40 @@
 
 NS_ENGINE_BEGIN
 
+#define pressed( btn ) (btn.EndedDown && btn.HalfTransitions == 1)
+
+// Used to determine if analog input is at move threshold
+constexpr f32 analog__move_threshold = 0.5f;
+
+struct EngineActions
+{
+	b32 move_up    = false;
+	b32 move_down  = false;
+	b32 move_left  = false;
+	b32 move_right = false;
+
+	b32 loop_mode = false;
+
+	b32 raise_volume  = false;
+	b32 lower_volume  = false;
+	b32 raise_tone_hz = false;
+	b32 lower_tone_hz = false;
+
+	b32 toggle_wave_tone = false;
+
+	b32 pause_renderer  = false;
+};
+
+struct PlayerActions
+{
+	s32 player_x_move_digital = 0;
+	s32 player_y_move_digital = 0;
+	f32 player_x_move_analog  = 0;
+	f32 player_y_move_analog  = 0;
+
+	b32 jump = false;
+};
+
 struct EngineState
 {
 	s32 WaveToneHz;
@@ -16,7 +50,16 @@ struct EngineState
 
 	f32 SampleWaveSineTime;
 	b32 SampleWaveSwitch;
+
+	s32 InputRecordingIndex;
+	s32 InputPlayingIndex;
+
+	platform::File ActiveInputRecordingFile;
+	platform::File ActivePlaybackFile;
+
+	hh::Memory game_memory;
 };
+
 
 using GetSoundSampleValueFn = s16( EngineState* state, AudioBuffer* sound_buffer );
 
@@ -117,6 +160,209 @@ render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
 	}
 }
 
+internal void
+render_player( OffscreenBuffer* buffer, s32 pos_x, s32 pos_y )
+{
+	u8* end_of_buffer = rcast(u8*, buffer->Memory)
+		- buffer->BytesPerPixel * buffer->Width
+		+ buffer->Pitch * buffer->Height;
+
+	s32 top    = pos_y;
+	s32 bottom = pos_y + 10;
+
+	u32 color = 0xFFFFFFFF;
+
+	for ( s32 coord_x = pos_x; coord_x < (pos_x+ 10); ++ coord_x )
+	{
+		u8*
+		pixel_byte  = rcast(u8*, buffer->Memory);
+		pixel_byte += coord_x * buffer->BytesPerPixel;
+		pixel_byte += top     * buffer->Pitch;
+
+		for ( s32 coord_y = top; coord_y < bottom; ++ coord_y )
+		{
+			if ( pixel_byte < buffer->Memory || pixel_byte >= end_of_buffer )
+				continue;
+
+			s32* pixel = rcast(s32*, pixel_byte);
+			*pixel = color;
+
+			pixel_byte += buffer->Pitch;
+		}
+	}
+}
+
+internal
+void begin_recording_input( EngineState* state, InputState* input, platform::ModuleAPI* platform_api )
+{
+	state->ActiveInputRecordingFile.Path = str_ascii("test_input.hmi");
+	state->InputRecordingIndex = 1;
+
+	// TODO(Ed) : If game persist memory is larger than 4 gb, this will need to be done in chunks...
+	platform_api->file_write_content( & state->ActiveInputRecordingFile, scast(u32, state->game_memory.PersistentSize), state->game_memory.Persistent );
+}
+
+internal
+void end_recording_input( EngineState* state, InputState* input, platform::ModuleAPI* platform_api )
+{
+	platform_api->file_close( & state->ActiveInputRecordingFile );
+	state->InputRecordingIndex = 0;
+}
+
+internal
+void begin_playback_input( EngineState* state, InputState* input, platform::ModuleAPI* platform_api )
+{
+	Str file_name = str_ascii("test_input.hmi");
+	if ( platform_api->file_check_exists( file_name ) )
+	{
+		state->ActivePlaybackFile.Path = str_ascii("test_input.hmi");
+		state->InputPlayingIndex = 1;
+	}
+
+	if ( state->ActiveInputRecordingFile.OpaqueHandle == nullptr )
+	{
+		platform_api->file_read_stream( & state->ActivePlaybackFile, scast(u32, state->game_memory.PersistentSize), state->game_memory.Persistent );
+	}
+}
+
+internal
+void end_playback_input( EngineState* state, InputState* input, platform::ModuleAPI* platform_api )
+{
+	platform_api->file_rewind( & state->ActivePlaybackFile );
+	platform_api->file_read_stream( & state->ActivePlaybackFile, scast(u32, state->game_memory.PersistentSize), state->game_memory.Persistent );
+	platform_api->file_close( & state->ActivePlaybackFile );
+
+	state->InputPlayingIndex = 0;
+}
+
+InputStateSnapshot input_state_snapshot( InputState* input )
+{
+	InputStateSnapshot snapshot = {};
+	for ( s32 idx = 0; idx < array_count( snapshot.Controllers ); ++ idx )
+	{
+		ControllerState* controller = & input->Controllers[idx];
+		if ( controller == nullptr )
+			continue;
+
+		if ( controller->DSPad )
+			snapshot.Controllers[idx].DSPad = *controller->DSPad;
+
+		if ( controller->XPad )
+			snapshot.Controllers[idx].XPad = *controller->XPad;
+
+		if ( controller->Keyboard )
+		{
+			snapshot.Controllers[idx].Keyboard       = *controller->Keyboard;
+		}
+
+		if ( controller->Mouse )
+			snapshot.Controllers[idx].Mouse = *controller->Mouse;
+	}
+	return snapshot;
+}
+
+internal
+void record_input( EngineState* state, InputState* input, platform::ModuleAPI* platform_api )
+{
+	InputStateSnapshot snapshot = input_state_snapshot( input );
+	if ( platform_api->file_write_stream( & state->ActiveInputRecordingFile, sizeof(snapshot), &snapshot ) == 0 )
+	{
+		// TODO(Ed) : Logging
+	}
+}
+
+internal
+void play_input( EngineState* state, InputState* input, platform::ModuleAPI* platform_api )
+{
+	InputStateSnapshot new_input;
+	if ( platform_api->file_read_stream( & state->ActivePlaybackFile, sizeof(InputStateSnapshot), & new_input ) == 0 )
+	{
+		end_playback_input( state, input, platform_api );
+		begin_playback_input( state, input, platform_api );
+		return;
+	}
+
+	for ( s32 idx = 0; idx < array_count( new_input.Controllers ); ++ idx )
+	{
+		ControllerState* controller = & input->Controllers[idx];
+		if ( controller == nullptr )
+			continue;
+
+		if ( controller->DSPad )
+			*controller->DSPad = new_input.Controllers[idx].DSPad;
+
+		if ( controller->XPad )
+			*controller->XPad = new_input.Controllers[idx].XPad;
+
+		if ( controller->Keyboard )
+		{
+			*controller->Keyboard = new_input.Controllers[idx].Keyboard;
+			printf("keyboard D key: %d\n", controller->Keyboard->D.EndedDown );
+		}
+
+		if ( controller->Mouse )
+			*controller->Mouse = new_input.Controllers[idx].Mouse;
+	}
+}
+
+internal
+void input_poll_engine_actions( InputState* input, EngineActions* actions )
+{
+	ControllerState* controller = & input->Controllers[0];
+	KeyboardState* keyboard = controller->Keyboard;
+
+	actions->move_right |= keyboard->D.EndedDown;
+	actions->move_left  |= keyboard->A.EndedDown;
+	actions->move_up    |= keyboard->W.EndedDown;
+	actions->move_down  |= keyboard->S.EndedDown;
+
+	actions->raise_volume |= keyboard->Up.EndedDown;
+	actions->lower_volume |= keyboard->Down.EndedDown;
+
+	actions->raise_tone_hz |= keyboard->Right.EndedDown;
+	actions->lower_tone_hz |= keyboard->Left.EndedDown;
+
+	actions->pause_renderer |= pressed( keyboard->Pause );
+
+	actions->toggle_wave_tone |= pressed( keyboard->Q );
+
+	actions->loop_mode |= pressed( keyboard->L );
+}
+
+internal
+void input_poll_player_actions( InputState* input, PlayerActions* actions )
+{
+	ControllerState* controller = & input->Controllers[0];
+
+	if ( controller->DSPad )
+	{
+		DualsensePadState* pad = controller->DSPad;
+
+		actions->jump |= pressed( pad->X );
+
+		actions->player_x_move_analog += pad->Stick.Left.X.End;
+		actions->player_y_move_analog += pad->Stick.Left.Y.End;
+	}
+	if ( controller->XPad )
+	{
+		XInputPadState* pad = controller->XPad;
+
+		actions->jump |= pressed( pad->A );
+
+		actions->player_x_move_analog += pad->Stick.Left.X.End;
+		actions->player_y_move_analog += pad->Stick.Left.Y.End;
+	}
+
+	if ( controller->Keyboard )
+	{
+		KeyboardState* keyboard = controller->Keyboard;
+		actions->jump |= pressed( keyboard->Space );
+
+		actions->player_x_move_digital += keyboard->D.EndedDown - keyboard->A.EndedDown;
+		actions->player_y_move_digital += keyboard->W.EndedDown - keyboard->S.EndedDown;
+	}
+}
+
 Engine_API
 void on_module_reload( Memory* memory, platform::ModuleAPI* platfom_api )
 {
@@ -135,24 +381,28 @@ void startup( Memory* memory, platform::ModuleAPI* platform_api )
 	state->YOffset = 0;
 
 	state->SampleWaveSwitch = false;
-	state->WaveToneHz = 120;
+	state->WaveToneHz = 60;
 	state->SampleWaveSineTime = 0.f;
 
 	state->RendererPaused = false;
 
-	#if Build_Debug && 0
-	{
-		using namespace platform;
+	state->InputRecordingIndex = 0;
+	state->InputPlayingIndex   = 0;
 
-		char const* file_path = __FILE__;
-		Debug_FileContent file_content = platform_api->debug_file_read_content( file_path );
-		if ( file_content.Size )
-		{
-			platform_api->debug_file_write_content( "test.out", file_content.Size, file_content.Data );
-			platform_api->debug_file_free_content( & file_content );
-		}
-	}
-	#endif
+	state->ActiveInputRecordingFile = {};
+	state->ActivePlaybackFile = {};
+
+	state->game_memory.PersistentSize = memory->PersistentSize / 2;
+	state->game_memory.Persistent     = rcast(Byte*, memory->Persistent) + state->game_memory.PersistentSize;
+	state->game_memory.TransientSize  = memory->TransientSize / 2;
+	state->game_memory.Transient      = rcast(Byte*, memory->Transient) + state->game_memory.TransientSize;
+
+	hh::PlayerState* player = rcast( hh::PlayerState*, state->game_memory.Persistent );
+	assert( sizeof(hh::PlayerState) <= state->game_memory.PersistentSize );
+
+	player->Pos_X = 100;
+	player->Pos_Y = 100;
+	player->MidJump = false;
 }
 
 Engine_API
@@ -169,131 +419,116 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 
 	ControllerState* controller = & input->Controllers[0];
 
-	// Abstracting the actionables as booleans and processing within this scope
-	// for now until proper callbacks for input bindings are setup.
-	b32 move_up    = false;
-	b32 move_down  = false;
-	b32 move_left  = false;
-	b32 move_right = false;
+	EngineActions engine_actions {};
+	PlayerActions player_actions {};
 
-	b32 action_up    = false;
-	b32 action_down  = false;
-	b32 action_left  = false;
-	b32 action_right = false;
-
-	b32 raise_volume  = false;
-	b32 lower_volume  = false;
-	b32 raise_tone_hz = false;
-	b32 lower_tone_hz = false;
-
-	b32 toggle_wave_tone = false;
-
-	b32 pause_renderer  = false;
-
-	f32 analog_threshold = 0.5f;
-
-	#define pressed( btn ) (btn.EndedDown && btn.HalfTransitions < 1)
-
-	if ( controller->DSPad )
+	input_poll_engine_actions( input, & engine_actions );
 	{
-		DualsensePadState* pad = controller->DSPad;
+		state->XOffset += 3 * engine_actions.move_right;
+		state->XOffset -= 3 * engine_actions.move_left;
+		state->YOffset += 3 * engine_actions.move_down;
+		state->YOffset -= 3 * engine_actions.move_up;
 
-		move_right |= pad->DPad.Right.EndedDown || pad->Stick.Left.X.End >  analog_threshold;
-		move_left  |= pad->DPad.Left.EndedDown  || pad->Stick.Left.X.End < -analog_threshold;
-		move_up    |= pad->DPad.Up.EndedDown    || pad->Stick.Left.Y.End >  analog_threshold;
-		move_down  |= pad->DPad.Down.EndedDown  || pad->Stick.Left.Y.End < -analog_threshold;
-
-		raise_volume |= pad->Triangle.EndedDown;
-		lower_volume |= pad->Circle.EndedDown;
-
-		raise_tone_hz |= pad->Square.EndedDown;
-		lower_tone_hz |= pad->X.EndedDown;
-
-		toggle_wave_tone |= pressed( pad->Options );
-	}
-	if ( controller->XPad )
-	{
-		XInputPadState* pad = controller->XPad;
-
-		move_right |= pad->DPad.Right.EndedDown || pad->Stick.Left.X.End >  analog_threshold;
-		move_left  |= pad->DPad.Left.EndedDown  || pad->Stick.Left.X.End < -analog_threshold;
-		move_up    |= pad->DPad.Up.EndedDown    || pad->Stick.Left.Y.End >  analog_threshold;
-		move_down  |= pad->DPad.Down.EndedDown  || pad->Stick.Left.Y.End < -analog_threshold;
-
-		raise_volume |= pad->Y.EndedDown;
-		lower_volume |= pad->B.EndedDown;
-
-		raise_tone_hz |= pad->X.EndedDown;
-		lower_tone_hz |= pad->A.EndedDown;
-
-		toggle_wave_tone |= pressed( pad->Start );
-	}
-	if ( controller->Keyboard )
-	{
-		KeyboardState* keyboard = controller->Keyboard;
-
-		move_right |= keyboard->D.EndedDown;
-		move_left  |= keyboard->A.EndedDown;
-		move_up    |= keyboard->W.EndedDown;
-		move_down  |= keyboard->S.EndedDown;
-
-		raise_volume |= keyboard->Up.EndedDown;
-		lower_volume |= keyboard->Down.EndedDown;
-
-		raise_tone_hz |= keyboard->Right.EndedDown;
-		lower_tone_hz |= keyboard->Left.EndedDown;
-
-		pause_renderer |= pressed( keyboard->Pause );
-
-		toggle_wave_tone |= pressed( keyboard->Space );
-	}
-
-	state->XOffset += 3 * move_right;
-	state->XOffset -= 3 * move_left;
-	state->YOffset += 3 * move_down;
-	state->YOffset -= 3 * move_up;
-
-	if ( raise_volume )
-	{
-		state->ToneVolume += 10;
-	}
-	if ( lower_volume )
-	{
-		state->ToneVolume -= 10;
-		if ( state->ToneVolume <= 0 )
-			state->ToneVolume = 0;
-	}
-
-	if ( raise_tone_hz )
-	{
-		state->WaveToneHz += 1;
-	}
-	if ( lower_tone_hz )
-	{
-		state->WaveToneHz -= 1;
-		if ( state->WaveToneHz <= 0 )
-			state->WaveToneHz = 1;
-	}
-
-	if ( toggle_wave_tone )
-	{
-		state->SampleWaveSwitch ^= true;
-	}
-	render_weird_graident( back_buffer, state->XOffset, state->YOffset );
-
-	if ( pause_renderer )
-	{
-		if ( state->RendererPaused )
+		if ( engine_actions.raise_volume )
 		{
-			platform_api->debug_set_pause_rendering(false);
-			state->RendererPaused = false;
+			state->ToneVolume += 10;
+		}
+		if ( engine_actions.lower_volume )
+		{
+			state->ToneVolume -= 10;
+			if ( state->ToneVolume <= 0 )
+				state->ToneVolume = 0;
+		}
+
+		if ( engine_actions.raise_tone_hz )
+		{
+			state->WaveToneHz += 1;
+		}
+		if ( engine_actions.lower_tone_hz )
+		{
+			state->WaveToneHz -= 1;
+			if ( state->WaveToneHz <= 0 )
+				state->WaveToneHz = 1;
+		}
+
+		if ( engine_actions.toggle_wave_tone )
+		{
+			state->SampleWaveSwitch ^= true;
+		}
+
+		if ( engine_actions.loop_mode )
+		{
+			if ( state->InputRecordingIndex == 0 && state->InputPlayingIndex == 0 )
+			{
+				begin_recording_input( state, input, platform_api );
+			}
+			else if ( state->InputPlayingIndex )
+			{
+				end_playback_input( state, input, platform_api );
+			}
+			else if ( state->InputRecordingIndex )
+			{
+				end_recording_input( state, input, platform_api );
+				begin_playback_input( state, input, platform_api );
+			}
+		}
+
+		if ( engine_actions.pause_renderer )
+		{
+			if ( state->RendererPaused )
+			{
+				platform_api->debug_set_pause_rendering(false);
+				state->RendererPaused = false;
+			}
+			else
+			{
+				platform_api->debug_set_pause_rendering(true);
+				state->RendererPaused = true;
+			}
+		}
+	}
+
+	if ( state->InputRecordingIndex )
+	{
+		record_input( state, input, platform_api );
+	}
+	if ( state->InputPlayingIndex )
+	{
+		play_input( state, input, platform_api );
+	}
+
+	hh::PlayerState* player = rcast( hh::PlayerState*, state->game_memory.Persistent );
+	assert( sizeof(hh::PlayerState) <= state->game_memory.PersistentSize );
+
+	input_poll_player_actions( input, & player_actions );
+	{
+		player->Pos_X += player_actions.player_x_move_digital * 5;
+		player->Pos_Y -= player_actions.player_y_move_digital * 5;
+		player->Pos_X += scast(u32, player_actions.player_x_move_analog  * 5);
+		player->Pos_Y -= scast(u32, player_actions.player_y_move_analog  * 5) - scast(u32, sinf( player->JumpTime * TAU ) * 10);
+
+		if ( player->JumpTime > 0.f )
+		{
+			player->JumpTime -= 0.025f;
 		}
 		else
 		{
-			platform_api->debug_set_pause_rendering(true);
-			state->RendererPaused = true;
+			player->JumpTime = 0.f;
+			player->MidJump = false;
+		}
+
+		if ( ! player->MidJump && player_actions.jump )
+		{
+			player->JumpTime = 1.f;
+			player->MidJump = true;
 		}
 	}
+
+	render_weird_graident( back_buffer, 0, 0 );
+	render_player( back_buffer, player->Pos_X, player->Pos_Y );
+
+	if ( state->InputRecordingIndex )
+		render_player( back_buffer, player->Pos_X + 20, player->Pos_Y - 20 );
 }
 
 Engine_API
@@ -312,3 +547,5 @@ void update_audio( AudioBuffer* audio_buffer, Memory* memory, platform::ModuleAP
 }
 
 NS_ENGINE_END
+
+#undef pressed

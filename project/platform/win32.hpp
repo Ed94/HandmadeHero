@@ -44,6 +44,12 @@
 
 NS_WIN32_BEGIN
 
+enum LWA : DWORD
+{
+	LWA_Alpha    = 0x00000002,
+	LWA_ColorKey = 0x00000001,
+};
+
 enum BI : DWORD
 {
 	BI_RGB_Uncompressed = 0L,

@@ -2,7 +2,7 @@
 
 #include "engine/engine.hpp"
 
-#define NS_HANDMADE_BEGIN namespace handmade {
+#define NS_HANDMADE_BEGIN namespace hh {
 #define NS_HANDMADE_END   }
 
 NS_HANDMADE_BEGIN
@@ -61,6 +61,15 @@ struct Player
 	engine::ControllerState* Controller;
 
 	// Possilby some other stuff in the future.
+};
+
+struct PlayerState
+{
+	s32 Pos_X;
+	s32 Pos_Y;
+
+	b32 MidJump;
+	f32 JumpTime;
 };
 
 NS_HANDMADE_END

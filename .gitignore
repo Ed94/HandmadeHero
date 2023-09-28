@@ -21,6 +21,10 @@ vc140.pdb
 build
 
 **/*.dll
+**/*.exe
+**/*.pdb
+
+**/*.hmi
 data/test.out
 data/handmade_engine.symbols
 data/handmade_win32.exe

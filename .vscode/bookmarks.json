@@ -1,0 +1,39 @@
+{
+	"files": [
+		{
+			"path": "project/platform/win32_platform.cpp",
+			"bookmarks": [
+				{
+					"line": 57,
+					"column": 0,
+					"label": "Struct Defs"
+				},
+				{
+					"line": 96,
+					"column": 0,
+					"label": "Static Data"
+				},
+				{
+					"line": 629,
+					"column": 0,
+					"label": "Timing"
+				},
+				{
+					"line": 1479,
+					"column": 4,
+					"label": "Main Loop : Audio Processing"
+				},
+				{
+					"line": 1598,
+					"column": 2,
+					"label": "Main Loop : Timing Update"
+				},
+				{
+					"line": 1682,
+					"column": 0,
+					"label": "Main Loop : End"
+				}
+			]
+		}
+	]
+}

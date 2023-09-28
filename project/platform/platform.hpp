@@ -44,33 +44,24 @@ NS_PLATFORM_BEGIN
 	IMPORTANT : These are not for shipping code - they are blocking and the write isn't protected.
 */
 
-struct Debug_FileContent
-{
-	void* Data;
-	u32   Size;
-	Byte  _PAD_[4];
-};
+using DebugSetPauseRenderingFn = void (b32 value);
 
-struct BinaryModule
+struct File
 {
 	void* OpaqueHandle;
+	Str   Path;
+	void* Data;
+	u32   Size;
 };
-
-using DebugFileFreeContentFn  = void ( Debug_FileContent* file_content );
-using DebugFileReadContentFn  = Debug_FileContent ( char const* file_path );
-using DebugFileWriteContentFn = b32 ( char const* file_path, u32 content_size, void* content_memory );
-
-using DebugSetPauseRenderingFn = void (b32 value);
 
 // TODO(Ed): This also assumes the symbol name is always within size of the provided buffer, needs to fail if not.
 // Note: This is a temporary solution until there is more infrastructure for the engine to use.
-void get_symbol_from_module_table( Debug_FileContent symbol_table, u32 symbol_ID, char* symbol_name )
+void get_symbol_from_module_table( File symbol_table, u32 symbol_ID, char* symbol_name )
 {
 	struct Token
 	{
 		char const* Ptr;
 		u32         Len;
-		char _PAD_[4];
 	};
 
 	Token tokens[256] = {};
@@ -124,17 +115,34 @@ using SetEngineFrameTargetFn = void ( u32 rate_in_hz );
 // This module api will be used to manage the editor and game modules from the engine side,
 // without the platform layer needing to know about it.
 
+struct BinaryModule
+{
+	void* OpaqueHandle;
+};
+
 using LoadBinaryModuleFn   = BinaryModule ( char const* module_path );
 using UnloadBinaryModuleFn = void ( BinaryModule* module );
 using GetModuleProcedureFn = void* ( BinaryModule module, char const* symbol );
 
+// The file interface is really just made for the engine to use.
+// It will allow for only reading or writting to a file at a time.
+// Note: If anything more robust is needed, I'll grab it from the zpl-c library.
+
+using FileCheckExistsFn  = b32 ( Str const file_path );
+using FileCloseFn 		 = void ( File* file );
+using FileDelete         = b32 ( Str const file_path );
+using FileReadContentFn  = b32 ( File* file );
+using FileReadStreamFn   = b32 ( File* file, u32 content_size, void* content_memory );
+using FileWriteContentFn = u32 ( File* file, u32 content_size, void* content_memory );
+using FileWriteStreamFn  = u32 ( File* file, u32 content_size, void* content_memory );
+using FileRewindFn       = void ( File* file );
+
 struct ModuleAPI
 {
-#if Build_Development
-	DebugFileFreeContentFn*  debug_file_free_content;
-	DebugFileReadContentFn*  debug_file_read_content;
-	DebugFileWriteContentFn* debug_file_write_content;
+	Str PathRoot;
+	Str PathBinaries;
 
+#if Build_Development
 	DebugSetPauseRenderingFn* debug_set_pause_rendering;
 #endif
 
@@ -147,6 +155,15 @@ struct ModuleAPI
 	LoadBinaryModuleFn*   load_binary_module;
 	UnloadBinaryModuleFn* unload_binary_module;
 	GetModuleProcedureFn* get_module_procedure;
+
+	FileCheckExistsFn*  file_check_exists;  // Checks if a file exists
+	FileCloseFn* 		file_close;         // Files successfuly provided to the user are not automatically closed, use this to close them.
+	FileDelete*         file_delete;        // Deletes a file from the file system
+	FileReadContentFn*  file_read_content;  // Read all content within file
+	FileReadStreamFn*   file_read_stream;   // Read next chunk of content within file
+	FileRewindFn*       file_rewind;        // Rewinds the file stream to the beginning
+	FileWriteContentFn* file_write_content; // Writes content to file (overwrites)
+	FileWriteStreamFn*  file_write_stream;  // Appends content to file
 };
 
 #pragma endregion Settings Exposure

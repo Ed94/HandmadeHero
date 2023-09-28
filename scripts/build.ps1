@@ -479,8 +479,11 @@ else {
 
 if ( $engine )
 {
-	# Delete old PDBs 
-	$pdb_files = Get-ChildItem -Path $path_binaries -Filter "handmade_engine_*.pdb"
+	$path_pdb_lock = Join-Path $path_binaries 'handmade_engine.pdb.lock'
+	New-Item $path_pdb_lock -ItemType File -Force -Verbose
+
+	# Delete old PDBs
+	[Array]$pdb_files = Get-ChildItem -Path $path_binaries -Filter "handmade_engine_*.pdb"
 	foreach ($file in $pdb_files) {
 		Remove-Item -Path $file.FullName -Force
 		Write-Host "Deleted $file" -ForegroundColor Green
@@ -564,6 +567,8 @@ if ( $engine )
 		$path_engine_symbols = Join-Path $path_binaries 'handmade_engine.symbols'
 		$engine_symbol_list | Out-File -Path $path_engine_symbols
 	}
+
+	Remove-Item $path_pdb_lock -Force -Verbose
 }
 
 if ( $platform )

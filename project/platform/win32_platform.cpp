@@ -26,11 +26,6 @@
 #include "engine/engine.hpp"
 #include "platform_engine_api.hpp"
 
-// Standard-Library stand-ins
-// #include <malloc.h>
-// TODO(Ed) : Remove these ^^
-
-
 #if 1
 // TODO(Ed): Redo these macros properly later.
 
@@ -99,24 +94,13 @@ struct DirectSoundBuffer
 	u32                 LatencySampleCount;
 };
 
-
 #pragma region Static Data
-
 global StrFixed< S16_MAX > Path_Root;
 global StrFixed< S16_MAX > Path_Binaries;
-
-constexpr Str FName_Engine_DLL       = str_ascii("handmade_engine.dll");
-constexpr Str FName_Engine_DLL_InUse = str_ascii("handmade_engine_in_use.dll");
-
-global StrFixed< S16_MAX > Path_Engine_DLL;
-global StrFixed< S16_MAX > Path_Engine_DLL_InUse;
 
 // TODO(Ed) : This is a global for now.
 global b32 Running         = false;
 global b32 Pause_Rendering = false;
-
-// Max controllers for the platform layer and thus for all other layers is 4. (Sanity and xinput limit)
-constexpr u32 Max_Controllers = 4;
 
 global WinDimensions   Window_Dimensions;
 global OffscreenBuffer Surface_Back_Buffer;
@@ -136,11 +120,24 @@ constexpr u32 Monitor_Refresh_Max_Supported = 500;
 constexpr f32 High_Perf_Frametime_MS = 1000.f / 240.f;
 
 global u32 Monitor_Refresh_Hz     = 60;
-global u32 Engine_Refresh_Hz      = Monitor_Refresh_Hz / 2;
+global u32 Engine_Refresh_Hz      = Monitor_Refresh_Hz;
 global f32 Engine_Frame_Target_MS = 1000.f / scast(f32, Engine_Refresh_Hz);
 #pragma endregion Static Data
 
 #pragma region Internal
+internal
+FILETIME file_get_last_write_time( char const* path )
+{
+	WIN32_FIND_DATAA dll_file_info = {};
+	HANDLE dll_file_handle = FindFirstFileA( path, & dll_file_info );
+	if ( dll_file_handle == INVALID_HANDLE_VALUE )
+	{
+		FindClose( dll_file_handle );
+	}
+
+	return dll_file_info.ftLastWriteTime;
+}
+
 #if Build_Debug
 struct DebugTimeMarker
 {
@@ -264,89 +261,7 @@ debug_sync_display( DirectSoundBuffer* sound_buffer
 }
 #endif
 
-inline u64
-timing_get_wall_clock()
-{
-	u64 clock;
-	QueryPerformanceCounter( rcast( LARGE_INTEGER*, & clock) );
-	return clock;
-}
-
-inline f32
-timing_get_seconds_elapsed( u64 start, u64 end )
-{
-	u64 delta = end - start;
-	f32 result = scast(f32, delta) / scast(f32, Performance_Counter_Frequency);
-	return result;
-}
-
-inline f32
-timing_get_ms_elapsed( u64 start, u64 end )
-{
-	u64 delta  = (end - start) * Tick_To_Millisecond;
-	f32 result = scast(f32, delta) / scast(f32, Performance_Counter_Frequency);
-	return result;
-}
-
-inline f32
-timing_get_us_elapsed( u64 start, u64 end )
-{
-	u64 delta = (end - start) * Tick_To_Microsecond;
-	f32 result = scast(f32, delta) / scast(f32, Performance_Counter_Frequency);
-	return result;
-}
-
-internal void
-input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* new_state, u32 raw_btns, u32 btn_flag )
-{
-#define had_transition() ( old_state->EndedDown == new_state->EndedDown )
-	new_state->EndedDown       = (raw_btns & btn_flag) > 0;
-	new_state->HalfTransitions = had_transition() ? 1 : 0;
-#undef had_transition
-}
-
-internal f32
-xinput_process_axis_value( s16 value, s16 deadzone_threshold )
-{
-	f32 result = 0;
-	if ( value < -deadzone_threshold )
-	{
-		result = scast(f32, value + deadzone_threshold) / (32768.0f - scast(f32, deadzone_threshold));
-	}
-	else if ( value > deadzone_threshold )
-	{
-		result = scast(f32, value + deadzone_threshold) / (32767.0f - scast(f32, deadzone_threshold));
-	}
-	return result;
-}
-
-internal f32
-input_process_axis_value( f32 value, f32 deadzone_threshold )
-{
-	f32 result = 0;
-	if ( value < -deadzone_threshold  )
-	{
-		result = (value + deadzone_threshold ) / (1.0f - deadzone_threshold );
-
-		if (result < -1.0f)
-			result = -1.0f; // Clamp to ensure it doesn't go below -1
-	}
-	else if ( value > deadzone_threshold )
-	{
-		result = (value - deadzone_threshold ) / (1.0f - deadzone_threshold );
-
-		if (result > 1.0f)
-			result = 1.0f; // Clamp to ensure it doesn't exceed 1
-	}
-	return result;
-}
-
-internal void
-poll_input( engine::InputState* input )
-{
-
-}
-
+#pragma region Direct Sound
 internal void
 init_sound(HWND window_handle, DirectSoundBuffer* sound_buffer )
 {
@@ -511,6 +426,240 @@ ds_fill_sound_buffer( DirectSoundBuffer* sound_buffer, DWORD byte_to_lock, DWORD
 		return;
 	}
 }
+#pragma endregion Direct Sound
+
+#pragma region Input
+
+// Max controllers for the platform layer and thus for all other layers is 4. (Sanity and xinput limit)
+constexpr u32 Max_Controllers = 4;
+
+using JSL_DeviceHandle = int;
+using EngineXInputPadStates = engine::XInputPadState[ Max_Controllers ];
+using EngineDSPadStates = engine::DualsensePadState[Max_Controllers];
+
+internal void
+input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* new_state, u32 raw_btns, u32 btn_flag )
+{
+#define had_transition() ( old_state->EndedDown != new_state->EndedDown )
+	new_state->EndedDown        = (raw_btns & btn_flag) > 0;
+	if ( had_transition() )
+		new_state->HalfTransitions += 1;
+	else
+		new_state->HalfTransitions = 0;
+#undef had_transition
+}
+
+internal f32
+jsl_input_process_axis_value( f32 value, f32 deadzone_threshold )
+{
+	f32 result = 0;
+	if ( value < -deadzone_threshold  )
+	{
+		result = (value + deadzone_threshold ) / (1.0f - deadzone_threshold );
+
+		if (result < -1.0f)
+			result = -1.0f; // Clamp to ensure it doesn't go below -1
+	}
+	else if ( value > deadzone_threshold )
+	{
+		result = (value - deadzone_threshold ) / (1.0f - deadzone_threshold );
+
+		if (result > 1.0f)
+			result = 1.0f; // Clamp to ensure it doesn't exceed 1
+	}
+	return result;
+}
+
+internal f32
+xinput_process_axis_value( s16 value, s16 deadzone_threshold )
+{
+	f32 result = 0;
+	if ( value < -deadzone_threshold )
+	{
+		result = scast(f32, value + deadzone_threshold) / (32768.0f - scast(f32, deadzone_threshold));
+	}
+	else if ( value > deadzone_threshold )
+	{
+		result = scast(f32, value + deadzone_threshold) / (32767.0f - scast(f32, deadzone_threshold));
+	}
+	return result;
+}
+
+internal void
+poll_input( engine::InputState* input, u32 jsl_num_devices, JSL_DeviceHandle* jsl_device_handles
+	, engine::KeyboardState* old_keyboard, engine::KeyboardState* new_keyboard
+	, EngineXInputPadStates* old_xpads, EngineXInputPadStates* new_xpads
+	, EngineDSPadStates* old_ds_pads, EngineDSPadStates* new_ds_pads )
+{
+	// TODO(Ed) : Setup user definable deadzones for triggers and sticks.
+
+	// Swapping at the beginning of the input frame instead of the end.
+	swap( old_keyboard, new_keyboard );
+	swap( old_xpads,    new_xpads );
+	swap( old_ds_pads,  new_ds_pads );
+
+	// Keyboard Polling
+	// Keyboards are unified for now.
+	{
+		constexpr u32 is_down = 0x80000000;
+		input_process_digital_btn( & old_keyboard->Q,         & new_keyboard->Q,         GetAsyncKeyState( 'Q' ),       is_down );
+		input_process_digital_btn( & old_keyboard->E,         & new_keyboard->E,         GetAsyncKeyState( 'E' ),       is_down );
+		input_process_digital_btn( & old_keyboard->W,         & new_keyboard->W,         GetAsyncKeyState( 'W' ),       is_down );
+		input_process_digital_btn( & old_keyboard->A,         & new_keyboard->A,         GetAsyncKeyState( 'A' ),       is_down );
+		input_process_digital_btn( & old_keyboard->S,         & new_keyboard->S,         GetAsyncKeyState( 'S' ),       is_down );
+		input_process_digital_btn( & old_keyboard->D,         & new_keyboard->D,         GetAsyncKeyState( 'D' ),       is_down );
+		input_process_digital_btn( & old_keyboard->L,         & new_keyboard->L,         GetAsyncKeyState( 'L' ),       is_down );
+		input_process_digital_btn( & old_keyboard->Escape,    & new_keyboard->Escape,    GetAsyncKeyState( VK_ESCAPE ), is_down );
+		input_process_digital_btn( & old_keyboard->Backspace, & new_keyboard->Backspace, GetAsyncKeyState( VK_BACK ),   is_down );
+		input_process_digital_btn( & old_keyboard->Up,        & new_keyboard->Up,        GetAsyncKeyState( VK_UP ),     is_down );
+		input_process_digital_btn( & old_keyboard->Down,      & new_keyboard->Down,      GetAsyncKeyState( VK_DOWN ),   is_down );
+		input_process_digital_btn( & old_keyboard->Left,      & new_keyboard->Left,      GetAsyncKeyState( VK_LEFT ),   is_down );
+		input_process_digital_btn( & old_keyboard->Right,     & new_keyboard->Right,     GetAsyncKeyState( VK_RIGHT ),  is_down );
+		input_process_digital_btn( & old_keyboard->Space,     & new_keyboard->Space,     GetAsyncKeyState( VK_SPACE ),  is_down );
+		input_process_digital_btn( & old_keyboard->Pause,     & new_keyboard->Pause,     GetAsyncKeyState( VK_PAUSE ),  is_down );
+
+		input->Controllers[0].Keyboard = new_keyboard;
+	}
+
+	// XInput Polling
+	// TODO(Ed) : Should we poll this more frequently?
+	for ( DWORD controller_index = 0; controller_index < Max_Controllers; ++ controller_index )
+	{
+		XINPUT_STATE controller_state;
+		b32 xinput_detected = xinput_get_state( controller_index, & controller_state ) == XI_PluggedIn;
+		if ( xinput_detected )
+		{
+			XINPUT_GAMEPAD*         xpad     = & controller_state.Gamepad;
+			engine::XInputPadState* old_xpad = old_xpads[ controller_index ];
+			engine::XInputPadState* new_xpad = new_xpads[ controller_index ];
+
+			input_process_digital_btn( & old_xpad->DPad.Up,    & new_xpad->DPad.Up, xpad->wButtons, XINPUT_GAMEPAD_DPAD_UP );
+			input_process_digital_btn( & old_xpad->DPad.Down,  & new_xpad->DPad.Down, xpad->wButtons, XINPUT_GAMEPAD_DPAD_DOWN );
+			input_process_digital_btn( & old_xpad->DPad.Left,  & new_xpad->DPad.Left, xpad->wButtons, XINPUT_GAMEPAD_DPAD_LEFT );
+			input_process_digital_btn( & old_xpad->DPad.Right, & new_xpad->DPad.Right, xpad->wButtons, XINPUT_GAMEPAD_DPAD_RIGHT );
+
+			input_process_digital_btn( & old_xpad->Y, & new_xpad->Y, xpad->wButtons, XINPUT_GAMEPAD_Y );
+			input_process_digital_btn( & old_xpad->A, & new_xpad->A, xpad->wButtons, XINPUT_GAMEPAD_A );
+			input_process_digital_btn( & old_xpad->B, & new_xpad->B, xpad->wButtons, XINPUT_GAMEPAD_B );
+			input_process_digital_btn( & old_xpad->X, & new_xpad->X, xpad->wButtons, XINPUT_GAMEPAD_X );
+
+			input_process_digital_btn( & old_xpad->Back,  & new_xpad->Back,  xpad->wButtons, XINPUT_GAMEPAD_BACK );
+			input_process_digital_btn( & old_xpad->Start, & new_xpad->Start, xpad->wButtons, XINPUT_GAMEPAD_START );
+
+			input_process_digital_btn( & old_xpad->LeftShoulder,  & new_xpad->LeftShoulder,  xpad->wButtons, XINPUT_GAMEPAD_LEFT_SHOULDER );
+			input_process_digital_btn( & old_xpad->RightShoulder, & new_xpad->RightShoulder, xpad->wButtons, XINPUT_GAMEPAD_RIGHT_SHOULDER );
+
+			new_xpad->Stick.Left.X.Start = old_xpad->Stick.Left.X.End;
+			new_xpad->Stick.Left.Y.Start = old_xpad->Stick.Left.Y.End;
+
+			f32 left_x = xinput_process_axis_value( xpad->sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE );
+			f32 left_y = xinput_process_axis_value( xpad->sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE );
+
+			// TODO(Ed) : Min/Max macros!!!
+			new_xpad->Stick.Left.X.Min = new_xpad->Stick.Left.X.Max = new_xpad->Stick.Left.X.End = left_x;
+			new_xpad->Stick.Left.Y.Min = new_xpad->Stick.Left.Y.Max = new_xpad->Stick.Left.Y.End = left_y;
+
+			// TODO(Ed): Make this actually an average for later
+			new_xpad->Stick.Left.X.Average = left_x;
+			new_xpad->Stick.Left.Y.Average = left_y;
+
+			input->Controllers[ controller_index ].XPad = new_xpad;
+		}
+		else
+		{
+			input->Controllers[ controller_index ].XPad = nullptr;
+		}
+	}
+
+	// JSL Input Polling
+	for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
+	{
+		if ( ! JslStillConnected( jsl_device_handles[ jsl_device_index ] ) )
+		{
+			OutputDebugStringA( "Error: JSLStillConnected returned false\n" );
+			continue;
+		}
+
+		// TODO : Won't support more than 4 for now... (or prob ever)
+		if ( jsl_device_index > 4 )
+			break;
+
+		JOY_SHOCK_STATE state = JslGetSimpleState( jsl_device_handles[ jsl_device_index ] );
+
+		// For now we're assuming anything that is detected via JSL is a dualsense pad.
+		// We'll eventually add support possibly for the nintendo pro controller.
+		engine::DualsensePadState* old_ds_pad  = old_ds_pads[ jsl_device_index ];
+		engine::DualsensePadState* new_ds_pad  = new_ds_pads[ jsl_device_index ];
+
+		input_process_digital_btn( & old_ds_pad->DPad.Up,    & new_ds_pad->DPad.Up,    state.buttons, JSMASK_UP );
+		input_process_digital_btn( & old_ds_pad->DPad.Down,  & new_ds_pad->DPad.Down,  state.buttons, JSMASK_DOWN );
+		input_process_digital_btn( & old_ds_pad->DPad.Left,  & new_ds_pad->DPad.Left,  state.buttons, JSMASK_LEFT );
+		input_process_digital_btn( & old_ds_pad->DPad.Right, & new_ds_pad->DPad.Right, state.buttons, JSMASK_RIGHT );
+
+		input_process_digital_btn( & old_ds_pad->Triangle, & new_ds_pad->Triangle, state.buttons, JSMASK_N );
+		input_process_digital_btn( & old_ds_pad->X,        & new_ds_pad->X,        state.buttons, JSMASK_S );
+		input_process_digital_btn( & old_ds_pad->Square,   & new_ds_pad->Square,   state.buttons, JSMASK_W );
+		input_process_digital_btn( & old_ds_pad->Circle,   & new_ds_pad->Circle,   state.buttons, JSMASK_E );
+
+		input_process_digital_btn( & old_ds_pad->Share,   & new_ds_pad->Share,   state.buttons, JSMASK_SHARE );
+		input_process_digital_btn( & old_ds_pad->Options, & new_ds_pad->Options, state.buttons, JSMASK_OPTIONS );
+
+		input_process_digital_btn( & old_ds_pad->L1, & new_ds_pad->L1, state.buttons, JSMASK_L );
+		input_process_digital_btn( & old_ds_pad->R1, & new_ds_pad->R1, state.buttons, JSMASK_R );
+
+		new_ds_pad->Stick.Left.X.Start = old_ds_pad->Stick.Left.X.End;
+		new_ds_pad->Stick.Left.Y.Start = old_ds_pad->Stick.Left.Y.End;
+
+		// Joyshock abstracts the sticks to a float value already for us of -1.f to 1.f.
+		// We'll assume a deadzone of 10% for now.
+		f32 left_x = jsl_input_process_axis_value( state.stickLX, 0.1f );
+		f32 left_y = jsl_input_process_axis_value( state.stickLY, 0.1f );
+
+		new_ds_pad->Stick.Left.X.Min = new_ds_pad->Stick.Left.X.Max = new_ds_pad->Stick.Left.X.End = left_x;
+		new_ds_pad->Stick.Left.Y.Min = new_ds_pad->Stick.Left.Y.Max = new_ds_pad->Stick.Left.Y.End = left_y;
+
+		// TODO(Ed): Make this actually an average for later
+		new_ds_pad->Stick.Left.X.Average = left_x;
+		new_ds_pad->Stick.Left.Y.Average = left_y;
+
+		input->Controllers[ jsl_device_index ].DSPad = new_ds_pad;
+	}
+}
+#pragma endregion Input
+
+#pragma region Timing
+inline f32
+timing_get_ms_elapsed( u64 start, u64 end )
+{
+	u64 delta  = (end - start) * Tick_To_Millisecond;
+	f32 result = scast(f32, delta) / scast(f32, Performance_Counter_Frequency);
+	return result;
+}
+
+inline f32
+timing_get_seconds_elapsed( u64 start, u64 end )
+{
+	u64 delta = end - start;
+	f32 result = scast(f32, delta) / scast(f32, Performance_Counter_Frequency);
+	return result;
+}
+
+inline f32
+timing_get_us_elapsed( u64 start, u64 end )
+{
+	u64 delta = (end - start) * Tick_To_Microsecond;
+	f32 result = scast(f32, delta) / scast(f32, Performance_Counter_Frequency);
+	return result;
+}
+
+inline u64
+timing_get_wall_clock()
+{
+	u64 clock;
+	QueryPerformanceCounter( rcast( LARGE_INTEGER*, & clock) );
+	return clock;
+}
+#pragma endregion Timing
 
 internal WinDimensions
 get_window_dimensions( HWND window_handle )
@@ -521,6 +670,23 @@ get_window_dimensions( HWND window_handle )
 	result.Width  = client_rect.right  - client_rect.left;
 	result.Height = client_rect.bottom - client_rect.top;
 	return result;
+}
+
+internal void
+display_buffer_in_window( HDC device_context, u32 window_width, u32 window_height, OffscreenBuffer* buffer
+	, u32 x, u32 y
+	, u32 width, u32 height )
+{
+	// TODO(Ed) : Aspect ratio correction
+	StretchDIBits( device_context
+	#if 0
+		, x, y, width, height
+		, x, y, width, height
+	#endif
+		, 0, 0, window_width, window_height
+		, 0, 0, buffer->Width, buffer->Height
+		, buffer->Memory, & buffer->Info
+		, DIB_ColorTable_RGB, RO_Source_To_Dest );
 }
 
 internal void
@@ -561,23 +727,6 @@ resize_dib_section( OffscreenBuffer* buffer, u32 width, u32 height )
 	// TODO(Ed) : Clear to black
 }
 
-internal void
-display_buffer_in_window( HDC device_context, u32 window_width, u32 window_height, OffscreenBuffer* buffer
-	, u32 x, u32 y
-	, u32 width, u32 height )
-{
-	// TODO(Ed) : Aspect ratio correction
-	StretchDIBits( device_context
-	#if 0
-		, x, y, width, height
-		, x, y, width, height
-	#endif
-		, 0, 0, window_width, window_height
-		, 0, 0, buffer->Width, buffer->Height
-		, buffer->Memory, & buffer->Info
-		, DIB_ColorTable_RGB, RO_Source_To_Dest );
-}
-
 internal LRESULT CALLBACK
 main_window_callback( HWND handle
 	, UINT   system_messages
@@ -590,7 +739,14 @@ main_window_callback( HWND handle
 	{
 		case WM_ACTIVATEAPP:
 		{
-			OutputDebugStringA( "WM_ACTIVATEAPP\n" );
+			if ( scast( bool, w_param ) == true )
+			{
+				SetLayeredWindowAttributes( handle, RGB(0, 0, 0), 255, LWA_Alpha );
+			}
+			else
+			{
+				SetLayeredWindowAttributes( handle, RGB(0, 0, 0), 100, LWA_Alpha );
+			}
 		}
 		break;
 
@@ -682,68 +838,156 @@ process_pending_window_messages( engine::KeyboardState* keyboard )
 		}
 	}
 }
+
 #pragma endregion Internal
 
 #pragma region Platfom API
 #if Build_Development
-void debug_file_free_content( Debug_FileContent* content )
+b32 file_check_exists( Str path )
 {
-	if ( content->Data)
+	HANDLE file_handle = CreateFileA( path
+		, GENERIC_READ, FILE_SHARE_READ, 0
+		, OPEN_EXISTING, 0, 0
+	);
+	if ( file_handle != INVALID_HANDLE_VALUE )
 	{
-		VirtualFree( content->Data, 0, MEM_Release);
-		*content = {};
+		CloseHandle( file_handle );
+		return true;
 	}
+	return false;
 }
 
-Debug_FileContent debug_file_read_content( char const* file_path )
+void file_close( File* file )
 {
-	Debug_FileContent result {};
+	HANDLE handle = pcast(HANDLE, file->OpaqueHandle);
 
-	HANDLE file_handle = CreateFileA( file_path
+	if ( handle == INVALID_HANDLE_VALUE )
+		return;
+
+	CloseHandle( handle );
+
+	if ( file->Data )
+	{
+		// TODO(Ed): This should use our persistent memory block.
+		VirtualFree( file->Data, 0, MEM_Release);
+	}
+	*file = {};
+}
+
+b32 file_delete( Str path )
+{
+	return DeleteFileA( path );
+}
+
+b32 file_read_stream( File* file, u32 content_size, void* content_memory )
+{
+	HANDLE file_handle;
+	if ( file->OpaqueHandle == nullptr )
+	{
+		file_handle = CreateFileA( file->Path
+			, GENERIC_READ, FILE_SHARE_READ, 0
+			, OPEN_EXISTING, 0, 0
+		);
+		if ( file_handle == INVALID_HANDLE_VALUE )
+		{
+			// TODO : Logging
+			return {};
+		}
+
+		file->OpaqueHandle = file_handle;
+	}
+	else
+	{
+		file_handle = pcast(HANDLE, file->OpaqueHandle);
+	}
+
+	u32 bytes_read;
+	if ( ReadFile( file_handle, content_memory, content_size, rcast(LPDWORD, &bytes_read), 0 ) == false )
+	{
+		// TODO : Logging
+		return {};
+	}
+
+	if ( bytes_read != content_size )
+	{
+		// TODO : Logging
+		return {};
+	}
+	return bytes_read;
+}
+
+b32 file_read_content( File* file )
+{
+	HANDLE file_handle = CreateFileA( file->Path
 		, GENERIC_READ, FILE_SHARE_READ, 0
 		, OPEN_EXISTING, 0, 0
 	);
 	if ( file_handle == INVALID_HANDLE_VALUE )
 	{
 		// TODO(Ed) : Logging
-		return result;
+		return {};
 	}
 
-	GetFileSizeEx( file_handle, rcast(LARGE_INTEGER*, &result.Size) );
-	if ( result.Size == 0 )
+	u32 size;
+	GetFileSizeEx( file_handle, rcast(LARGE_INTEGER*, &size) );
+	if ( size == 0 )
 	{
 		// TODO(Ed) : Logging
-		return result;
+		CloseHandle( file_handle );
+		return {};
 	}
-	result.Data = VirtualAlloc( 0, result.Size, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+
+	// TODO(Ed) : This should use our memory block.
+	file->Data = rcast(HANDLE*, VirtualAlloc( 0, sizeof(HANDLE) + size, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write ));
+	file->Size = size;
+	file->OpaqueHandle = file_handle;
 
 	u32 bytes_read;
-	if ( ReadFile( file_handle, result.Data, result.Size, rcast(LPDWORD, &bytes_read), 0 ) == false )
+	if ( ReadFile( file_handle, file->Data, file->Size, rcast(LPDWORD, &bytes_read), 0 ) == false )
 	{
 		// TODO(Ed) : Logging
+		CloseHandle( file_handle );
 		return {};
 	}
 
-	if ( bytes_read != result.Size )
+	if ( bytes_read != file->Size )
 	{
 		// TODO : Logging
+		CloseHandle( file_handle );
 		return {};
 	}
-
-	CloseHandle( file_handle );
-	return result;
+	return bytes_read;
 }
 
-b32 debug_file_write_content( char const* file_path, u32 content_size, void* content_memory )
+void file_rewind( File* file )
 {
-	HANDLE file_handle = CreateFileA( file_path
-		, GENERIC_WRITE, 0, 0
-		, CREATE_ALWAYS, 0, 0
-	);
+	HANDLE file_handle = pcast(HANDLE, file->OpaqueHandle);
 	if ( file_handle == INVALID_HANDLE_VALUE )
+		return;
+
+	SetFilePointer(file_handle, 0, NULL, FILE_BEGIN);
+}
+
+u32 file_write_stream( File* file, u32 content_size, void* content_memory )
+{
+	HANDLE file_handle;
+	if ( file->OpaqueHandle == nullptr )
 	{
-		// TODO : Logging
-		return false;
+		file_handle = CreateFileA( file->Path
+			,GENERIC_WRITE, 0, 0
+			, OPEN_ALWAYS, 0, 0
+		);
+		if ( file_handle == INVALID_HANDLE_VALUE )
+		{
+			// TODO(Ed) : Logging
+			return {};
+		}
+
+		file->OpaqueHandle = file_handle;
+	}
+	else
+	{
+		file_handle = pcast(HANDLE, file->OpaqueHandle);
 	}
 
 	DWORD bytes_written;
@@ -753,8 +997,29 @@ b32 debug_file_write_content( char const* file_path, u32 content_size, void* con
 		return false;
 	}
 
-	CloseHandle( file_handle );
-	return true;
+	return bytes_written;
+}
+
+u32 file_write_content( File* file, u32 content_size, void* content_memory )
+{
+	HANDLE file_handle = CreateFileA( file->Path
+		, GENERIC_WRITE, 0, 0
+		, CREATE_ALWAYS, 0, 0
+	);
+	if ( file_handle == INVALID_HANDLE_VALUE )
+	{
+		// TODO : Logging
+		return false;
+	}
+	file->OpaqueHandle = file_handle;
+
+	DWORD bytes_written;
+	if ( WriteFile( file_handle, content_memory, content_size, & bytes_written, 0 ) == false )
+	{
+		// TODO : Logging
+		return false;
+	}
+	return bytes_written;
 }
 
 void debug_set_pause_rendering( b32 value )
@@ -763,7 +1028,21 @@ void debug_set_pause_rendering( b32 value )
 }
 #endif
 
-u32 get_monitor_refresh_rate();
+u32 get_monitor_refresh_rate()
+{
+	return 0;
+}
+void set_monitor_refresh_rate( u32 refresh_rate )
+{
+}
+u32 get_engine_refresh_rate()
+{
+	return 0;
+}
+void set_engine_refresh_rate( u32 refresh_rate )
+{
+
+}
 
 BinaryModule load_binary_module( char const* module_path )
 {
@@ -783,21 +1062,17 @@ void* get_binary_module_symbol( BinaryModule module, char const* symbol_name )
 }
 #pragma endregion Platform API
 
-FILETIME file_get_last_write_time( char const* path )
-{
-	WIN32_FIND_DATAA dll_file_info = {};
-	HANDLE dll_file_handle = FindFirstFileA( path, & dll_file_info );
-	if ( dll_file_handle == INVALID_HANDLE_VALUE )
-	{
-		FindClose( dll_file_handle );
-	}
-
-	return dll_file_info.ftLastWriteTime;
-}
-
 #pragma region Engine Module API
-global HMODULE Lib_Handmade_Engine = nullptr;
 
+constexpr Str FName_Engine_DLL       = str_ascii("handmade_engine.dll");
+constexpr Str FName_Engine_DLL_InUse = str_ascii("handmade_engine_in_use.dll");
+constexpr Str FName_Engine_PDB_Lock  = str_ascii("handmade_engine.pdb.lock");
+
+global HMODULE             Lib_Handmade_Engine = nullptr;
+global StrFixed< S16_MAX > Path_Engine_DLL;
+global StrFixed< S16_MAX > Path_Engine_DLL_InUse;
+
+internal
 engine::ModuleAPI load_engine_module_api()
 {
 	using ModuleAPI = engine::ModuleAPI;
@@ -816,8 +1091,9 @@ engine::ModuleAPI load_engine_module_api()
 	StrFixed< S16_MAX > path_handmade_engine_symbols { 0, {} };
 	path_handmade_engine_symbols.concat( Path_Binaries, fname_handmade_engine_symbols );
 
-	Debug_FileContent symbol_table = debug_file_read_content( path_handmade_engine_symbols );
-	if ( symbol_table.Size == 0 )
+	File symbol_table {};
+	symbol_table.Path = path_handmade_engine_symbols;
+	if ( ! file_read_content( & symbol_table ) )
 	{
 		fatal( "Failed to load symbol table for handmade engine module!" );
 		return {};
@@ -835,7 +1111,7 @@ engine::ModuleAPI load_engine_module_api()
 	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_UpdateAndRender, symboL_update_and_render );
 	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_UpdateAudio,     symbol_update_audio );
 
-	debug_file_free_content( & symbol_table );
+	file_close( & symbol_table );
 
 	engine::ModuleAPI engine_api {};
 	engine_api.on_module_reload  = get_procedure_from_library< engine::OnModuleRelaodFn > ( Lib_Handmade_Engine, symbol_on_module_reload );
@@ -857,6 +1133,7 @@ engine::ModuleAPI load_engine_module_api()
 	return engine_api;
 }
 
+internal
 void unload_engine_module_api( engine::ModuleAPI* engine_api )
 {
 	if ( engine_api->IsValid )
@@ -876,6 +1153,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	using namespace win32;
 	using namespace platform;
 
+#pragma region Startup
 	// Timing
 #if Build_Development
 	u64 launch_clock = timing_get_wall_clock();
@@ -891,30 +1169,10 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 
 	QueryPerformanceFrequency( rcast(LARGE_INTEGER*, & Performance_Counter_Frequency) );
 
-	// Prepare platform API
-	ModuleAPI platform_api {};
-	{
-	#if Build_Development
-		platform_api.debug_file_free_content  = & debug_file_free_content;
-		platform_api.debug_file_read_content  = & debug_file_read_content;
-		platform_api.debug_file_write_content = & debug_file_write_content;
-
-		platform_api.debug_set_pause_rendering = & debug_set_pause_rendering;
-	#endif
-		platform_api.get_monitor_refresh_rate = nullptr;
-		platform_api.set_monitor_refresh_rate = nullptr;
-		platform_api.get_engine_frame_target  = nullptr;
-		platform_api.set_engine_frame_target  = nullptr;
-
-		platform_api.load_binary_module	  = & load_binary_module;
-		platform_api.unload_binary_module = & unload_binary_module;
-		platform_api.get_module_procedure = & get_binary_module_symbol;
-	}
-
 	// Memory
 	engine::Memory engine_memory {};
 	{
-		engine_memory.PersistentSize = megabytes( 64 );
+		engine_memory.PersistentSize = megabytes( 128 );
 		// engine_memory.FrameSize	     = megabytes( 64 );
 		engine_memory.TransientSize  = gigabytes( 2 );
 
@@ -960,7 +1218,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 
 		window_handle = CreateWindowExW(
-			0,
+			WS_EX_LAYERED | WS_EX_TOPMOST,
 			window_class.lpszClassName,
 			L"Handmade Hero",
 			WS_Overlapped_Window | WS_Initially_Visible,
@@ -969,6 +1227,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			0, 0,                         // parent, menu
 			instance, 0                   // instance, param
 		);
+
 
 		if ( ! window_handle )
 		{
@@ -980,8 +1239,10 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	resize_dib_section( &Surface_Back_Buffer, 1280, 720 );
 
 	// Setup pathing
-	// TODO(Ed): This will not support long paths, NEEDS to be changed to support long paths.
+	StrFixed< S16_MAX > path_pdb_lock {};
 	{
+		// TODO(Ed): This will not support long paths, NEEDS to be changed to support long paths.
+
 		char path_buffer[S16_MAX];
 		GetModuleFileNameA( 0, path_buffer, sizeof(path_buffer) );
 
@@ -1008,6 +1269,34 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 
 		Path_Engine_DLL.      concat( Path_Binaries, FName_Engine_DLL );
 		Path_Engine_DLL_InUse.concat( Path_Binaries, FName_Engine_DLL_InUse );
+
+		path_pdb_lock.concat( Path_Binaries, FName_Engine_PDB_Lock );
+	}
+
+	// Prepare platform API
+	ModuleAPI platform_api {};
+	{
+	#if Build_Development
+		platform_api.debug_set_pause_rendering = & debug_set_pause_rendering;
+	#endif
+		// Not implemented yet
+		platform_api.get_monitor_refresh_rate = nullptr;
+		platform_api.set_monitor_refresh_rate = nullptr;
+		platform_api.get_engine_frame_target  = nullptr;
+		platform_api.set_engine_frame_target  = nullptr;
+
+		platform_api.load_binary_module	  = & load_binary_module;
+		platform_api.unload_binary_module = & unload_binary_module;
+		platform_api.get_module_procedure = & get_binary_module_symbol;
+
+		platform_api.file_check_exists  = & file_check_exists;
+		platform_api.file_close         = & file_close;
+		platform_api.file_delete        = & file_delete;
+		platform_api.file_read_content  = & file_read_content;
+		platform_api.file_read_stream   = & file_read_stream;
+		platform_api.file_rewind        = & file_rewind;
+		platform_api.file_write_content = & file_write_content;
+		platform_api.file_write_stream  = & file_write_stream;
 	}
 
 	// Load engine module
@@ -1054,7 +1343,6 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	engine::InputState input {};
 
 	// There can be 4 of any of each input API type : KB & Mouse, XInput, JSL.
-
 #if 0
 	using EngineKeyboardStates = engine::KeyboardState[ Max_Controllers ];
 	EngineKeyboardStates keyboard_states[2] {};
@@ -1067,17 +1355,14 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	engine::KeyboardState* new_keyboard = & keyboard_states[1];
 	// Important: Assuming keyboard always connected for now, and assigning to first controller.
 
-	using EngineXInputPadStates = engine::XInputPadState[ Max_Controllers ];
 	EngineXInputPadStates  xpad_states[2] {};
 	EngineXInputPadStates* old_xpads = & xpad_states[0];
 	EngineXInputPadStates* new_xpads = & xpad_states[1];
 
-	using EngineDSPadStates = engine::DualsensePadState[Max_Controllers];
 	EngineDSPadStates  ds_pad_states[2] {};
 	EngineDSPadStates* old_ds_pads = & ds_pad_states[0];
 	EngineDSPadStates* new_ds_pads = & ds_pad_states[1];
 
-	using JSL_DeviceHandle = int;
 	u32 jsl_num_devices = JslConnectDevices();
 	JSL_DeviceHandle jsl_device_handles[4] {};
 	{
@@ -1103,7 +1388,8 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		if ( jsl_num_devices > 4 )
 		{
 			jsl_num_devices = 4;
-			MessageBoxA( window_handle, "More than 4 JSL devices found, this engine will only support the first four found.", "Warning", MB_ICONEXCLAMATION );
+			MessageBoxA( window_handle, "More than 4 JSL devices found, this engine will only support the first four found."
+				, "Warning", MB_ICONEXCLAMATION );
 		}
 	}
 
@@ -1121,6 +1407,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	sprintf_s( text_buffer, sizeof(text_buffer), "Startup MS: %f\n", startup_ms );
 	OutputDebugStringA( text_buffer );
 #endif
+#pragma endregion Startup
 
 	Running = true;
 #if 0
@@ -1138,159 +1425,36 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 #endif
 	while( Running )
 	{
-		FILETIME engine_api_current_time = file_get_last_write_time( Path_Engine_DLL );
-		if ( CompareFileTime( & engine_api_load_time, & engine_api_current_time ) != 0 )
-		{
+		// Engine Module Hot-Reload
+		do {
+			FILETIME engine_api_current_time = file_get_last_write_time( Path_Engine_DLL );
+			if ( CompareFileTime( & engine_api_load_time, & engine_api_current_time ) == 0 )
+				break;
+
+			WIN32_FIND_DATAA lock_file_info = {};
+			for(;;)
+			{
+				HANDLE lock_file = FindFirstFileA( path_pdb_lock, & lock_file_info );
+				if ( lock_file != INVALID_HANDLE_VALUE )
+				{
+					FindClose( lock_file );
+					Sleep( 1 );
+					continue;
+				}
+				break;
+			}
+
 			engine_api_load_time = engine_api_current_time;
 			unload_engine_module_api( & engine_api );
 			engine_api = load_engine_module_api();
-		}
+		} while (0);
 
 		process_pending_window_messages( new_keyboard );
 
-		// TODO(Ed): Offload polling to these functions later.
-		// poll_xinput( & input, old_xpads, new_xpads );
-		// poll_jsl( & input, old_jsl_pads, new_jsl_pads );
-
-		// or
-		// poll_input();
-
-		// Input
-		// void poll_input();
-		{
-			// TODO(Ed) : Setup user definable deadzones for triggers and sticks.
-
-			// Swapping at the beginning of the input frame instead of the end.
-			swap( old_keyboard, new_keyboard );
-			swap( old_xpads,    new_xpads );
-			swap( old_ds_pads,  new_ds_pads );
-
-			// Keyboard Polling
-			// Keyboards are unified for now.
-			{
-				constexpr u32 is_down = 0x80000000;
-				input_process_digital_btn( & old_keyboard->Q,         & new_keyboard->Q,         GetAsyncKeyState( 'Q' ),       is_down );
-				input_process_digital_btn( & old_keyboard->E,         & new_keyboard->E,         GetAsyncKeyState( 'E' ),       is_down );
-				input_process_digital_btn( & old_keyboard->W,         & new_keyboard->W,         GetAsyncKeyState( 'W' ),       is_down );
-				input_process_digital_btn( & old_keyboard->A,         & new_keyboard->A,         GetAsyncKeyState( 'A' ),       is_down );
-				input_process_digital_btn( & old_keyboard->S,         & new_keyboard->S,         GetAsyncKeyState( 'S' ),       is_down );
-				input_process_digital_btn( & old_keyboard->D,         & new_keyboard->D,         GetAsyncKeyState( 'D' ),       is_down );
-				input_process_digital_btn( & old_keyboard->Escape,    & new_keyboard->Escape,    GetAsyncKeyState( VK_ESCAPE ), is_down );
-				input_process_digital_btn( & old_keyboard->Backspace, & new_keyboard->Backspace, GetAsyncKeyState( VK_BACK ),   is_down );
-				input_process_digital_btn( & old_keyboard->Up,        & new_keyboard->Up,        GetAsyncKeyState( VK_UP ),     is_down );
-				input_process_digital_btn( & old_keyboard->Down,      & new_keyboard->Down,      GetAsyncKeyState( VK_DOWN ),   is_down );
-				input_process_digital_btn( & old_keyboard->Left,      & new_keyboard->Left,      GetAsyncKeyState( VK_LEFT ),   is_down );
-				input_process_digital_btn( & old_keyboard->Right,     & new_keyboard->Right,     GetAsyncKeyState( VK_RIGHT ),  is_down );
-				input_process_digital_btn( & old_keyboard->Space,     & new_keyboard->Space,     GetAsyncKeyState( VK_SPACE ),  is_down );
-				input_process_digital_btn( & old_keyboard->Pause,     & new_keyboard->Pause,     GetAsyncKeyState( VK_PAUSE ),  is_down );
-
-				input.Controllers[0].Keyboard = new_keyboard;
-			}
-
-			// XInput Polling
-			// TODO(Ed) : Should we poll this more frequently?
-			for ( DWORD controller_index = 0; controller_index < Max_Controllers; ++ controller_index )
-			{
-				XINPUT_STATE controller_state;
-				b32 xinput_detected = xinput_get_state( controller_index, & controller_state ) == XI_PluggedIn;
-				if ( xinput_detected )
-				{
-					XINPUT_GAMEPAD*       xpad = & controller_state.Gamepad;
-					engine::XInputPadState* old_xpad = old_xpads[ controller_index ];
-					engine::XInputPadState* new_xpad = new_xpads[ controller_index ];
-
-					input_process_digital_btn( & old_xpad->DPad.Up,    & new_xpad->DPad.Up, xpad->wButtons, XINPUT_GAMEPAD_DPAD_UP );
-					input_process_digital_btn( & old_xpad->DPad.Down,  & new_xpad->DPad.Down, xpad->wButtons, XINPUT_GAMEPAD_DPAD_DOWN );
-					input_process_digital_btn( & old_xpad->DPad.Left,  & new_xpad->DPad.Left, xpad->wButtons, XINPUT_GAMEPAD_DPAD_LEFT );
-					input_process_digital_btn( & old_xpad->DPad.Right, & new_xpad->DPad.Right, xpad->wButtons, XINPUT_GAMEPAD_DPAD_RIGHT );
-
-					input_process_digital_btn( & old_xpad->Y, & new_xpad->Y, xpad->wButtons, XINPUT_GAMEPAD_Y );
-					input_process_digital_btn( & old_xpad->A, & new_xpad->A, xpad->wButtons, XINPUT_GAMEPAD_A );
-					input_process_digital_btn( & old_xpad->B, & new_xpad->B, xpad->wButtons, XINPUT_GAMEPAD_B );
-					input_process_digital_btn( & old_xpad->X, & new_xpad->X, xpad->wButtons, XINPUT_GAMEPAD_X );
-
-					input_process_digital_btn( & old_xpad->Back,  & new_xpad->Back,  xpad->wButtons, XINPUT_GAMEPAD_BACK );
-					input_process_digital_btn( & old_xpad->Start, & new_xpad->Start, xpad->wButtons, XINPUT_GAMEPAD_START );
-
-					input_process_digital_btn( & old_xpad->LeftShoulder,  & new_xpad->LeftShoulder,  xpad->wButtons, XINPUT_GAMEPAD_LEFT_SHOULDER );
-					input_process_digital_btn( & old_xpad->RightShoulder, & new_xpad->RightShoulder, xpad->wButtons, XINPUT_GAMEPAD_RIGHT_SHOULDER );
-
-					new_xpad->Stick.Left.X.Start = old_xpad->Stick.Left.X.End;
-					new_xpad->Stick.Left.Y.Start = old_xpad->Stick.Left.Y.End;
-
-					f32 left_x = xinput_process_axis_value( xpad->sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE );
-					f32 left_y = xinput_process_axis_value( xpad->sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE );
-
-					// TODO(Ed) : Min/Max macros!!!
-					new_xpad->Stick.Left.X.Min = new_xpad->Stick.Left.X.Max = new_xpad->Stick.Left.X.End = left_x;
-					new_xpad->Stick.Left.Y.Min = new_xpad->Stick.Left.Y.Max = new_xpad->Stick.Left.Y.End = left_y;
-
-					// TODO(Ed): Make this actually an average for later
-					new_xpad->Stick.Left.X.Average = left_x;
-					new_xpad->Stick.Left.Y.Average = left_y;
-
-					input.Controllers[ controller_index ].XPad = new_xpad;
-				}
-				else
-				{
-					input.Controllers[ controller_index ].XPad = nullptr;
-				}
-			}
-
-			// JSL Input Polling
-			for ( u32 jsl_device_index = 0; jsl_device_index < jsl_num_devices; ++ jsl_device_index )
-			{
-				if ( ! JslStillConnected( jsl_device_handles[ jsl_device_index ] ) )
-				{
-					OutputDebugStringA( "Error: JSLStillConnected returned false\n" );
-					continue;
-				}
-
-				// TODO : Won't support more than 4 for now... (or prob ever)
-				if ( jsl_device_index > 4 )
-					break;
-
-				JOY_SHOCK_STATE state = JslGetSimpleState( jsl_device_handles[ jsl_device_index ] );
-
-				// For now we're assuming anything that is detected via JSL is a dualsense pad.
-				// We'll eventually add support possibly for the nintendo pro controller.
-				engine::DualsensePadState* old_ds_pad  = old_ds_pads[ jsl_device_index ];
-				engine::DualsensePadState* new_ds_pad  = new_ds_pads[ jsl_device_index ];
-
-				input_process_digital_btn( & old_ds_pad->DPad.Up,    & new_ds_pad->DPad.Up,    state.buttons, JSMASK_UP );
-				input_process_digital_btn( & old_ds_pad->DPad.Down,  & new_ds_pad->DPad.Down,  state.buttons, JSMASK_DOWN );
-				input_process_digital_btn( & old_ds_pad->DPad.Left,  & new_ds_pad->DPad.Left,  state.buttons, JSMASK_LEFT );
-				input_process_digital_btn( & old_ds_pad->DPad.Right, & new_ds_pad->DPad.Right, state.buttons, JSMASK_RIGHT );
-
-				input_process_digital_btn( & old_ds_pad->Triangle, & new_ds_pad->Triangle, state.buttons, JSMASK_N );
-				input_process_digital_btn( & old_ds_pad->X,        & new_ds_pad->X,        state.buttons, JSMASK_S );
-				input_process_digital_btn( & old_ds_pad->Square,   & new_ds_pad->Square,   state.buttons, JSMASK_W );
-				input_process_digital_btn( & old_ds_pad->Circle,   & new_ds_pad->Circle,   state.buttons, JSMASK_E );
-
-				input_process_digital_btn( & old_ds_pad->Share,   & new_ds_pad->Share,   state.buttons, JSMASK_SHARE );
-				input_process_digital_btn( & old_ds_pad->Options, & new_ds_pad->Options, state.buttons, JSMASK_OPTIONS );
-
-				input_process_digital_btn( & old_ds_pad->L1, & new_ds_pad->L1, state.buttons, JSMASK_L );
-				input_process_digital_btn( & old_ds_pad->R1, & new_ds_pad->R1, state.buttons, JSMASK_R );
-
-				new_ds_pad->Stick.Left.X.Start = old_ds_pad->Stick.Left.X.End;
-				new_ds_pad->Stick.Left.Y.Start = old_ds_pad->Stick.Left.Y.End;
-
-				// Joyshock abstracts the sticks to a float value already for us of -1.f to 1.f.
-				// We'll assume a deadzone of 10% for now.
-				f32 left_x = input_process_axis_value( state.stickLX, 0.1f );
-				f32 left_y = input_process_axis_value( state.stickLY, 0.1f );
-
-				new_ds_pad->Stick.Left.X.Min = new_ds_pad->Stick.Left.X.Max = new_ds_pad->Stick.Left.X.End = left_x;
-				new_ds_pad->Stick.Left.Y.Min = new_ds_pad->Stick.Left.Y.Max = new_ds_pad->Stick.Left.Y.End = left_y;
-
-				// TODO(Ed): Make this actually an average for later
-				new_ds_pad->Stick.Left.X.Average = left_x;
-				new_ds_pad->Stick.Left.Y.Average = left_y;
-
-				input.Controllers[ jsl_device_index ].DSPad = new_ds_pad;
-			}
-		}
+		poll_input( & input, jsl_num_devices, jsl_device_handles
+			, old_keyboard, new_keyboard
+			, old_xpads, new_xpads
+			, old_ds_pads, new_ds_pads );
 
 		// Engine's logical iteration and rendering process
 		engine_api.update_and_render( & input, rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.Memory), & engine_memory, & platform_api );
@@ -1302,7 +1466,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		DWORD ds_write_cursor;
 		do {
 		/*
-			Sound computation:
+			Audio Processing:
 			There is a sync boundary value, that is the number of samples that the engine's frame-time may vary by
 			(ex: approx 2ms of variance between frame-times).
 
@@ -1485,6 +1649,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &Surface_Back_Buffer
 				, 0, 0
 				, dimensions.Width, dimensions.Height );
+			ReleaseDC( window_handle, device_context );
 		}
 
 		flip_wall_clock = timing_get_wall_clock();
