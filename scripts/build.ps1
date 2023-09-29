@@ -404,6 +404,8 @@ $path_engine   = Join-Path $path_project 'engine'
 
 $update_deps = Join-Path $PSScriptRoot 'update_deps.ps1'
 
+$handmade_process_active = Get-Process | Where-Object {$_.Name -like 'handmade_win32*'}
+
 if ( (Test-Path $path_build) -eq $false ) {
 	New-Item $path_build -ItemType Directory
 }
@@ -554,13 +556,9 @@ if ( $engine )
 	}
 
 	Remove-Item $path_pdb_lock -Force -Verbose
-}
-
-if ( $platform )
-{
 
 	#region CodeGen
-	if ( $true ) {
+	if ( $handmade_process_active -eq $null ) {
 		$engine_codegen_compiler_args = @()
 		$engine_codegen_compiler_args += ( $flag_define + 'GEN_TIME' )
 
@@ -568,8 +566,8 @@ if ( $platform )
 			$flag_link_win_subsystem_console
 		)
 
-		$unit       = Join-Path $path_codegen 'handmade_platform_gen.cpp'
-		$executable = Join-Path $path_build   'handmade_platform_gen.exe'
+		$unit       = Join-Path $path_codegen 'engine_postbuild_gen.cpp'
+		$executable = Join-Path $path_build   'engine_postbuild_gen.exe'
 
 		build-simple $includes $engine_codegen_compiler_args $engine_codegen_linker_args $unit $executable
 		write-host
@@ -577,14 +575,16 @@ if ( $platform )
 		Push-Location $path_build
 		& $executable
 		Pop-Location
-		write-host
 
 		$path_generated_file = Join-Path $path_build 'engine_symbol_table.hpp'
 		move-item $path_generated_file (join-path $path_gen (split-path $path_generated_file -leaf)) -Force
 	}
 	#endregion CodeGen
+}
 
-	# Delete old PDBs 
+if ( $platform )
+{
+	# Delete old PDBs
 	$pdb_files = Get-ChildItem -Path $path_binaries -Filter "handmade_win32_*.pdb"
 	foreach ($file in $pdb_files) {
 		Remove-Item -Path $file.FullName -Force

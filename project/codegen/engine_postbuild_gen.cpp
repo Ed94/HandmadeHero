@@ -6,7 +6,7 @@
 #include "dependencies/gen.hpp"
 using namespace gen;
 
-#include "platform/platform_engine_api.hpp"
+#include "engine/engine_to_platform_api.hpp"
 constexpr StrC fname_handmade_engine_symbols = txt("handmade_engine.symbols");
 
 String get_symbol_from_module_table( FileContents symbol_table, u32 symbol_ID )
@@ -53,7 +53,7 @@ String get_symbol_from_module_table( FileContents symbol_table, u32 symbol_ID )
 int gen_main()
 {
 	gen::init();
-	log_fmt("Generating code for Handmade Hero: Platfom Module\n");
+	log_fmt("Generating code for Handmade Hero: Engine Module\n");
 
 	FileContents symbol_table = file_read_contents( GlobalAllocator, true, fname_handmade_engine_symbols );
 
@@ -61,7 +61,7 @@ int gen_main()
 #undef str_ascii
 	Builder builder = Builder::open( "engine_symbol_table.hpp" );
 	builder.print( pragma_once );
-	builder.print( def_include( txt("platform/platform.hpp") ) );
+	builder.print( def_include( txt("engine/engine.hpp") ) );
 	builder.print( fmt_newline );
 	builder.print_fmt( "NS_ENGINE_BEGIN\n\n" );
 
@@ -93,9 +93,8 @@ int gen_main()
 	builder.write();
 #pragma pop_macro("str_ascii")
 
-	log_fmt("Generaton finished for Handmade Hero: Platform Module\n");
+	log_fmt("Generaton finished for Handmade Hero: Engine Module\n");
 	// gen::deinit();
 	return 0;
 }
 #endif
-

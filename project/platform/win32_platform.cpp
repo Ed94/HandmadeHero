@@ -24,7 +24,7 @@
 
 // Engine layer headers
 #include "engine/engine.hpp"
-#include "platform_engine_api.hpp"
+#include "engine/engine_to_platform_api.hpp"
 
 #include "gen/engine_symbol_table.hpp"
 

@@ -1,5 +1,5 @@
 #pragma once
-#include "platform/platform.hpp"
+#include "engine/engine.hpp"
 
 NS_ENGINE_BEGIN
 
