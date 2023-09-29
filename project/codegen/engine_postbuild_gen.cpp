@@ -1,12 +1,21 @@
+#include "platform/compiler_ignores.hpp"
+
 #if GEN_TIME
 #define GEN_DEFINE_LIBRARY_CODE_CONSTANTS
 #define GEN_IMPLEMENTATION
 #define GEN_BENCHMARK
 #define GEN_ENFORCE_STRONG_CODE_TYPES
 #include "dependencies/gen.hpp"
+#undef ccast
+#undef pcast
+#undef do_once
+#undef do_once_start
+#undef do_once_end
 using namespace gen;
 
+
 #include "engine/engine_to_platform_api.hpp"
+
 constexpr StrC fname_handmade_engine_symbols = txt("handmade_engine.symbols");
 
 String get_symbol_from_module_table( FileContents symbol_table, u32 symbol_ID )
@@ -70,7 +79,6 @@ int gen_main()
 	StrC symbol_shutdown          = get_symbol_from_module_table( symbol_table, engine::ModuleAPI::Sym_Shutdown );
 	StrC symbol_update_and_render = get_symbol_from_module_table( symbol_table, engine::ModuleAPI::Sym_UpdateAndRender );
 	StrC symbol_update_audio      = get_symbol_from_module_table( symbol_table, engine::ModuleAPI::Sym_UpdateAudio );
-
 
 	builder.print( parse_variable( token_fmt( "symbol", symbol_on_module_load, stringize(
 		constexpr const Str symbol_on_module_load = str_ascii("<symbol>");

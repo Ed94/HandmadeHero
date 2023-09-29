@@ -17,7 +17,7 @@
 			"type":"cppvsdbg",
 			"request": "launch",
 			"name" : "Debug handmade platform gen msvc",
-			"program": "${workspaceFolder}/build/handmade_platform_gen.exe",
+			"program": "${workspaceFolder}/build/engine_postbuild_gen.exe",
 			"args": [],
 			"cwd": "${workspaceFolder}/build",
 			"visualizerFile": "${workspaceFolder}/scripts/handmade.natvis"

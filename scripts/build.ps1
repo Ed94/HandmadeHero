@@ -209,9 +209,9 @@ if ( $vendor -match "clang" )
 			$flag_exceptions_disabled,
 			$flag_target_arch, $target_arch,
 			$flag_wall,
-			$flag_preprocess_non_intergrated,
-			$flag_section_data,
-			$flag_section_functions,
+			$flag_preprocess_on_intergrated,
+			# $flag_section_data,
+			# $flag_section_functions,
 			( $flag_path_output + $object )
 		)
 		if ( $optimize ) {
@@ -477,8 +477,8 @@ if ( $engine )
 	}
 
 	$linker_args = @(
-		$flag_link_dll,
-		$flag_link_optimize_references
+		$flag_link_dll
+		# $flag_link_optimize_references
 	)
 
 	$unit            = Join-Path $path_project  'handmade_engine.cpp'
@@ -493,7 +493,7 @@ if ( $engine )
 		$path_lib = $dynamic_library -replace '\.dll', '.lib'
 		$path_exp = $dynamic_library -replace '\.dll', '.exp'
 		Remove-Item $path_lib -Force
-		Remove-Item $path_exp -Force
+		if ( Test-Path $path_exp ) { Remove-Item $path_exp -Force }
 
 		# We need to generate the symbol table so that we can lookup the symbols we need when loading/reloading the library at runtime.
 		# This is done by sifting through the emitter.map file from the linker for the base symbol names
@@ -559,6 +559,13 @@ if ( $engine )
 
 	#region CodeGen
 	if ( $handmade_process_active -eq $null ) {
+		# Delete old PDBs
+		$pdb_files = Get-ChildItem -Path $path_build -Filter "engine_postbuild_gen_*.pdb"
+		foreach ($file in $pdb_files) {
+			Remove-Item -Path $file.FullName -Force
+			Write-Host "Deleted $file" -ForegroundColor Green
+		}
+
 		$engine_codegen_compiler_args = @()
 		$engine_codegen_compiler_args += ( $flag_define + 'GEN_TIME' )
 
