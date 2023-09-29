@@ -3,6 +3,7 @@ Clear-Host
 $target_arch = Join-Path $PSScriptRoot 'helpers/target_arch.psm1'
 $devshell    = Join-Path $PSScriptRoot 'helpers/devshell.ps1'
 $path_root   = git rev-parse --show-toplevel
+$path_build  = Join-Path $path_root    'build'
 
 Import-Module $target_arch
 
@@ -196,6 +197,8 @@ if ( $vendor -match "clang" )
 
 		$object = $unit -replace '\.cpp', '.obj'
 		$map    = $unit -replace '\.cpp', '.map'
+		$object = join-path $path_build (split-path $object -Leaf)
+		$map    = join-path $path_build (split-path $map    -Leaf)
 
 		# The PDB file has to also be time-stamped so that we can reload the DLL at runtime
 		$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
@@ -315,8 +318,8 @@ if ( $vendor -match "msvc" )
 
 		$object = $unit -replace '\.(cpp)$', '.obj'
 		$map    = $unit -replace '\.(cpp)$', '.map'
-		$object = $object -replace '\bproject\b', 'build'
-		$map    = $map    -replace '\bproject\b', 'build'
+		$object = join-path $path_build (split-path $object -Leaf)
+		$map    = join-path $path_build (split-path $map    -Leaf)
 
 		# The PDB file has to also be time-stamped so that we can reload the DLL at runtime
 		$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
@@ -391,10 +394,10 @@ if ( $vendor -match "msvc" )
 
 #region Building
 $path_project  = Join-Path $path_root    'project'
-$path_build    = Join-Path $path_root    'build'
 $path_data     = Join-Path $path_root	 'data'
 $path_binaries = Join-Path $path_data    'binaries'
 $path_deps     = Join-Path $path_project 'dependencies'
+$path_codegen  = Join-Path $path_project 'codegen'
 $path_gen      = Join-Path $path_project 'gen'
 $path_platform = Join-Path $path_project 'platform'
 $path_engine   = Join-Path $path_project 'engine'
@@ -412,36 +415,6 @@ if ( (Test-Path $path_deps) -eq $false ) {
 if ( (Test-Path $path_binaries) -eq $false ) {
 	New-Item $path_binaries -ItemType Directory
 }
-
-#region Handmade Generate
-if ( $false ) {
-	$includes = @(
-		$path_project,
-		$path_gen,
-		# $path_deps,
-		$path_platform
-	)
-	$compiler_args = @()
-	$compiler_args += ( $flag_define + 'GEN_TIME' )
-
-	$linker_args = @(
-		$flag_link_win_subsystem_console
-	)
-
-	$unit       = Join-Path $path_gen   'handmade_gen.cpp'
-	$executable = Join-Path $path_build 'handmade_gen.exe'
-
-	build-simple $includes $compiler_args $linker_args $unit $executable
-	write-host
-
-	& $executable
-	write-host
-
-	if ( $false ) {
-		Remove-Item (Get-ChildItem -Path $path_build -Recurse -Force)
-	}
-}
-#endregion Handmade Generate
 
 #region Handmade Runtime
 $includes = @(
@@ -576,7 +549,7 @@ if ( $engine )
 		}
 
 		# Write the symbol table to a file
-		$path_engine_symbols = Join-Path $path_binaries 'handmade_engine.symbols'
+		$path_engine_symbols = Join-Path $path_build 'handmade_engine.symbols'
 		$engine_symbols.Values | Out-File -Path $path_engine_symbols
 	}
 
@@ -585,6 +558,32 @@ if ( $engine )
 
 if ( $platform )
 {
+
+	#region CodeGen
+	if ( $true ) {
+		$engine_codegen_compiler_args = @()
+		$engine_codegen_compiler_args += ( $flag_define + 'GEN_TIME' )
+
+		$engine_codegen_linker_args = @(
+			$flag_link_win_subsystem_console
+		)
+
+		$unit       = Join-Path $path_codegen 'handmade_platform_gen.cpp'
+		$executable = Join-Path $path_build   'handmade_platform_gen.exe'
+
+		build-simple $includes $engine_codegen_compiler_args $engine_codegen_linker_args $unit $executable
+		write-host
+
+		Push-Location $path_build
+		& $executable
+		Pop-Location
+		write-host
+
+		$path_generated_file = Join-Path $path_build 'engine_symbol_table.hpp'
+		move-item $path_generated_file (join-path $path_gen (split-path $path_generated_file -leaf)) -Force
+	}
+	#endregion CodeGen
+
 	# Delete old PDBs 
 	$pdb_files = Get-ChildItem -Path $path_binaries -Filter "handmade_win32_*.pdb"
 	foreach ($file in $pdb_files) {
@@ -604,7 +603,7 @@ if ( $platform )
 		$lib_jsl,
 
 		$flag_link_win_subsystem_windows
-		# $flag_link_optimize_references
+		$flag_link_optimize_references
 	)
 
 	$unit       = Join-Path $path_project  'handmade_win32.cpp'

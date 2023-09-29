@@ -53,51 +53,6 @@ struct File
 	u32   Size;
 };
 
-// TODO(Ed): This also assumes the symbol name is always within size of the provided buffer, needs to fail if not.
-// Note: This is a temporary solution until there is more infrastructure for the engine to use.
-void get_symbol_from_module_table( File symbol_table, u32 symbol_ID, char* symbol_name )
-{
-	struct Token
-	{
-		char const* Ptr;
-		u32         Len;
-	};
-
-	Token tokens[256] = {};
-	s32 idx = 0;
-
-	char const* scanner = rcast( char const*, symbol_table.Data );
-	u32 left = symbol_table.Size;
-	while ( left )
-	{
-		if ( *scanner == '\n' || *scanner == '\r' )
-		{
-			++ scanner;
-			-- left;
-		}
-		else
-		{
-			tokens[idx].Ptr = scanner;
-			while ( left && *scanner != '\r' && *scanner != '\n' )
-			{
-				-- left;
-				++ scanner;
-				++ tokens[idx].Len;
-			}
-			++ idx;
-		}
-	}
-
-	Token& token = tokens[symbol_ID];
-	while ( token.Len -- )
-	{
-		*symbol_name = *token.Ptr;
-		++ symbol_name;
-		++ token.Ptr;
-	}
-	*symbol_name = '\0';
-}
-
 #pragma region Settings Exposure
 // Exposing specific properties for user configuration in settings
 

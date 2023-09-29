@@ -26,6 +26,8 @@
 #include "engine/engine.hpp"
 #include "platform_engine_api.hpp"
 
+#include "gen/engine_symbol_table.hpp"
+
 #if 1
 // TODO(Ed): Redo these macros properly later.
 
@@ -1086,39 +1088,12 @@ engine::ModuleAPI load_engine_module_api()
 		return {};
 	}
 
-	constexpr Str fname_handmade_engine_symbols = str_ascii("handmade_engine.symbols");
-
-	StrFixed< S16_MAX > path_handmade_engine_symbols { 0, {} };
-	path_handmade_engine_symbols.concat( Path_Binaries, fname_handmade_engine_symbols );
-
-	File symbol_table {};
-	symbol_table.Path = path_handmade_engine_symbols;
-	if ( file_read_content( & symbol_table ), symbol_table.Size == 0 )
-	{
-		fatal( "Failed to load symbol table for handmade engine module!" );
-		return {};
-	}
-
-	// TODO(Ed) : Clean this up later when Casey makes strings. (If he doesn't we'll do it)
-	char symbol_on_module_reload[256];
-	char symboL_startup[256];
-	char symboL_shutdown[256];
-	char symboL_update_and_render[256];
-	char symbol_update_audio[256];
-	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_OnModuleReload,  symbol_on_module_reload );
-	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_Startup,         symboL_startup );
-	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_Shutdown,        symboL_shutdown );
-	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_UpdateAndRender, symboL_update_and_render );
-	get_symbol_from_module_table( symbol_table, ModuleAPI::Sym_UpdateAudio,     symbol_update_audio );
-
-	file_close( & symbol_table );
-
 	engine::ModuleAPI engine_api {};
-	engine_api.on_module_reload  = get_procedure_from_library< engine::OnModuleRelaodFn > ( Lib_Handmade_Engine, symbol_on_module_reload );
-	engine_api.startup           = get_procedure_from_library< engine::StartupFn >        ( Lib_Handmade_Engine, symboL_startup );
-	engine_api.shutdown          = get_procedure_from_library< engine::ShutdownFn >       ( Lib_Handmade_Engine, symboL_shutdown );
-	engine_api.update_and_render = get_procedure_from_library< engine::UpdateAndRenderFn >( Lib_Handmade_Engine, symboL_update_and_render );
-	engine_api.update_audio      = get_procedure_from_library< engine::UpdateAudioFn >    ( Lib_Handmade_Engine, symbol_update_audio );
+	engine_api.on_module_reload  = get_procedure_from_library< engine::OnModuleRelaodFn > ( Lib_Handmade_Engine, engine::symbol_on_module_load );
+	engine_api.startup           = get_procedure_from_library< engine::StartupFn >        ( Lib_Handmade_Engine, engine::symbol_startup );
+	engine_api.shutdown          = get_procedure_from_library< engine::ShutdownFn >       ( Lib_Handmade_Engine, engine::symbol_shutdown );
+	engine_api.update_and_render = get_procedure_from_library< engine::UpdateAndRenderFn >( Lib_Handmade_Engine, engine::symbol_update_and_render );
+	engine_api.update_audio      = get_procedure_from_library< engine::UpdateAudioFn >    ( Lib_Handmade_Engine, engine::symbol_update_audio );
 
 	engine_api.IsValid =
 			engine_api.on_module_reload

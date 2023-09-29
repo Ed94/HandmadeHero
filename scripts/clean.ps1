@@ -13,3 +13,4 @@ if ( Test-Path $path_build ) {
 if ( Test-Path $path_binaries ) {
 	Remove-Item -verbose $path_binaries -Recurse
 }
+
