@@ -84,9 +84,10 @@ enum MB : UINT
 
 enum Mem : DWORD
 {
-	MEM_Commit_Zeroed = MEM_COMMIT,
-	MEM_Reserve	      = MEM_RESERVE,
-	MEM_Release 	  = MEM_RELEASE,
+	MEM_Commit_Zeroed   = MEM_COMMIT,
+	MEM_Reserve	        = MEM_RESERVE,
+	MEM_Release 	    = MEM_RELEASE,
+	MEM_Use_Large_pages = MEM_LARGE_PAGES,
 };
 
 enum Page : DWORD

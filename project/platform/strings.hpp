@@ -22,8 +22,7 @@ struct Str
 		str_append( Len, Data, src.Len, src.Data );
 	}
 
-	static
-	void concast( u32 dest_size, Str* dest, Str const str_a, Str const str_b )
+	void concat( u32 dest_size, Str* dest, Str const str_a, Str const str_b )
 	{
 		str_concat( dest_size, dest->Data
 			, str_a.Len, str_a.Data
@@ -42,8 +41,8 @@ struct Str
 	}
 };
 
-template< u32 capacity >
 // Fixed length raw strings.
+template< u32 capacity >
 struct StrFixed
 {
 	constexpr static u32 Capacity = capacity;
@@ -188,3 +187,5 @@ u32 str_length( char const* str )
 
 	return result;
 }
+
+using StrPath = StrFixed< S16_MAX >;

@@ -18,7 +18,7 @@ using namespace gen;
 
 constexpr StrC fname_handmade_engine_symbols = txt("handmade_engine.symbols");
 
-String get_symbol_from_module_table( FileContents symbol_table, u32 symbol_ID )
+void get_symbols_from_module_table( FileContents symbol_table, Array<String> symbols )
 {
 	struct Token
 	{
@@ -26,11 +26,8 @@ String get_symbol_from_module_table( FileContents symbol_table, u32 symbol_ID )
 		u32         Len;
 	};
 
-	Token tokens[256] = {};
-
 	char const* scanner = rcast( char const*, symbol_table.data );
 	u32 left = symbol_table.size;
-	u32 line = 0;
 	while ( left )
 	{
 		if ( *scanner == '\n' || *scanner == '\r' )
@@ -40,23 +37,17 @@ String get_symbol_from_module_table( FileContents symbol_table, u32 symbol_ID )
 		}
 		else
 		{
-			tokens[line].Ptr = scanner;
+			Token token {};
+			token.Ptr = scanner;
 			while ( left && *scanner != '\r' && *scanner != '\n' )
 			{
 				-- left;
 				++ scanner;
-				++ tokens[line].Len;
+				++ token.Len;
 			}
-
-			if ( line == symbol_ID )
-			{
-				String result = String::make_length( GlobalAllocator, tokens[line].Ptr, tokens[line].Len );
-				return result;
-			}
-			++ line;
+			symbols.append( String::make_length( GlobalAllocator, token.Ptr, token.Len ) );
 		}
 	}
-	return {};
 }
 
 int gen_main()
@@ -74,25 +65,24 @@ int gen_main()
 	builder.print( fmt_newline );
 	builder.print_fmt( "NS_ENGINE_BEGIN\n\n" );
 
-	StrC symbol_on_module_load    = get_symbol_from_module_table( symbol_table, engine::ModuleAPI::Sym_OnModuleReload );
-	StrC symbol_startup           = get_symbol_from_module_table( symbol_table, engine::ModuleAPI::Sym_Startup );
-	StrC symbol_shutdown          = get_symbol_from_module_table( symbol_table, engine::ModuleAPI::Sym_Shutdown );
-	StrC symbol_update_and_render = get_symbol_from_module_table( symbol_table, engine::ModuleAPI::Sym_UpdateAndRender );
-	StrC symbol_update_audio      = get_symbol_from_module_table( symbol_table, engine::ModuleAPI::Sym_UpdateAudio );
+	Array<String> symbols = Array<String>::init_reserve( GlobalAllocator, kilobytes(1) );
+	get_symbols_from_module_table( symbol_table, symbols );
 
-	builder.print( parse_variable( token_fmt( "symbol", symbol_on_module_load, stringize(
+	using ModuleAPI = engine::ModuleAPI;
+
+	builder.print( parse_variable( token_fmt( "symbol", (StrC)symbols[ModuleAPI::Sym_OnModuleReload], stringize(
 		constexpr const Str symbol_on_module_load = str_ascii("<symbol>");
 	))));
-	builder.print( parse_variable( token_fmt( "symbol", symbol_startup, stringize(
+	builder.print( parse_variable( token_fmt( "symbol", (StrC)symbols[ModuleAPI::Sym_Startup], stringize(
 		constexpr const Str symbol_startup = str_ascii("<symbol>");
 	))));
-	builder.print( parse_variable( token_fmt( "symbol", symbol_shutdown, stringize(
+	builder.print( parse_variable( token_fmt( "symbol", (StrC)symbols[ModuleAPI::Sym_Shutdown], stringize(
 		constexpr const Str symbol_shutdown = str_ascii("<symbol>");
 	))));
-	builder.print( parse_variable( token_fmt( "symbol", symbol_update_and_render, stringize(
+	builder.print( parse_variable( token_fmt( "symbol", (StrC)symbols[ModuleAPI::Sym_UpdateAndRender], stringize(
 		constexpr const Str symbol_update_and_render = str_ascii("<symbol>");
 	))));
-	builder.print( parse_variable( token_fmt( "symbol", symbol_update_audio, stringize(
+	builder.print( parse_variable( token_fmt( "symbol", (StrC)symbols[ModuleAPI::Sym_UpdateAudio], stringize(
 		constexpr const Str symbol_update_audio = str_ascii("<symbol>");
 	))));
 

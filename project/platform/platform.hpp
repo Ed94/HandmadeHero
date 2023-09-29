@@ -80,8 +80,9 @@ using FileRewindFn       = void ( File* file );
 
 struct ModuleAPI
 {
-	Str PathRoot;
-	Str PathBinaries;
+	Str path_root;
+	Str path_binaries;
+	Str path_scratch;
 
 #if Build_Development
 	DebugSetPauseRenderingFn* debug_set_pause_rendering;

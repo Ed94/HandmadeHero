@@ -201,8 +201,7 @@ if ( $vendor -match "clang" )
 		$map    = join-path $path_build (split-path $map    -Leaf)
 
 		# The PDB file has to also be time-stamped so that we can reload the DLL at runtime
-		$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-		$pdb       = $binary -replace '\.(exe|dll)$', "_$timestamp.pdb"
+		$pdb    = $binary -replace '\.(exe|dll)$', "_$(get-random).pdb"
 
 		$compiler_args += @(
 			$flag_no_color_diagnostics,
@@ -322,8 +321,7 @@ if ( $vendor -match "msvc" )
 		$map    = join-path $path_build (split-path $map    -Leaf)
 
 		# The PDB file has to also be time-stamped so that we can reload the DLL at runtime
-		$timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-		$pdb       = $binary -replace '\.(exe|dll)$', "_$timestamp.pdb"
+		$pdb    = $binary -replace '\.(exe|dll)$', "_$(get-random).pdb"
 
 		$compiler_args += @(
 			$flag_nologo,

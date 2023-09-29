@@ -150,12 +150,13 @@ render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
 			u8 green = scast(u8, y + y_offset - u8(wildcard) % 128);
 			u8 red   = scast(u8, wildcard) % 256 - x * 0.4f;
 		#else
-			u8 blue  = scast(u8, x + x_offset);
-			u8 green = scast(u8, y + y_offset);
-			u8 red   = 0;
+			u8 red   = scast(u8, y + x_offset);
+			u8 green = scast(u8, x + y_offset);
+			u8 blue  = scast(u8, x + y - x_offset - y_offset);
+			//    blue *= 2;
 		#endif
 
-			*pixel++ = u32(red << 16) | u32(green/2 << 16) | blue/2 << 0;
+			*pixel++ = u32(red/2 << 16) | u32(green/6 << 8) | blue/2 << 0;
 		}
 		wildcard += 0.5375f;
 		row += buffer->Pitch;
@@ -197,7 +198,11 @@ render_player( OffscreenBuffer* buffer, s32 pos_x, s32 pos_y )
 internal
 void begin_recording_input( EngineState* state, InputState* input, platform::ModuleAPI* platform_api )
 {
-	state->ActiveInputRecordingFile.Path = str_ascii("test_input.hmi");
+	Str file_name = str_ascii("test_input.hmi");
+	StrPath file_path = {};
+	file_path.concat( platform_api->path_scratch, file_name );
+
+	state->ActiveInputRecordingFile.Path = file_path;
 	state->InputRecordingIndex = 1;
 
 	// TODO(Ed) : If game persist memory is larger than 4 gb, this will need to be done in chunks...
@@ -215,9 +220,11 @@ internal
 void begin_playback_input( EngineState* state, InputState* input, platform::ModuleAPI* platform_api )
 {
 	Str file_name = str_ascii("test_input.hmi");
-	if ( platform_api->file_check_exists( file_name ) )
+	StrPath file_path = {};
+	file_path.concat( platform_api->path_scratch, file_name );
+	if ( platform_api->file_check_exists( file_path ) )
 	{
-		state->ActivePlaybackFile.Path = str_ascii("test_input.hmi");
+		state->ActivePlaybackFile.Path = file_path;
 		state->InputPlayingIndex = 1;
 	}
 
@@ -254,7 +261,7 @@ InputStateSnapshot input_state_snapshot( InputState* input )
 
 		if ( controller->Keyboard )
 		{
-			snapshot.Controllers[idx].Keyboard       = *controller->Keyboard;
+			snapshot.Controllers[idx].Keyboard = *controller->Keyboard;
 		}
 
 		if ( controller->Mouse )

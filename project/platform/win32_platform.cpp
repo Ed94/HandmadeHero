@@ -97,8 +97,9 @@ struct DirectSoundBuffer
 };
 
 #pragma region Static Data
-global StrFixed< S16_MAX > Path_Root;
-global StrFixed< S16_MAX > Path_Binaries;
+global StrPath Path_Root;
+global StrPath Path_Binaries;
+global StrPath Path_Scratch;
 
 // TODO(Ed) : This is a global for now.
 global b32 Running         = false;
@@ -130,14 +131,19 @@ global f32 Engine_Frame_Target_MS = 1000.f / scast(f32, Engine_Refresh_Hz);
 internal
 FILETIME file_get_last_write_time( char const* path )
 {
+	WIN32_FILE_ATTRIBUTE_DATA engine_dll_file_attributes = {};
+	GetFileAttributesExA( path, GetFileExInfoStandard, & engine_dll_file_attributes );
+
+	return engine_dll_file_attributes.ftLastWriteTime;
+#if 0
 	WIN32_FIND_DATAA dll_file_info = {};
 	HANDLE dll_file_handle = FindFirstFileA( path, & dll_file_info );
 	if ( dll_file_handle == INVALID_HANDLE_VALUE )
 	{
 		FindClose( dll_file_handle );
 	}
-
 	return dll_file_info.ftLastWriteTime;
+#endif
 }
 
 struct AudioTimeMarker
@@ -503,6 +509,9 @@ poll_input( engine::InputState* input, u32 jsl_num_devices, JSL_DeviceHandle* js
 	// Keyboard Polling
 	// Keyboards are unified for now.
 	{
+		// TODO(Ed): this needs to be moved out of heere when frames are detached from polling input.
+		input->Controllers[0].Keyboard = {};
+
 		constexpr u32 is_down = 0x80000000;
 		input_process_digital_btn( & old_keyboard->Q,         & new_keyboard->Q,         GetAsyncKeyState( 'Q' ),       is_down );
 		input_process_digital_btn( & old_keyboard->E,         & new_keyboard->E,         GetAsyncKeyState( 'E' ),       is_down );
@@ -685,7 +694,8 @@ display_buffer_in_window( HDC device_context, u32 window_width, u32 window_heigh
 		, x, y, width, height
 		, x, y, width, height
 	#endif
-		, 0, 0, window_width, window_height
+		, 0, 0, buffer->Width, buffer->Height
+		// , 0, 0, window_width, window_height
 		, 0, 0, buffer->Width, buffer->Height
 		, buffer->Memory, & buffer->Info
 		, DIB_ColorTable_RGB, RO_Source_To_Dest );
@@ -1147,13 +1157,11 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	// Memory
 	engine::Memory engine_memory {};
 	{
-		engine_memory.PersistentSize = megabytes( 128 );
-		// engine_memory.FrameSize	     = megabytes( 64 );
-		engine_memory.TransientSize  = gigabytes( 2 );
+		u64 total_size = gigabytes( 4 );
 
-		u64 total_size = engine_memory.PersistentSize
-			// + engine_memory.FrameSize
-			+ engine_memory.TransientSize;
+		engine_memory.PersistentSize = total_size - megabytes( 128 );
+		// engine_memory.FrameSize	     = megabytes( 64 );
+		engine_memory.TransientSize  = total_size - engine_memory.PersistentSize;
 
 	#if Build_Debug
 		void* base_address = rcast(void*, terabytes( 1 ));
@@ -1177,7 +1185,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	{
 		window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
 		window_class.lpfnWndProc = main_window_callback;
-		// window_class.cbClsExtra  = ;
+		// window_class.cbClsExtra  = ;about:blank#blocked
 		// window_class.cbWndExtra  = ;
 		window_class.hInstance   = instance;
 		// window_class.hIcon = ;
@@ -1193,13 +1201,13 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 
 		window_handle = CreateWindowExW(
-			// WS_EX_LAYERED | WS_EX_TOPMOST,
-			WS_EX_LAYERED,
+			WS_EX_LAYERED | WS_EX_TOPMOST,
+			// WS_EX_LAYERED,
 			window_class.lpszClassName,
 			L"Handmade Hero",
 			WS_Overlapped_Window | WS_Initially_Visible,
 			CW_Use_Default, CW_Use_Default, // x, y
-			1100, 700, // width, height
+			CW_Use_Default, CW_Use_Default, // width, height
 			0, 0,                         // parent, menu
 			instance, 0                   // instance, param
 		);
@@ -1212,7 +1220,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 	}
 	// WinDimensions dimensions = get_window_dimensions( window_handle );
-	resize_dib_section( &Surface_Back_Buffer, 1280, 720 );
+	resize_dib_section( &Surface_Back_Buffer, 1920, 1080 );
 
 	// Setup pathing
 	StrFixed< S16_MAX > path_pdb_lock {};
@@ -1247,11 +1255,21 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		Path_Engine_DLL_InUse.concat( Path_Binaries, FName_Engine_DLL_InUse );
 
 		path_pdb_lock.concat( Path_Binaries, FName_Engine_PDB_Lock );
+
+		Path_Scratch.concat( Path_Root, str_ascii("scratch") );
+		Path_Scratch.Data[ Path_Scratch.Len ] = '\\';
+		++ Path_Scratch.Len;
+
+		CreateDirectoryA( Path_Scratch, 0 );
 	}
 
 	// Prepare platform API
 	ModuleAPI platform_api {};
 	{
+		platform_api.path_root     = Path_Root;
+		platform_api.path_binaries = Path_Binaries;
+		platform_api.path_scratch  = Path_Scratch;
+
 	#if Build_Development
 		platform_api.debug_set_pause_rendering = & debug_set_pause_rendering;
 	#endif
