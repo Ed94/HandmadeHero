@@ -29,6 +29,11 @@ struct EngineActions
 
 #if Build_Development
 	b32 pause_renderer;
+
+	b32 set_snapshot_slot_1;
+	b32 set_snapshot_slot_2;
+	b32 set_snapshot_slot_3;
+	b32 set_snapshot_slot_4;
 #endif
 };
 
@@ -181,17 +186,20 @@ render_player( OffscreenBuffer* buffer, s32 pos_x, s32 pos_y )
 	}
 }
 
-using SnapshotFn = void ( s32 slot, Memory* memory, platform::ModuleAPI* platform_api );
+#if Build_Development
+using SnapshotFn = void ( Memory* memory, platform::ModuleAPI* platform_api );
 
 internal
-void load_engine_snapshot( s32 slot, Memory* memory, platform::ModuleAPI* platform_api )
+void load_engine_snapshot( Memory* memory, platform::ModuleAPI* platform_api )
 {
-	platform_api->memory_copy( memory->persistent, memory->total_size(), memory->snapshots[ slot ].memory );
+	platform_api->memory_copy( memory->persistent, memory->total_size()
+		, memory->snapshots[ memory->active_snapshot_slot ].memory );
 }
 
 internal
-void load_game_snapshot( s32 slot, Memory* memory, platform::ModuleAPI* platform_api )
+void load_game_snapshot( Memory* memory, platform::ModuleAPI* platform_api )
 {
+	s32          slot  = memory->active_snapshot_slot;
 	EngineState* state = rcast( EngineState*, memory->persistent );
 
 	void* persistent_slot = memory->snapshots[ slot ].memory;
@@ -202,14 +210,15 @@ void load_game_snapshot( s32 slot, Memory* memory, platform::ModuleAPI* platform
 }
 
 internal
-void take_engine_snapshot( s32 slot, Memory* memory, platform::ModuleAPI* platform_api )
+void take_engine_snapshot( Memory* memory, platform::ModuleAPI* platform_api )
 {
-	platform_api->memory_copy( memory->snapshots[ slot ].memory, memory->total_size(), memory->persistent );
+	platform_api->memory_copy( memory->snapshots[ memory->active_snapshot_slot ].memory, memory->total_size(), memory->persistent );
 }
 
 internal
-void take_game_snapshot( s32 slot, Memory* memory, platform::ModuleAPI* platform_api )
+void take_game_snapshot( Memory* memory, platform::ModuleAPI* platform_api )
 {
+	s32          slot  = memory->active_snapshot_slot;
 	EngineState* state = rcast( EngineState*, memory->persistent );
 
 	void* persistent_slot = memory->snapshots[ slot ].memory;
@@ -219,64 +228,54 @@ void take_game_snapshot( s32 slot, Memory* memory, platform::ModuleAPI* platform
 	platform_api->memory_copy( transient_slot,  state->game_memory.transient_size,  state->game_memory.transient );
 }
 
-#define Snapshot_New_Way 1
 internal
 void begin_recording_input( Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
 {
-	Str file_name = str_ascii("test_input.hmi");
+	Str file_name = str_ascii("test_input_");
 	StrPath file_path = {};
 	file_path.concat( platform_api->path_scratch, file_name );
+	snprintf( file_path.ptr, file_path.len, "%s%d.hm_replay", file_name.ptr, memory->active_snapshot_slot );
 
-	memory->active_recording_file.path = file_path;
-	memory->input_recording_index      = 1;
-
-#if Snapshot_New_Way
-	platform_api->file_delete( memory->active_recording_file.path );
-#else
-	platform_api->file_write_content( & state->ActiveInputRecordingFile, scast(u32, state->game_memory.PersistentSize), state->game_memory.Persistent );
-#endif
+	platform_api->file_delete( memory->active_input_replay_file.path );
+	memory->active_input_replay_file.path = file_path;
+	memory->replay_mode                   = ReplayMode_Record;
 }
 
 internal
 void end_recording_input( Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
 {
-	memory->input_recording_index = 0;
-	platform_api->file_close( & memory->active_recording_file );
+	memory->replay_mode = ReplayMode_Off;
+	platform_api->file_close( & memory->active_input_replay_file );
 }
 
 internal
 void begin_playback_input( Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
 {
-	Str file_name = str_ascii("test_input.hmi");
+	Str     file_name = str_ascii("test_input_");
 	StrPath file_path = {};
 	file_path.concat( platform_api->path_scratch, file_name );
+	snprintf( file_path.ptr, file_path.len, "%s%d.hm_replay", file_name.ptr, memory->active_snapshot_slot );
+
+	// TODO(Ed - From Casey): Recording system still seems to take too long
+	// on record start - find out what Windows is doing and if
+	// we can speed up / defer some of that processing.
+
 	if ( platform_api->file_check_exists( file_path ) )
 	{
-		memory->active_playback_file.path = file_path;
-		memory->input_playback_index	  = 1;
+		memory->active_input_replay_file.path = file_path;
+		memory->replay_mode = ReplayMode_Playback;
 	}
-
-#if Snapshot_New_Way
-#else
-	if ( state->ActiveInputRecordingFile.OpaqueHandle == nullptr )
+	else
 	{
-		platform_api->file_read_stream( & state->ActivePlaybackFile, scast(u32, state->game_memory.PersistentSize), state->game_memory.Persistent );
+		// TODO(Ed) : Logging
 	}
-#endif
 }
 
 internal
 void end_playback_input( Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
 {
-	memory->input_playback_index = 0;
-
-#if Snapshot_New_Way
-#else
-	platform_api->file_rewind( & state->ActivePlaybackFile );
-	platform_api->file_read_stream( & state->ActivePlaybackFile, scast(u32, state->game_memory.PersistentSize), state->game_memory.Persistent );
-#endif
-
-	platform_api->file_close( & memory->active_playback_file );
+	memory->replay_mode = ReplayMode_Off;
+	platform_api->file_close( & memory->active_input_replay_file );
 }
 
 InputStateSnapshot input_state_snapshot( InputState* input )
@@ -309,7 +308,7 @@ internal
 void record_input( Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
 {
 	InputStateSnapshot snapshot = input_state_snapshot( input );
-	if ( platform_api->file_write_stream( & memory->active_recording_file, sizeof(snapshot), &snapshot ) == 0 )
+	if ( platform_api->file_write_stream( & memory->active_input_replay_file, sizeof(snapshot), &snapshot ) == 0 )
 	{
 		// TODO(Ed) : Logging
 	}
@@ -319,11 +318,10 @@ internal
 void play_input( SnapshotFn* load_snapshot, Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
 {
 	InputStateSnapshot new_input;
-	if ( platform_api->file_read_stream( & memory->active_playback_file, sizeof(InputStateSnapshot), & new_input ) == 0 )
+	if ( platform_api->file_read_stream( & memory->active_input_replay_file, sizeof(InputStateSnapshot), & new_input ) == 0 )
 	{
-		end_playback_input( memory, input, platform_api );
-		load_snapshot( memory->active_snapshot_slot, memory, platform_api );
-		begin_playback_input( memory, input, platform_api );
+		load_snapshot( memory, platform_api );
+		platform_api->file_rewind( & memory->active_input_replay_file );
 		return;
 	}
 
@@ -352,24 +350,25 @@ void play_input( SnapshotFn* load_snapshot, Memory* memory, InputState* input, p
 void process_loop_mode( SnapshotFn* take_snapshot, SnapshotFn* load_snapshot
 	, Memory* memory, EngineState* state, InputState* input, platform::ModuleAPI* platform_api )
 {
-	if ( memory->input_recording_index == 0 && memory->input_playback_index == 0 )
+	if ( memory->replay_mode == ReplayMode_Off )
 	{
-		take_snapshot( 0, memory, platform_api );
-		memory->active_snapshot_slot = 0;
+		take_snapshot( memory, platform_api );
 		begin_recording_input( memory, input, platform_api );
 	}
-	else if ( memory->input_playback_index )
+	else if ( memory->replay_mode == ReplayMode_Playback )
 	{
 		end_playback_input( memory, input, platform_api );
-		load_snapshot( memory->active_snapshot_slot, memory, platform_api );
+		load_snapshot( memory, platform_api );
 	}
-	else if ( memory->input_recording_index )
+	else if ( memory->replay_mode == ReplayMode_Record )
 	{
 		end_recording_input( memory, input, platform_api );
-		load_snapshot( memory->active_snapshot_slot, memory, platform_api );
+		load_snapshot( memory, platform_api );
 		begin_playback_input( memory, input, platform_api );
 	}
 }
+// Build_Development
+#endif
 
 internal
 void input_poll_engine_actions( InputState* input, EngineActions* actions )
@@ -390,6 +389,11 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 
 #if Build_Development
 	actions->pause_renderer |= pressed( keyboard->pause );
+
+	actions->set_snapshot_slot_1 |= pressed( keyboard->_1 ) && keyboard->right_alt.ended_down;
+	actions->set_snapshot_slot_2 |= pressed( keyboard->_2 ) && keyboard->right_alt.ended_down;
+	actions->set_snapshot_slot_3 |= pressed( keyboard->_3 ) && keyboard->right_alt.ended_down;
+	actions->set_snapshot_slot_4 |= pressed( keyboard->_4 ) && keyboard->right_alt.ended_down;
 #endif
 
 	actions->toggle_wave_tone |= pressed( keyboard->Q );
@@ -404,6 +408,7 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 
 	actions->move_up    = (mouse->vertical_wheel.end > 0.f) * 10;
 	actions->move_down  = (mouse->vertical_wheel.end < 0.f) * 10;
+
 }
 
 internal
@@ -454,13 +459,13 @@ void on_module_reload( Memory* memory, platform::ModuleAPI* platfom_api )
 Engine_API
 void startup( Memory* memory, platform::ModuleAPI* platform_api )
 {
-	memory->active_snapshot_slot  = -1;
-	memory->input_recording_index = 0;
-	memory->input_playback_index  = 0;
-	memory->active_recording_file = {};
-	memory->active_playback_file  = {};
-	memory->engine_loop_active    = false;
-	memory->game_loop_active      = false;
+#if Build_Development
+	memory->active_snapshot_slot     = 1;
+	memory->replay_mode		         = ReplayMode_Off;
+	memory->active_input_replay_file = {};
+	memory->engine_loop_active       = false;
+	memory->game_loop_active         = false;
+#endif
 
 	for ( s32 slot = 0; slot < memory->Num_Snapshot_Slots; ++ slot )
 	{
@@ -513,27 +518,29 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 
 	input_poll_engine_actions( input, & engine_actions );
 
+#if Build_Development
 	// Ease of use: Allow user to press L key without shift if engine loop recording is active.
 	engine_actions.loop_mode_engine |= engine_actions.loop_mode_game && memory->engine_loop_active;
 
 	if ( engine_actions.loop_mode_engine && ! memory->game_loop_active )
 	{
 		process_loop_mode( & take_engine_snapshot, & load_engine_snapshot, memory, state, input, platform_api );
-		memory->engine_loop_active = memory->input_playback_index || memory->input_recording_index;
+		memory->engine_loop_active = memory->replay_mode > ReplayMode_Off;
 	}
 
 	// Input recording and playback for engine state
 	if ( memory->engine_loop_active )
 	{
-		if ( memory->input_recording_index )
+		if ( memory->replay_mode == ReplayMode_Record )
 		{
 			record_input( memory, input, platform_api );
 		}
-		if ( memory->input_playback_index )
+		if ( memory->replay_mode == ReplayMode_Playback )
 		{
 			play_input( & load_engine_snapshot, memory, input, platform_api );
 		}
 	}
+#endif
 
 	// Process Engine Actions
 	{
@@ -572,7 +579,7 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 		if ( engine_actions.loop_mode_game && ! memory->engine_loop_active )
 		{
 			process_loop_mode( & take_game_snapshot, & load_game_snapshot, memory, state, input, platform_api );
-			memory->game_loop_active = memory->input_playback_index || memory->input_recording_index;
+			memory->game_loop_active = memory->replay_mode > ReplayMode_Off;
 		}
 
 	#if Build_Development
@@ -589,21 +596,31 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 				state->renderer_paused = true;
 			}
 		}
+
+		if ( ! memory->game_loop_active )
+		{
+			if ( engine_actions.set_snapshot_slot_1 ) memory->active_snapshot_slot = 0;
+			if ( engine_actions.set_snapshot_slot_2 ) memory->active_snapshot_slot = 1;
+			if ( engine_actions.set_snapshot_slot_3 ) memory->active_snapshot_slot = 2;
+			if ( engine_actions.set_snapshot_slot_4 ) memory->active_snapshot_slot = 3;
+		}
 	#endif
 	}
 
+#if Build_Development
 	if ( ! memory->engine_loop_active )
 	{
 		// Input recording and playback for game state
-		if ( memory->input_recording_index )
+		if ( memory->replay_mode == ReplayMode_Record )
 		{
 			record_input( memory, input, platform_api );
 		}
-		if ( memory->input_playback_index )
+		if ( memory->replay_mode == ReplayMode_Playback )
 		{
 			play_input( & load_game_snapshot, memory, input, platform_api );
 		}
 	}
+#endif
 
 	hh::PlayerState* player = rcast( hh::PlayerState*, state->game_memory.persistent );
 	assert( sizeof(hh::PlayerState) <= state->game_memory.persistent_size );
@@ -622,21 +639,23 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 		else
 		{
 			player->jump_time = 0.f;
-			player->mid_jump = false;
+			player->mid_jump  = false;
 		}
 
 		if ( ! player->mid_jump && player_actions.jump )
 		{
 			player->jump_time = 1.f;
-			player->mid_jump = true;
+			player->mid_jump  = true;
 		}
 	}
 
 	render_weird_graident( back_buffer, state->x_offset, state->y_offset );
 	render_player( back_buffer, player->pos_x, player->pos_y );
 
-	if ( memory->input_recording_index )
+#if Build_Development
+	if ( memory->replay_mode == ReplayMode_Record )
 		render_player( back_buffer, player->pos_x + 20, player->pos_y - 20 );
+#endif
 
 	render_player( back_buffer, (s32)input->controllers[0].mouse->X.end, (s32)input->controllers[0].mouse->Y.end );
 

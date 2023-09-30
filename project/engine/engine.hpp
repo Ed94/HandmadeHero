@@ -11,6 +11,13 @@
 
 NS_ENGINE_BEGIN
 
+enum ReplayMode : s32
+{
+	ReplayMode_Off,
+	ReplayMode_Record,
+	ReplayMode_Playback
+};
+
 struct Clocks
 {
 	// TODO(Ed) : Clock values...
@@ -24,8 +31,10 @@ struct ThreadContext
 
 struct MemorySnapshot
 {
-	Str   file_path;
-	void* memory;
+	StrPath file_path;
+	void*   opaque_handle;
+	void*   opaque_handle_2;
+	void*   memory;
 };
 
 struct Memory
@@ -45,23 +54,22 @@ struct Memory
 	u64   transient_size;
 
 	// TODO(Ed) : Move this crap to state & replay archive definitions?
+	#if Build_Development
 		static constexpr
-		s32 Num_Snapshot_Slots = 4;
+		s32 Num_Snapshot_Slots = 2;
 		// Abuse RAM to store snapshots of the Engine or Game state.
 		MemorySnapshot snapshots[ Num_Snapshot_Slots ];
 		s32 active_snapshot_slot;
 
 		// Recording and playback info is the same for either engine or game.
 
-		s32 input_recording_index;
-		s32 input_playback_index;
-
-		platform::File active_recording_file;
-		platform::File active_playback_file;
+		ReplayMode replay_mode;
+		platform::File active_input_replay_file;
 
 		// Engine-wide recording & playback loop.
 		s32 engine_loop_active;
 		s32 game_loop_active;
+	#endif
 
 	u64 total_size()
 	{
@@ -114,7 +122,11 @@ union KeyboardState
 {
 	DigitalBtn keys[12];
 	struct {
-		DigitalBtn row_1;
+		DigitalBtn _1;
+		DigitalBtn _2;
+		DigitalBtn _3;
+		DigitalBtn _4;
+
 		DigitalBtn Q;
 		DigitalBtn E;
 		DigitalBtn W;
@@ -131,6 +143,8 @@ union KeyboardState
 		DigitalBtn right;
 		DigitalBtn space;
 		DigitalBtn pause;
+		DigitalBtn left_alt;
+		DigitalBtn right_alt;
 		DigitalBtn right_shift;
 		DigitalBtn left_shift;
 	};

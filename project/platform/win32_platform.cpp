@@ -504,6 +504,10 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 	// Keyboards are unified for now.
 	{
 		constexpr u32 is_down = 0x80000000;
+		input_process_digital_btn( & old_keyboard->_1, 	        & new_keyboard->_1,          GetAsyncKeyState( '1' ),       is_down );
+		input_process_digital_btn( & old_keyboard->_2, 	        & new_keyboard->_2,          GetAsyncKeyState( '2' ),       is_down );
+		input_process_digital_btn( & old_keyboard->_3, 	        & new_keyboard->_3,          GetAsyncKeyState( '3' ),       is_down );
+		input_process_digital_btn( & old_keyboard->_4, 	        & new_keyboard->_4,          GetAsyncKeyState( '4' ),       is_down );
 		input_process_digital_btn( & old_keyboard->Q,           & new_keyboard->Q,           GetAsyncKeyState( 'Q' ),       is_down );
 		input_process_digital_btn( & old_keyboard->E,           & new_keyboard->E,           GetAsyncKeyState( 'E' ),       is_down );
 		input_process_digital_btn( & old_keyboard->W,           & new_keyboard->W,           GetAsyncKeyState( 'W' ),       is_down );
@@ -520,8 +524,10 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 		input_process_digital_btn( & old_keyboard->right,       & new_keyboard->right,       GetAsyncKeyState( VK_RIGHT ),  is_down );
 		input_process_digital_btn( & old_keyboard->space,       & new_keyboard->space,       GetAsyncKeyState( VK_SPACE ),  is_down );
 		input_process_digital_btn( & old_keyboard->pause,       & new_keyboard->pause,       GetAsyncKeyState( VK_PAUSE ),  is_down );
-		input_process_digital_btn( & old_keyboard->right_shift, & new_keyboard->right_shift, GetAsyncKeyState( VK_RSHIFT ), is_down );
+		input_process_digital_btn( & old_keyboard->left_alt,    & new_keyboard->left_alt,    GetAsyncKeyState( VK_LMENU ),  is_down );
+		input_process_digital_btn( & old_keyboard->right_alt,   & new_keyboard->right_alt,   GetAsyncKeyState( VK_RMENU ),  is_down );
 		input_process_digital_btn( & old_keyboard->left_shift,  & new_keyboard->left_shift,  GetAsyncKeyState( VK_LSHIFT ), is_down );
+		input_process_digital_btn( & old_keyboard->right_shift, & new_keyboard->right_shift, GetAsyncKeyState( VK_RSHIFT ), is_down );
 
 		input->controllers[0].keyboard = new_keyboard;
 	}
@@ -1209,105 +1215,6 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 
 	QueryPerformanceFrequency( rcast(LARGE_INTEGER*, & Performance_Counter_Frequency) );
 
-	// Memory
-	engine::Memory engine_memory {};
-	{
-		engine_memory.persistent_size = megabytes( 128 );
-		// engine_memory.FrameSize	     = megabytes( 64 );
-		engine_memory.transient_size  = gigabytes( 2 );
-
-		u64 total_size = engine_memory.persistent_size
-			// + engine_memory.FrameSize
-			+ engine_memory.transient_size;
-
-	#if Build_Debug
-		void* base_address = rcast(void*, terabytes( 1 ));
-	#else
-		void* base_address = 0;
-	#endif
-
-		engine_memory.persistent = VirtualAlloc( base_address, total_size , MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
-		engine_memory.transient  = rcast( u8*, engine_memory.persistent ) + engine_memory.persistent_size;
-
-		Byte* snapshot_address = rcast(Byte*, NULL) + terabytes(2);
-		void* snapshots_memory = VirtualAlloc( snapshot_address, total_size * engine_memory.Num_Snapshot_Slots, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
-		if ( snapshots_memory == nullptr )
-		{
-			// TODO : Diagnostic Logging
-			return -1;
-		}
-
-		for (u32 slot = 0; slot < engine_memory.Num_Snapshot_Slots; ++slot)
-		{
-			engine::MemorySnapshot& snapshot = engine_memory.snapshots[ slot ];
-
-			Byte* address = rcast(Byte*, snapshots_memory) + total_size * slot;
-			snapshot.memory = address;
-		}
-
-		if (	engine_memory.persistent == nullptr
-			||	engine_memory.transient  == nullptr )
-		{
-			// TODO : Diagnostic Logging
-			return -1;
-		}
-	}
-
-	WNDCLASSW window_class {};
-	HWND window_handle = nullptr;
-	{
-		window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
-		window_class.lpfnWndProc = main_window_callback;
-		// window_class.cbClsExtra  = ;
-		// window_class.cbWndExtra  = ;
-		window_class.hInstance   = instance;
-		// window_class.hIcon = ;
-		// window_class.hCursor = ;
-		// window_class.hbrBackground = ;
-		window_class.lpszMenuName  = L"Handmade Hero!";
-		window_class.lpszClassName = L"HandmadeHeroWindowClass";
-
-		if ( ! RegisterClassW( & window_class ) )
-		{
-			// TODO : Diagnostic Logging
-			return 0;
-		}
-
-		window_handle = CreateWindowExW(
-			// WS_EX_LAYERED | WS_EX_TOPMOST,
-			WS_EX_LAYERED,
-			window_class.lpszClassName,
-			L"Handmade Hero",
-			WS_Overlapped_Window | WS_Initially_Visible,
-			CW_Use_Default, CW_Use_Default, // x, y
-			CW_Use_Default, CW_Use_Default, // width, height
-			0, 0,                         // parent, menu
-			instance, 0                   // instance, param
-		);
-
-
-		if ( ! window_handle )
-		{
-			// TODO : Diagnostic Logging
-			return 0;
-		}
-
-		// WinDimensions dimensions = get_window_dimensions( window_handle );
-		resize_dib_section( &Surface_Back_Buffer, 1920, 1080 );
-
-		// Setup monitor refresh and associated timers
-		HDC refresh_dc = GetDC( window_handle );
-		u32 monitor_refresh_hz = GetDeviceCaps( refresh_dc, VREFRESH );
-		if ( monitor_refresh_hz > 1 )
-		{
-			Monitor_Refresh_Hz = monitor_refresh_hz;
-		}
-		ReleaseDC( window_handle, refresh_dc );
-
-		Engine_Refresh_Hz      = 60;
-		Engine_Frame_Target_MS = 1000.f / scast(f32, Engine_Refresh_Hz);
-	}
-
 	// Setup pathing
 	StrFixed< S16_MAX > path_pdb_lock {};
 	{
@@ -1347,6 +1254,115 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		++ Path_Scratch.len;
 
 		CreateDirectoryA( Path_Scratch, 0 );
+	}
+
+	// Memory
+	engine::Memory engine_memory {};
+	{
+		engine_memory.persistent_size = megabytes( 128 );
+		// engine_memory.FrameSize	     = megabytes( 64 );
+		engine_memory.transient_size  = gigabytes( 2 );
+
+		u64 total_size = engine_memory.persistent_size
+			// + engine_memory.FrameSize
+			+ engine_memory.transient_size;
+
+	#if Build_Debug
+		void* base_address = rcast(void*, terabytes( 1 ));
+	#else
+		void* base_address = 0;
+	#endif
+
+		engine_memory.persistent = VirtualAlloc( base_address, total_size , MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+		engine_memory.transient  = rcast( u8*, engine_memory.persistent ) + engine_memory.persistent_size;
+
+	#if Build_Development
+		for (u32 slot = 0; slot < engine_memory.Num_Snapshot_Slots; ++slot)
+		{
+			engine::MemorySnapshot& snapshot = engine_memory.snapshots[ slot ];
+
+			snapshot.file_path.concat( Path_Scratch, str_ascii("snapshot_") );
+			wsprintfA( snapshot.file_path.ptr, "%s%d.hm_snapshot", snapshot.file_path.ptr, slot );
+
+			HANDLE snapshot_file = CreateFileA( snapshot.file_path
+				, GENERIC_READ | GENERIC_WRITE, 0, 0
+				, CREATE_ALWAYS, 0, 0 );
+
+			LARGE_INTEGER file_size {};
+			file_size.QuadPart = total_size;
+
+			HANDLE snapshot_mapping = CreateFileMappingA( snapshot_file, 0
+				, Page_Read_Write
+				, file_size.HighPart, file_size.LowPart
+				, 0 );
+
+			snapshot.memory = MapViewOfFile( snapshot_mapping, FILE_MAP_ALL_ACCESS, 0, 0, total_size );
+			snapshot.opaque_handle   = snapshot_file;
+			snapshot.opaque_handle_2 = snapshot_mapping;
+		}
+	#endif
+
+		if (	engine_memory.persistent == nullptr
+			||	engine_memory.transient  == nullptr )
+		{
+			// TODO : Diagnostic Logging
+			return -1;
+		}
+	}
+
+	WNDCLASSW window_class {};
+	HWND window_handle = nullptr;
+	{
+		window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
+		window_class.lpfnWndProc = main_window_callback;
+		// window_class.cbClsExtra  = ;
+		// window_class.cbWndExtra  = ;
+		window_class.hInstance   = instance;
+		// window_class.hIcon = ;
+		// window_class.hCursor = ;
+		// window_class.hbrBackground = ;
+		window_class.lpszMenuName  = L"Handmade Hero!";
+		window_class.lpszClassName = L"HandmadeHeroWindowClass";
+
+		if ( ! RegisterClassW( & window_class ) )
+		{
+			// TODO : Diagnostic Logging
+			return 0;
+		}
+
+		window_handle = CreateWindowExW(
+			WS_EX_LAYERED | WS_EX_TOPMOST,
+			// WS_EX_LAYERED,
+			window_class.lpszClassName,
+			L"Handmade Hero",
+			WS_Overlapped_Window | WS_Initially_Visible,
+			CW_Use_Default, CW_Use_Default, // x, y
+			CW_Use_Default, CW_Use_Default, // width, height
+			0, 0,                         // parent, menu
+			instance, 0                   // instance, param
+		);
+
+
+		if ( ! window_handle )
+		{
+			// TODO : Diagnostic Logging
+			return 0;
+		}
+
+		// WinDimensions dimensions = get_window_dimensions( window_handle );
+		resize_dib_section( &Surface_Back_Buffer, 1920, 1080 );
+
+		// Setup monitor refresh and associated timers
+		HDC refresh_dc = GetDC( window_handle );
+		u32 monitor_refresh_hz = GetDeviceCaps( refresh_dc, VREFRESH );
+		if ( monitor_refresh_hz > 1 )
+		{
+			Monitor_Refresh_Hz = monitor_refresh_hz;
+		}
+		ReleaseDC( window_handle, refresh_dc );
+
+		Engine_Refresh_Hz      = 60;
+		Engine_Frame_Target_MS = 1000.f / scast(f32, Engine_Refresh_Hz);
 	}
 
 	// Prepare platform API
@@ -1735,7 +1751,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			WinDimensions dimensions     = get_window_dimensions( window_handle );
 			HDC           device_context = GetDC( window_handle );
 
-		#if Build_Development
+		#if Build_Development && 0
 			// Note: debug_marker_index is wrong for the 0th index
 			debug_sync_display( & ds_sound_buffer
 				, audio_time_markers_size, audio_time_markers, audio_marker_index - 1

@@ -26,6 +26,7 @@ build
 
 **/*.hmi
 **/*.symbols
+**/*.hm_*
 
 data/test.out
 data/handmade_engine.symbols
