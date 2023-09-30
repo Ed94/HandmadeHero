@@ -61,39 +61,39 @@ using namespace win32;
 // This is the "backbuffer" data related to the windowing surface provided by the operating system.
 struct OffscreenBuffer
 {
-	BITMAPINFO Info;
+	BITMAPINFO info;
 	char       _PAD_[4];
-	void*      Memory; // Lets use directly mess with the "pixel's memory buffer"
-	s32        Width;
-	s32        Height;
-	s32        Pitch;
-	s32        BytesPerPixel;
+	void*      memory; // Lets use directly mess with the "pixel's memory buffer"
+	s32        width;
+	s32        height;
+	s32        pitch;
+	s32        bytes_per_pixel;
 };
 
 struct WinDimensions
 {
-	u32 Width;
-	u32 Height;
+	u32 width;
+	u32 height;
 };
 
 // TODO : This will def need to be looked over.
 struct DirectSoundBuffer
 {
-	LPDIRECTSOUNDBUFFER SecondaryBuffer;
-	s16*                Samples;
-	u32                 SecondaryBufferSize;
-	u32                 SamplesPerSecond;
-	u32                 BytesPerSample;
+	LPDIRECTSOUNDBUFFER secondary_buffer;
+	s16*                samples;
+	u32                 secondary_buffer_size;
+	u32                 samples_per_second;
+	u32                 bytes_per_sample;
 
 	// TODO(Ed) : Makes math easier...
-	u32                 BytesPerSecond;
-	u32                 GuardSampleBytes;
+	u32                 bytes_per_second;
+	u32                 guard_sample_bytes;
 
-	DWORD               IsPlaying;
-	u32                 RunningSampleIndex;
+	DWORD               is_playing;
+	u32                 running_sample_index;
 
 	// TODO(Ed) : Should this be in bytes?
-	u32                 LatencySampleCount;
+	u32                 latency_sample_count;
 };
 
 #pragma region Static Data
@@ -148,15 +148,15 @@ FILETIME file_get_last_write_time( char const* path )
 
 struct AudioTimeMarker
 {
-	DWORD OutputPlayCusror;
-	DWORD OutputWriteCursor;
-	DWORD OutputLocation;
-	DWORD OutputByteCount;
+	DWORD output_play_cursor;
+	DWORD output_write_cursor;
+	DWORD output_location;
+	DWORD output_byte_count;
 
-	DWORD FlipPlayCursor;
-	DWORD FlipWriteCursor;
+	DWORD flip_play_curosr;
+	DWORD flip_write_cursor;
 
-	DWORD ExpectedFlipCursor;
+	DWORD expected_flip_cursor;
 };
 
 #if Build_Debug
@@ -168,24 +168,24 @@ debug_draw_vertical( s32 x_pos, s32 top, s32 bottom, s32 color )
 		top = 0;
 	}
 
-	if ( bottom > Surface_Back_Buffer.Height )
+	if ( bottom > Surface_Back_Buffer.height )
 	{
-		bottom = Surface_Back_Buffer.Height;
+		bottom = Surface_Back_Buffer.height;
 	}
 
-	if ( x_pos >= 0 && x_pos < Surface_Back_Buffer.Width )
+	if ( x_pos >= 0 && x_pos < Surface_Back_Buffer.width )
 	{
 		u8*
-		pixel_byte  = rcast(u8*, Surface_Back_Buffer.Memory);
-		pixel_byte += x_pos * Surface_Back_Buffer.BytesPerPixel;
-		pixel_byte += top   * Surface_Back_Buffer.Pitch;
+		pixel_byte  = rcast(u8*, Surface_Back_Buffer.memory );
+		pixel_byte += x_pos * Surface_Back_Buffer.bytes_per_pixel;
+		pixel_byte += top   * Surface_Back_Buffer.pitch;
 
 		for ( s32 y = top; y < bottom; ++ y )
 		{
 			s32* pixel = rcast(s32*, pixel_byte);
 			*pixel = color;
 
-			pixel_byte += Surface_Back_Buffer.Pitch;
+			pixel_byte += Surface_Back_Buffer.pitch;
 		}
 	}
 }
@@ -209,18 +209,18 @@ debug_sync_display( DirectSoundBuffer* sound_buffer
 {
 	u32 pad_x         = 32;
 	u32 pad_y         = 16;
-	f32 buffers_ratio = scast(f32, Surface_Back_Buffer.Width) / (scast(f32, sound_buffer->SecondaryBufferSize) * 1);
+	f32 buffers_ratio = scast(f32, Surface_Back_Buffer.width) / (scast(f32, sound_buffer->secondary_buffer_size) * 1);
 
 	u32 line_height = 64;
 	for ( u32 marker_index = 0; marker_index < num_markers; ++ marker_index )
 	{
 		AudioTimeMarker* marker = & markers[marker_index];
-		assert( marker->OutputPlayCusror  < sound_buffer->SecondaryBufferSize );
-		assert( marker->OutputWriteCursor < sound_buffer->SecondaryBufferSize );
-		assert( marker->OutputLocation    < sound_buffer->SecondaryBufferSize );
-		assert( marker->OutputByteCount   < sound_buffer->SecondaryBufferSize );
-		assert( marker->FlipPlayCursor    < sound_buffer->SecondaryBufferSize );
-		assert( marker->FlipWriteCursor   < sound_buffer->SecondaryBufferSize );
+		assert( marker->output_play_cursor  < sound_buffer->secondary_buffer_size );
+		assert( marker->output_write_cursor < sound_buffer->secondary_buffer_size );
+		assert( marker->output_location     < sound_buffer->secondary_buffer_size );
+		assert( marker->output_byte_count   < sound_buffer->secondary_buffer_size );
+		assert( marker->flip_play_curosr    < sound_buffer->secondary_buffer_size );
+		assert( marker->flip_write_cursor   < sound_buffer->secondary_buffer_size );
 
 		DWORD play_color          = 0x88888888;
 		DWORD write_color         = 0x88800000;
@@ -239,8 +239,8 @@ debug_sync_display( DirectSoundBuffer* sound_buffer
 
 			u32 row_2_top = top;
 
-			debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->OutputPlayCusror,  play_color );
-			debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->OutputWriteCursor, write_color );
+			debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->output_play_cursor,  play_color );
+			debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->output_write_cursor, write_color );
 
 			play_color  = 0xFFFFFFFF;
 			write_color = 0xFFFF0000;
@@ -248,8 +248,8 @@ debug_sync_display( DirectSoundBuffer* sound_buffer
 			top    += pad_y + line_height;
 			bottom += pad_y + line_height;
 
-			debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->OutputLocation, play_color );
-			debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->OutputLocation + marker->OutputByteCount, write_color );
+			debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->output_location, play_color );
+			debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->output_location + marker->output_byte_count, write_color );
 
 			play_color  = 0xFFFFFFFF;
 			write_color = 0xFFFF0000;
@@ -257,14 +257,14 @@ debug_sync_display( DirectSoundBuffer* sound_buffer
 			top    += pad_y + line_height;
 			bottom += pad_y + line_height;
 
-			debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, row_2_top, bottom, marker->ExpectedFlipCursor, expected_flip_color );
+			debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, row_2_top, bottom, marker->expected_flip_cursor, expected_flip_color );
 		}
 
-		DWORD play_window = marker->FlipPlayCursor + 480 * sound_buffer->BytesPerSample;
+		DWORD play_window = marker->flip_play_curosr + 480 * sound_buffer->bytes_per_sample;
 
-		debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->FlipPlayCursor,  play_color );
-		debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, play_window,             play_window_color );
-		debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->FlipWriteCursor, write_color );
+		debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->flip_play_curosr,  play_color );
+		debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, play_window,               play_window_color );
+		debug_draw_sound_buffer_marker( sound_buffer, buffers_ratio, pad_x, pad_y, top, bottom, marker->flip_write_cursor, write_color );
 	}
 }
 #endif
@@ -303,7 +303,7 @@ init_sound(HWND window_handle, DirectSoundBuffer* sound_buffer )
 	wave_format {};
 	wave_format.wFormatTag      = WAVE_FORMAT_PCM;  /* format type */
 	wave_format.nChannels       = 2;  /* number of channels (i.e. mono, stereo...) */
-	wave_format.nSamplesPerSec  = scast(u32, sound_buffer->SamplesPerSecond);  /* sample rate */
+	wave_format.nSamplesPerSec  = scast(u32, sound_buffer->samples_per_second);  /* sample rate */
 	wave_format.wBitsPerSample  = 16;  /* number of bits per sample of mono data */
 	wave_format.nBlockAlign     = wave_format.nChannels      * wave_format.wBitsPerSample / 8 ;  /* block size of data */
 	wave_format.nAvgBytesPerSec = wave_format.nSamplesPerSec * wave_format.nBlockAlign;  /* for buffer estimation */
@@ -329,14 +329,14 @@ init_sound(HWND window_handle, DirectSoundBuffer* sound_buffer )
 	DSBUFFERDESC
 	buffer_description { sizeof(buffer_description) };
 	buffer_description.dwFlags       = DSBCAPS_GETCURRENTPOSITION2;
-	buffer_description.dwBufferBytes = sound_buffer->SecondaryBufferSize;
+	buffer_description.dwBufferBytes = sound_buffer->secondary_buffer_size;
 	buffer_description.lpwfxFormat   = & wave_format;
 
-	if ( ! SUCCEEDED( direct_sound->CreateSoundBuffer( & buffer_description, & sound_buffer->SecondaryBuffer, 0 ) ))
+	if ( ! SUCCEEDED( direct_sound->CreateSoundBuffer( & buffer_description, & sound_buffer->secondary_buffer, 0 ) ))
 	{
 		// TODO : Diagnostic
 	}
-	if ( ! SUCCEEDED( sound_buffer->SecondaryBuffer->SetFormat( & wave_format ) ) )
+	if ( ! SUCCEEDED( sound_buffer->secondary_buffer->SetFormat( & wave_format ) ) )
 	{
 		// TODO : Diagnostic
 	}
@@ -350,7 +350,7 @@ ds_clear_sound_buffer( DirectSoundBuffer* sound_buffer )
 	LPVOID region_2;
 	DWORD  region_2_size;
 
-	HRESULT ds_lock_result = sound_buffer->SecondaryBuffer->Lock( 0, sound_buffer->SecondaryBufferSize
+	HRESULT ds_lock_result = sound_buffer->secondary_buffer->Lock( 0, sound_buffer->secondary_buffer_size
 		, & region_1, & region_1_size
 		, & region_2, & region_2_size
 		, 0 );
@@ -373,7 +373,7 @@ ds_clear_sound_buffer( DirectSoundBuffer* sound_buffer )
 		++ sample_out;
 	}
 
-	if ( ! SUCCEEDED( sound_buffer->SecondaryBuffer->Unlock( region_1, region_1_size, region_2, region_2_size ) ))
+	if ( ! SUCCEEDED( sound_buffer->secondary_buffer->Unlock( region_1, region_1_size, region_2, region_2_size ) ))
 	{
 		return;
 	}
@@ -387,7 +387,7 @@ ds_fill_sound_buffer( DirectSoundBuffer* sound_buffer, DWORD byte_to_lock, DWORD
 	LPVOID region_2;
 	DWORD  region_2_size;
 
-	HRESULT ds_lock_result = sound_buffer->SecondaryBuffer->Lock( byte_to_lock, bytes_to_write
+	HRESULT ds_lock_result = sound_buffer->secondary_buffer->Lock( byte_to_lock, bytes_to_write
 		, & region_1, & region_1_size
 		, & region_2, & region_2_size
 		, 0 );
@@ -398,9 +398,9 @@ ds_fill_sound_buffer( DirectSoundBuffer* sound_buffer, DWORD byte_to_lock, DWORD
 
 	// TODO : Assert that region sizes are valid
 
-	DWORD region_1_sample_count = region_1_size / sound_buffer->BytesPerSample;
+	DWORD region_1_sample_count = region_1_size / sound_buffer->bytes_per_sample;
 	s16*  sample_out            = rcast( s16*, region_1 );
-	s16*  sample_in 		    = sound_buffer->Samples;
+	s16*  sample_in 		    = sound_buffer->samples;
 	for ( DWORD sample_index = 0; sample_index < region_1_sample_count; ++ sample_index )
 	{
 		*sample_out = *sample_in;
@@ -411,10 +411,10 @@ ds_fill_sound_buffer( DirectSoundBuffer* sound_buffer, DWORD byte_to_lock, DWORD
 		++ sample_out;
 		++ sample_in;
 
-		++ sound_buffer->RunningSampleIndex;
+		++ sound_buffer->running_sample_index;
 	}
 
-	DWORD region_2_sample_count = region_2_size / sound_buffer->BytesPerSample;
+	DWORD region_2_sample_count = region_2_size / sound_buffer->bytes_per_sample;
 	      sample_out            = rcast( s16*, region_2 );
 	for ( DWORD sample_index = 0; sample_index < region_2_sample_count; ++ sample_index )
 	{
@@ -426,10 +426,10 @@ ds_fill_sound_buffer( DirectSoundBuffer* sound_buffer, DWORD byte_to_lock, DWORD
 		++ sample_out;
 		++ sample_in;
 
-		++ sound_buffer->RunningSampleIndex;
+		++ sound_buffer->running_sample_index;
 	}
 
-	if ( ! SUCCEEDED( sound_buffer->SecondaryBuffer->Unlock( region_1, region_1_size, region_2, region_2_size ) ))
+	if ( ! SUCCEEDED( sound_buffer->secondary_buffer->Unlock( region_1, region_1_size, region_2, region_2_size ) ))
 	{
 		return;
 	}
@@ -448,12 +448,12 @@ using EngineDSPadStates = engine::DualsensePadState[Max_Controllers];
 internal void
 input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* new_state, u32 raw_btns, u32 btn_flag )
 {
-#define had_transition() ( old_state->EndedDown != new_state->EndedDown )
-	new_state->EndedDown        = (raw_btns & btn_flag) > 0;
+#define had_transition() ( old_state->ended_down != new_state->ended_down )
+	new_state->ended_down        = (raw_btns & btn_flag) > 0;
 	if ( had_transition() )
-		new_state->HalfTransitions += 1;
+		new_state->half_transitions += 1;
 	else
-		new_state->HalfTransitions = 0;
+		new_state->half_transitions = 0;
 #undef had_transition
 }
 
@@ -494,42 +494,58 @@ xinput_process_axis_value( s16 value, s16 deadzone_threshold )
 }
 
 internal void
-poll_input( engine::InputState* input, u32 jsl_num_devices, JSL_DeviceHandle* jsl_device_handles
+poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, JSL_DeviceHandle* jsl_device_handles
 	, engine::KeyboardState* old_keyboard, engine::KeyboardState* new_keyboard
-	, EngineXInputPadStates* old_xpads, EngineXInputPadStates* new_xpads
-	, EngineDSPadStates* old_ds_pads, EngineDSPadStates* new_ds_pads )
+	, engine::MousesState*   old_mouse,    engine::MousesState*   new_mouse
+	, EngineXInputPadStates* old_xpads,    EngineXInputPadStates* new_xpads
+	, EngineDSPadStates*     old_ds_pads,  EngineDSPadStates*     new_ds_pads )
 {
-	// TODO(Ed) : Setup user definable deadzones for triggers and sticks.
-
-	// Swapping at the beginning of the input frame instead of the end.
-	swap( old_keyboard, new_keyboard );
-	swap( old_xpads,    new_xpads );
-	swap( old_ds_pads,  new_ds_pads );
-
 	// Keyboard Polling
 	// Keyboards are unified for now.
 	{
-		// TODO(Ed): this needs to be moved out of heere when frames are detached from polling input.
-		input->Controllers[0].Keyboard = {};
+		constexpr u32 is_down = 0x80000000;
+		input_process_digital_btn( & old_keyboard->Q,           & new_keyboard->Q,           GetAsyncKeyState( 'Q' ),       is_down );
+		input_process_digital_btn( & old_keyboard->E,           & new_keyboard->E,           GetAsyncKeyState( 'E' ),       is_down );
+		input_process_digital_btn( & old_keyboard->W,           & new_keyboard->W,           GetAsyncKeyState( 'W' ),       is_down );
+		input_process_digital_btn( & old_keyboard->A,           & new_keyboard->A,           GetAsyncKeyState( 'A' ),       is_down );
+		input_process_digital_btn( & old_keyboard->S,           & new_keyboard->S,           GetAsyncKeyState( 'S' ),       is_down );
+		input_process_digital_btn( & old_keyboard->D,           & new_keyboard->D,           GetAsyncKeyState( 'D' ),       is_down );
+		input_process_digital_btn( & old_keyboard->K,           & new_keyboard->K,           GetAsyncKeyState( 'K' ),       is_down );
+		input_process_digital_btn( & old_keyboard->L,           & new_keyboard->L,           GetAsyncKeyState( 'L' ),       is_down );
+		input_process_digital_btn( & old_keyboard->escape,      & new_keyboard->escape,      GetAsyncKeyState( VK_ESCAPE ), is_down );
+		input_process_digital_btn( & old_keyboard->backspace,   & new_keyboard->backspace,   GetAsyncKeyState( VK_BACK ),   is_down );
+		input_process_digital_btn( & old_keyboard->up,          & new_keyboard->up,          GetAsyncKeyState( VK_UP ),     is_down );
+		input_process_digital_btn( & old_keyboard->down,        & new_keyboard->down,        GetAsyncKeyState( VK_DOWN ),   is_down );
+		input_process_digital_btn( & old_keyboard->left,        & new_keyboard->left,        GetAsyncKeyState( VK_LEFT ),   is_down );
+		input_process_digital_btn( & old_keyboard->right,       & new_keyboard->right,       GetAsyncKeyState( VK_RIGHT ),  is_down );
+		input_process_digital_btn( & old_keyboard->space,       & new_keyboard->space,       GetAsyncKeyState( VK_SPACE ),  is_down );
+		input_process_digital_btn( & old_keyboard->pause,       & new_keyboard->pause,       GetAsyncKeyState( VK_PAUSE ),  is_down );
+		input_process_digital_btn( & old_keyboard->right_shift, & new_keyboard->right_shift, GetAsyncKeyState( VK_RSHIFT ), is_down );
+		input_process_digital_btn( & old_keyboard->left_shift,  & new_keyboard->left_shift,  GetAsyncKeyState( VK_LSHIFT ), is_down );
+
+		input->controllers[0].keyboard = new_keyboard;
+	}
+
+	// Mouse polling
+	{
+		// input->Controllers[0].Mouse = {};
 
 		constexpr u32 is_down = 0x80000000;
-		input_process_digital_btn( & old_keyboard->Q,         & new_keyboard->Q,         GetAsyncKeyState( 'Q' ),       is_down );
-		input_process_digital_btn( & old_keyboard->E,         & new_keyboard->E,         GetAsyncKeyState( 'E' ),       is_down );
-		input_process_digital_btn( & old_keyboard->W,         & new_keyboard->W,         GetAsyncKeyState( 'W' ),       is_down );
-		input_process_digital_btn( & old_keyboard->A,         & new_keyboard->A,         GetAsyncKeyState( 'A' ),       is_down );
-		input_process_digital_btn( & old_keyboard->S,         & new_keyboard->S,         GetAsyncKeyState( 'S' ),       is_down );
-		input_process_digital_btn( & old_keyboard->D,         & new_keyboard->D,         GetAsyncKeyState( 'D' ),       is_down );
-		input_process_digital_btn( & old_keyboard->L,         & new_keyboard->L,         GetAsyncKeyState( 'L' ),       is_down );
-		input_process_digital_btn( & old_keyboard->Escape,    & new_keyboard->Escape,    GetAsyncKeyState( VK_ESCAPE ), is_down );
-		input_process_digital_btn( & old_keyboard->Backspace, & new_keyboard->Backspace, GetAsyncKeyState( VK_BACK ),   is_down );
-		input_process_digital_btn( & old_keyboard->Up,        & new_keyboard->Up,        GetAsyncKeyState( VK_UP ),     is_down );
-		input_process_digital_btn( & old_keyboard->Down,      & new_keyboard->Down,      GetAsyncKeyState( VK_DOWN ),   is_down );
-		input_process_digital_btn( & old_keyboard->Left,      & new_keyboard->Left,      GetAsyncKeyState( VK_LEFT ),   is_down );
-		input_process_digital_btn( & old_keyboard->Right,     & new_keyboard->Right,     GetAsyncKeyState( VK_RIGHT ),  is_down );
-		input_process_digital_btn( & old_keyboard->Space,     & new_keyboard->Space,     GetAsyncKeyState( VK_SPACE ),  is_down );
-		input_process_digital_btn( & old_keyboard->Pause,     & new_keyboard->Pause,     GetAsyncKeyState( VK_PAUSE ),  is_down );
+		input_process_digital_btn( & old_mouse->left,   & new_mouse->left,   GetAsyncKeyState( VK_LBUTTON ), is_down );
+		input_process_digital_btn( & old_mouse->middle, & new_mouse->middle, GetAsyncKeyState( VK_MBUTTON ), is_down );
+		input_process_digital_btn( & old_mouse->right,  & new_mouse->right,  GetAsyncKeyState( VK_RBUTTON ), is_down );
 
-		input->Controllers[0].Keyboard = new_keyboard;
+		POINT mouse_pos;
+		GetCursorPos( & mouse_pos );
+		ScreenToClient( window_handle, & mouse_pos );
+
+		new_mouse->vertical_wheel   = {};
+		new_mouse->horizontal_wheel = {};
+
+		new_mouse->X.end = (f32)mouse_pos.x;
+		new_mouse->Y.end = (f32)mouse_pos.y;
+
+		input->controllers[0].mouse = new_mouse;
 	}
 
 	// XInput Polling
@@ -543,42 +559,41 @@ poll_input( engine::InputState* input, u32 jsl_num_devices, JSL_DeviceHandle* js
 			XINPUT_GAMEPAD*         xpad     = & controller_state.Gamepad;
 			engine::XInputPadState* old_xpad = old_xpads[ controller_index ];
 			engine::XInputPadState* new_xpad = new_xpads[ controller_index ];
-
-			input_process_digital_btn( & old_xpad->DPad.Up,    & new_xpad->DPad.Up, xpad->wButtons, XINPUT_GAMEPAD_DPAD_UP );
-			input_process_digital_btn( & old_xpad->DPad.Down,  & new_xpad->DPad.Down, xpad->wButtons, XINPUT_GAMEPAD_DPAD_DOWN );
-			input_process_digital_btn( & old_xpad->DPad.Left,  & new_xpad->DPad.Left, xpad->wButtons, XINPUT_GAMEPAD_DPAD_LEFT );
-			input_process_digital_btn( & old_xpad->DPad.Right, & new_xpad->DPad.Right, xpad->wButtons, XINPUT_GAMEPAD_DPAD_RIGHT );
+			input_process_digital_btn( & old_xpad->dpad.up,    & new_xpad->dpad.up, xpad->wButtons, XINPUT_GAMEPAD_DPAD_UP );
+			input_process_digital_btn( & old_xpad->dpad.down,  & new_xpad->dpad.down, xpad->wButtons, XINPUT_GAMEPAD_DPAD_DOWN );
+			input_process_digital_btn( & old_xpad->dpad.left,  & new_xpad->dpad.left, xpad->wButtons, XINPUT_GAMEPAD_DPAD_LEFT );
+			input_process_digital_btn( & old_xpad->dpad.right, & new_xpad->dpad.right, xpad->wButtons, XINPUT_GAMEPAD_DPAD_RIGHT );
 
 			input_process_digital_btn( & old_xpad->Y, & new_xpad->Y, xpad->wButtons, XINPUT_GAMEPAD_Y );
 			input_process_digital_btn( & old_xpad->A, & new_xpad->A, xpad->wButtons, XINPUT_GAMEPAD_A );
 			input_process_digital_btn( & old_xpad->B, & new_xpad->B, xpad->wButtons, XINPUT_GAMEPAD_B );
 			input_process_digital_btn( & old_xpad->X, & new_xpad->X, xpad->wButtons, XINPUT_GAMEPAD_X );
 
-			input_process_digital_btn( & old_xpad->Back,  & new_xpad->Back,  xpad->wButtons, XINPUT_GAMEPAD_BACK );
-			input_process_digital_btn( & old_xpad->Start, & new_xpad->Start, xpad->wButtons, XINPUT_GAMEPAD_START );
+			input_process_digital_btn( & old_xpad->back,  & new_xpad->back,  xpad->wButtons, XINPUT_GAMEPAD_BACK );
+			input_process_digital_btn( & old_xpad->start, & new_xpad->start, xpad->wButtons, XINPUT_GAMEPAD_START );
 
-			input_process_digital_btn( & old_xpad->LeftShoulder,  & new_xpad->LeftShoulder,  xpad->wButtons, XINPUT_GAMEPAD_LEFT_SHOULDER );
-			input_process_digital_btn( & old_xpad->RightShoulder, & new_xpad->RightShoulder, xpad->wButtons, XINPUT_GAMEPAD_RIGHT_SHOULDER );
+			input_process_digital_btn( & old_xpad->left_shoulder,  & new_xpad->left_shoulder,  xpad->wButtons, XINPUT_GAMEPAD_LEFT_SHOULDER );
+			input_process_digital_btn( & old_xpad->right_shoulder, & new_xpad->right_shoulder, xpad->wButtons, XINPUT_GAMEPAD_RIGHT_SHOULDER );
 
-			new_xpad->Stick.Left.X.Start = old_xpad->Stick.Left.X.End;
-			new_xpad->Stick.Left.Y.Start = old_xpad->Stick.Left.Y.End;
+			new_xpad->stick.left.X.start = old_xpad->stick.left.X.end;
+			new_xpad->stick.left.Y.start = old_xpad->stick.left.Y.end;
 
 			f32 left_x = xinput_process_axis_value( xpad->sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE );
 			f32 left_y = xinput_process_axis_value( xpad->sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE );
 
 			// TODO(Ed) : Min/Max macros!!!
-			new_xpad->Stick.Left.X.Min = new_xpad->Stick.Left.X.Max = new_xpad->Stick.Left.X.End = left_x;
-			new_xpad->Stick.Left.Y.Min = new_xpad->Stick.Left.Y.Max = new_xpad->Stick.Left.Y.End = left_y;
+			new_xpad->stick.left.X.min = new_xpad->stick.left.X.max = new_xpad->stick.left.X.end = left_x;
+			new_xpad->stick.left.Y.min = new_xpad->stick.left.Y.max = new_xpad->stick.left.Y.end = left_y;
 
 			// TODO(Ed): Make this actually an average for later
-			new_xpad->Stick.Left.X.Average = left_x;
-			new_xpad->Stick.Left.Y.Average = left_y;
+			new_xpad->stick.left.X.average = left_x;
+			new_xpad->stick.left.Y.average = left_y;
 
-			input->Controllers[ controller_index ].XPad = new_xpad;
+			input->controllers[ controller_index ].xpad = new_xpad;
 		}
 		else
 		{
-			input->Controllers[ controller_index ].XPad = nullptr;
+			input->controllers[ controller_index ].xpad = nullptr;
 		}
 	}
 
@@ -602,38 +617,38 @@ poll_input( engine::InputState* input, u32 jsl_num_devices, JSL_DeviceHandle* js
 		engine::DualsensePadState* old_ds_pad  = old_ds_pads[ jsl_device_index ];
 		engine::DualsensePadState* new_ds_pad  = new_ds_pads[ jsl_device_index ];
 
-		input_process_digital_btn( & old_ds_pad->DPad.Up,    & new_ds_pad->DPad.Up,    state.buttons, JSMASK_UP );
-		input_process_digital_btn( & old_ds_pad->DPad.Down,  & new_ds_pad->DPad.Down,  state.buttons, JSMASK_DOWN );
-		input_process_digital_btn( & old_ds_pad->DPad.Left,  & new_ds_pad->DPad.Left,  state.buttons, JSMASK_LEFT );
-		input_process_digital_btn( & old_ds_pad->DPad.Right, & new_ds_pad->DPad.Right, state.buttons, JSMASK_RIGHT );
+		input_process_digital_btn( & old_ds_pad->dpad.up,    & new_ds_pad->dpad.up,    state.buttons, JSMASK_UP );
+		input_process_digital_btn( & old_ds_pad->dpad.down,  & new_ds_pad->dpad.down,  state.buttons, JSMASK_DOWN );
+		input_process_digital_btn( & old_ds_pad->dpad.left,  & new_ds_pad->dpad.left,  state.buttons, JSMASK_LEFT );
+		input_process_digital_btn( & old_ds_pad->dpad.right, & new_ds_pad->dpad.right, state.buttons, JSMASK_RIGHT );
 
-		input_process_digital_btn( & old_ds_pad->Triangle, & new_ds_pad->Triangle, state.buttons, JSMASK_N );
-		input_process_digital_btn( & old_ds_pad->X,        & new_ds_pad->X,        state.buttons, JSMASK_S );
-		input_process_digital_btn( & old_ds_pad->Square,   & new_ds_pad->Square,   state.buttons, JSMASK_W );
-		input_process_digital_btn( & old_ds_pad->Circle,   & new_ds_pad->Circle,   state.buttons, JSMASK_E );
+		input_process_digital_btn( & old_ds_pad->triangle, & new_ds_pad->triangle, state.buttons, JSMASK_N );
+		input_process_digital_btn( & old_ds_pad->cross,    & new_ds_pad->cross,    state.buttons, JSMASK_S );
+		input_process_digital_btn( & old_ds_pad->square,   & new_ds_pad->square,   state.buttons, JSMASK_W );
+		input_process_digital_btn( & old_ds_pad->circle,   & new_ds_pad->circle,   state.buttons, JSMASK_E );
 
-		input_process_digital_btn( & old_ds_pad->Share,   & new_ds_pad->Share,   state.buttons, JSMASK_SHARE );
-		input_process_digital_btn( & old_ds_pad->Options, & new_ds_pad->Options, state.buttons, JSMASK_OPTIONS );
+		input_process_digital_btn( & old_ds_pad->share,   & new_ds_pad->share,   state.buttons, JSMASK_SHARE );
+		input_process_digital_btn( & old_ds_pad->options, & new_ds_pad->options, state.buttons, JSMASK_OPTIONS );
 
 		input_process_digital_btn( & old_ds_pad->L1, & new_ds_pad->L1, state.buttons, JSMASK_L );
 		input_process_digital_btn( & old_ds_pad->R1, & new_ds_pad->R1, state.buttons, JSMASK_R );
 
-		new_ds_pad->Stick.Left.X.Start = old_ds_pad->Stick.Left.X.End;
-		new_ds_pad->Stick.Left.Y.Start = old_ds_pad->Stick.Left.Y.End;
+		new_ds_pad->stick.left.X.start = old_ds_pad->stick.left.X.end;
+		new_ds_pad->stick.left.Y.start = old_ds_pad->stick.left.Y.end;
 
 		// Joyshock abstracts the sticks to a float value already for us of -1.f to 1.f.
 		// We'll assume a deadzone of 10% for now.
 		f32 left_x = jsl_input_process_axis_value( state.stickLX, 0.1f );
 		f32 left_y = jsl_input_process_axis_value( state.stickLY, 0.1f );
 
-		new_ds_pad->Stick.Left.X.Min = new_ds_pad->Stick.Left.X.Max = new_ds_pad->Stick.Left.X.End = left_x;
-		new_ds_pad->Stick.Left.Y.Min = new_ds_pad->Stick.Left.Y.Max = new_ds_pad->Stick.Left.Y.End = left_y;
+		new_ds_pad->stick.left.X.min = new_ds_pad->stick.left.X.max = new_ds_pad->stick.left.X.end = left_x;
+		new_ds_pad->stick.left.Y.min = new_ds_pad->stick.left.Y.max = new_ds_pad->stick.left.Y.end = left_y;
 
 		// TODO(Ed): Make this actually an average for later
-		new_ds_pad->Stick.Left.X.Average = left_x;
-		new_ds_pad->Stick.Left.Y.Average = left_y;
+		new_ds_pad->stick.left.X.average = left_x;
+		new_ds_pad->stick.left.Y.average = left_y;
 
-		input->Controllers[ jsl_device_index ].DSPad = new_ds_pad;
+		input->controllers[ jsl_device_index ].ds_pad = new_ds_pad;
 	}
 }
 #pragma endregion Input
@@ -678,8 +693,8 @@ get_window_dimensions( HWND window_handle )
 	RECT client_rect;
 	GetClientRect( window_handle, & client_rect );
 	WinDimensions result;
-	result.Width  = client_rect.right  - client_rect.left;
-	result.Height = client_rect.bottom - client_rect.top;
+	result.width  = client_rect.right  - client_rect.left;
+	result.height = client_rect.bottom - client_rect.top;
 	return result;
 }
 
@@ -694,10 +709,10 @@ display_buffer_in_window( HDC device_context, u32 window_width, u32 window_heigh
 		, x, y, width, height
 		, x, y, width, height
 	#endif
-		, 0, 0, buffer->Width, buffer->Height
+		, 0, 0, buffer->width, buffer->height
 		// , 0, 0, window_width, window_height
-		, 0, 0, buffer->Width, buffer->Height
-		, buffer->Memory, & buffer->Info
+		, 0, 0, buffer->width, buffer->height
+		, buffer->memory, & buffer->info
 		, DIB_ColorTable_RGB, RO_Source_To_Dest );
 }
 
@@ -705,23 +720,23 @@ internal void
 resize_dib_section( OffscreenBuffer* buffer, u32 width, u32 height )
 {
 	// TODO(Ed) : Bulletproof memory handling here for the bitmap memory
-	if ( buffer->Memory )
+	if ( buffer->memory )
 	{
-		VirtualFree( buffer->Memory, 0, MEM_RELEASE );
+		VirtualFree( buffer->memory, 0, MEM_RELEASE );
 	}
 
-	buffer->Width         = width;
-	buffer->Height        = height;
-	buffer->BytesPerPixel = 4;
-	buffer->Pitch         = buffer->Width * buffer->BytesPerPixel;
+	buffer->width           = width;
+	buffer->height          = height;
+	buffer->bytes_per_pixel = 4;
+	buffer->pitch           = buffer->width * buffer->bytes_per_pixel;
 
 	// Negative means top-down in the context of the biHeight
 #	define Top_Down -
 	BITMAPINFOHEADER&
-	header = buffer->Info.bmiHeader;
-	header.biSize        = sizeof( buffer->Info.bmiHeader );
-	header.biWidth       = buffer->Width;
-	header.biHeight      = Top_Down buffer->Height;
+	header = buffer->info.bmiHeader;
+	header.biSize        = sizeof( buffer->info.bmiHeader );
+	header.biWidth       = buffer->width;
+	header.biHeight      = Top_Down buffer->height;
 	header.biPlanes      = 1;
 	header.biBitCount    = 32; // Need 24, but want 32 ( alignment )
 	header.biCompression = BI_RGB_Uncompressed;
@@ -733,8 +748,8 @@ resize_dib_section( OffscreenBuffer* buffer, u32 width, u32 height )
 #	undef Top_Down
 
 	// We want to "touch" a pixel on every 4-byte boundary
-	u32 BitmapMemorySize = (buffer->Width * buffer->Height) * buffer->BytesPerPixel;
-	buffer->Memory = VirtualAlloc( NULL, BitmapMemorySize, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+	u32 BitmapMemorySize = (buffer->width * buffer->height) * buffer->bytes_per_pixel;
+	buffer->memory = VirtualAlloc( NULL, BitmapMemorySize, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
 
 	// TODO(Ed) : Clear to black
 }
@@ -787,10 +802,29 @@ main_window_callback( HWND handle
 
 			WinDimensions dimensions = get_window_dimensions( handle );
 
-			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &Surface_Back_Buffer
+			display_buffer_in_window( device_context, dimensions.width, dimensions.height, &Surface_Back_Buffer
 				, x, y
 				, width, height );
 			EndPaint( handle, & info );
+		}
+		break;
+
+		case WM_MOUSEMOVE:
+		{
+            RECT rect;
+            POINT pt = { LOWORD(l_param), HIWORD(l_param) };
+
+            GetClientRect(handle, &rect);
+            if (PtInRect(&rect, pt))
+            {
+                // Hide the cursor when it's inside the window
+                while (ShowCursor(FALSE) >= 0);
+            }
+            else
+            {
+                // Show the cursor when it's outside the window
+                while (ShowCursor(TRUE) < 0);
+            }
 		}
 		break;
 
@@ -809,7 +843,7 @@ main_window_callback( HWND handle
 }
 
 internal void
-process_pending_window_messages( engine::KeyboardState* keyboard )
+process_pending_window_messages( engine::KeyboardState* keyboard, engine::MousesState* mouse )
 {
 	MSG window_msg_info;
 	while ( PeekMessageA( & window_msg_info, 0, 0, 0, PM_Remove_Messages_From_Queue ) )
@@ -821,7 +855,7 @@ process_pending_window_messages( engine::KeyboardState* keyboard )
 		}
 
 		// Keyboard input handling
-		switch (window_msg_info.message)
+	switch (window_msg_info.message)
 		{
 			// I rather do this with GetAsyncKeyState...
 			case WM_SYSKEYDOWN:
@@ -841,6 +875,22 @@ process_pending_window_messages( engine::KeyboardState* keyboard )
 					}
 					break;
 				}
+			}
+			break;
+
+			case WM_MOUSEWHEEL:
+			{
+				// This captures the vertical scroll value
+				int verticalScroll = GET_WHEEL_DELTA_WPARAM(window_msg_info.wParam);
+				mouse->vertical_wheel.end += scast(f32, verticalScroll);
+			}
+			break;
+
+			case WM_MOUSEHWHEEL:
+			{
+				// This captures the horizontal scroll value
+				int horizontalScroll = GET_WHEEL_DELTA_WPARAM(window_msg_info.wParam);
+				mouse->horizontal_wheel.end += scast( f32, horizontalScroll);
 			}
 			break;
 
@@ -877,17 +927,17 @@ b32 file_check_exists( Str path )
 
 void file_close( File* file )
 {
-	HANDLE handle = pcast(HANDLE, file->OpaqueHandle);
+	HANDLE handle = pcast(HANDLE, file->opaque_handle);
 
 	if ( handle == INVALID_HANDLE_VALUE )
 		return;
 
 	CloseHandle( handle );
 
-	if ( file->Data )
+	if ( file->data )
 	{
 		// TODO(Ed): This should use our persistent memory block.
-		VirtualFree( file->Data, 0, MEM_Release);
+		VirtualFree( file->data, 0, MEM_Release);
 	}
 	*file = {};
 }
@@ -900,9 +950,9 @@ b32 file_delete( Str path )
 b32 file_read_stream( File* file, u32 content_size, void* content_memory )
 {
 	HANDLE file_handle;
-	if ( file->OpaqueHandle == nullptr )
+	if ( file->opaque_handle == nullptr )
 	{
-		file_handle = CreateFileA( file->Path
+		file_handle = CreateFileA( file->path
 			, GENERIC_READ, FILE_SHARE_READ, 0
 			, OPEN_EXISTING, 0, 0
 		);
@@ -912,11 +962,11 @@ b32 file_read_stream( File* file, u32 content_size, void* content_memory )
 			return {};
 		}
 
-		file->OpaqueHandle = file_handle;
+		file->opaque_handle = file_handle;
 	}
 	else
 	{
-		file_handle = pcast(HANDLE, file->OpaqueHandle);
+		file_handle = pcast(HANDLE, file->opaque_handle );
 	}
 
 	u32 bytes_read;
@@ -936,7 +986,7 @@ b32 file_read_stream( File* file, u32 content_size, void* content_memory )
 
 b32 file_read_content( File* file )
 {
-	HANDLE file_handle = CreateFileA( file->Path
+	HANDLE file_handle = CreateFileA( file->path
 		, GENERIC_READ, FILE_SHARE_READ, 0
 		, OPEN_EXISTING, 0, 0
 	);
@@ -956,19 +1006,19 @@ b32 file_read_content( File* file )
 	}
 
 	// TODO(Ed) : This should use our memory block.
-	file->Data = rcast(HANDLE*, VirtualAlloc( 0, sizeof(HANDLE) + size, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write ));
-	file->Size = size;
-	file->OpaqueHandle = file_handle;
+	file->data = rcast(HANDLE*, VirtualAlloc( 0, sizeof(HANDLE) + size, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write ));
+	file->size = size;
+	file->opaque_handle = file_handle;
 
 	u32 bytes_read;
-	if ( ReadFile( file_handle, file->Data, file->Size, rcast(LPDWORD, &bytes_read), 0 ) == false )
+	if ( ReadFile( file_handle, file->data, file->size, rcast(LPDWORD, &bytes_read), 0 ) == false )
 	{
 		// TODO(Ed) : Logging
 		CloseHandle( file_handle );
 		return {};
 	}
 
-	if ( bytes_read != file->Size )
+	if ( bytes_read != file->size )
 	{
 		// TODO : Logging
 		CloseHandle( file_handle );
@@ -979,7 +1029,7 @@ b32 file_read_content( File* file )
 
 void file_rewind( File* file )
 {
-	HANDLE file_handle = pcast(HANDLE, file->OpaqueHandle);
+	HANDLE file_handle = pcast(HANDLE, file->opaque_handle );
 	if ( file_handle == INVALID_HANDLE_VALUE )
 		return;
 
@@ -989,9 +1039,9 @@ void file_rewind( File* file )
 u32 file_write_stream( File* file, u32 content_size, void* content_memory )
 {
 	HANDLE file_handle;
-	if ( file->OpaqueHandle == nullptr )
+	if ( file->opaque_handle == nullptr )
 	{
-		file_handle = CreateFileA( file->Path
+		file_handle = CreateFileA( file->path
 			,GENERIC_WRITE, 0, 0
 			, OPEN_ALWAYS, 0, 0
 		);
@@ -1001,11 +1051,11 @@ u32 file_write_stream( File* file, u32 content_size, void* content_memory )
 			return {};
 		}
 
-		file->OpaqueHandle = file_handle;
+		file->opaque_handle = file_handle;
 	}
 	else
 	{
-		file_handle = pcast(HANDLE, file->OpaqueHandle);
+		file_handle = pcast(HANDLE, file->opaque_handle );
 	}
 
 	DWORD bytes_written;
@@ -1020,7 +1070,7 @@ u32 file_write_stream( File* file, u32 content_size, void* content_memory )
 
 u32 file_write_content( File* file, u32 content_size, void* content_memory )
 {
-	HANDLE file_handle = CreateFileA( file->Path
+	HANDLE file_handle = CreateFileA( file->path
 		, GENERIC_WRITE, 0, 0
 		, CREATE_ALWAYS, 0, 0
 	);
@@ -1029,7 +1079,7 @@ u32 file_write_content( File* file, u32 content_size, void* content_memory )
 		// TODO : Logging
 		return false;
 	}
-	file->OpaqueHandle = file_handle;
+	file->opaque_handle = file_handle;
 
 	DWORD bytes_written;
 	if ( WriteFile( file_handle, content_memory, content_size, & bytes_written, 0 ) == false )
@@ -1064,13 +1114,18 @@ BinaryModule load_binary_module( char const* module_path )
 
 void unload_binary_module( BinaryModule* module )
 {
-	FreeLibrary( scast(HMODULE, module->OpaqueHandle) );
+	FreeLibrary( scast(HMODULE, module->opaque_handle) );
 	*module = {};
 }
 
 void* get_binary_module_symbol( BinaryModule module, char const* symbol_name )
 {
-	return rcast(void*, GetProcAddress( scast(HMODULE, module.OpaqueHandle), symbol_name ));
+	return rcast(void*, GetProcAddress( scast(HMODULE, module.opaque_handle), symbol_name ));
+}
+
+void memory_copy( void* dest, u64 src_size, void* src )
+{
+	CopyMemory( dest, src, src_size );
 }
 #pragma endregion Platform API
 
@@ -1157,11 +1212,13 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	// Memory
 	engine::Memory engine_memory {};
 	{
-		u64 total_size = gigabytes( 4 );
-
-		engine_memory.PersistentSize = total_size - megabytes( 128 );
+		engine_memory.persistent_size = megabytes( 128 );
 		// engine_memory.FrameSize	     = megabytes( 64 );
-		engine_memory.TransientSize  = total_size - engine_memory.PersistentSize;
+		engine_memory.transient_size  = gigabytes( 2 );
+
+		u64 total_size = engine_memory.persistent_size
+			// + engine_memory.FrameSize
+			+ engine_memory.transient_size;
 
 	#if Build_Debug
 		void* base_address = rcast(void*, terabytes( 1 ));
@@ -1169,11 +1226,27 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		void* base_address = 0;
 	#endif
 
-		engine_memory.Persistent = VirtualAlloc( base_address, total_size , MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
-		engine_memory.Transient = rcast( u8*, engine_memory.Persistent ) + engine_memory.PersistentSize;
+		engine_memory.persistent = VirtualAlloc( base_address, total_size , MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+		engine_memory.transient  = rcast( u8*, engine_memory.persistent ) + engine_memory.persistent_size;
 
-		if (	engine_memory.Persistent == nullptr
-			||	engine_memory.Transient  == nullptr )
+		Byte* snapshot_address = rcast(Byte*, NULL) + terabytes(2);
+		void* snapshots_memory = VirtualAlloc( snapshot_address, total_size * engine_memory.Num_Snapshot_Slots, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
+		if ( snapshots_memory == nullptr )
+		{
+			// TODO : Diagnostic Logging
+			return -1;
+		}
+
+		for (u32 slot = 0; slot < engine_memory.Num_Snapshot_Slots; ++slot)
+		{
+			engine::MemorySnapshot& snapshot = engine_memory.snapshots[ slot ];
+
+			Byte* address = rcast(Byte*, snapshots_memory) + total_size * slot;
+			snapshot.memory = address;
+		}
+
+		if (	engine_memory.persistent == nullptr
+			||	engine_memory.transient  == nullptr )
 		{
 			// TODO : Diagnostic Logging
 			return -1;
@@ -1185,7 +1258,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	{
 		window_class.style = CS_Horizontal_Redraw | CS_Vertical_Redraw;
 		window_class.lpfnWndProc = main_window_callback;
-		// window_class.cbClsExtra  = ;about:blank#blocked
+		// window_class.cbClsExtra  = ;
 		// window_class.cbWndExtra  = ;
 		window_class.hInstance   = instance;
 		// window_class.hIcon = ;
@@ -1201,8 +1274,8 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 
 		window_handle = CreateWindowExW(
-			WS_EX_LAYERED | WS_EX_TOPMOST,
-			// WS_EX_LAYERED,
+			// WS_EX_LAYERED | WS_EX_TOPMOST,
+			WS_EX_LAYERED,
 			window_class.lpszClassName,
 			L"Handmade Hero",
 			WS_Overlapped_Window | WS_Initially_Visible,
@@ -1218,9 +1291,22 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			// TODO : Diagnostic Logging
 			return 0;
 		}
+
+		// WinDimensions dimensions = get_window_dimensions( window_handle );
+		resize_dib_section( &Surface_Back_Buffer, 1920, 1080 );
+
+		// Setup monitor refresh and associated timers
+		HDC refresh_dc = GetDC( window_handle );
+		u32 monitor_refresh_hz = GetDeviceCaps( refresh_dc, VREFRESH );
+		if ( monitor_refresh_hz > 1 )
+		{
+			Monitor_Refresh_Hz = monitor_refresh_hz;
+		}
+		ReleaseDC( window_handle, refresh_dc );
+
+		Engine_Refresh_Hz      = 60;
+		Engine_Frame_Target_MS = 1000.f / scast(f32, Engine_Refresh_Hz);
 	}
-	// WinDimensions dimensions = get_window_dimensions( window_handle );
-	resize_dib_section( &Surface_Back_Buffer, 1920, 1080 );
 
 	// Setup pathing
 	StrFixed< S16_MAX > path_pdb_lock {};
@@ -1234,22 +1320,22 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		{
 			fatal( "Failed to get the root directory!" );
 		}
-		Path_Binaries.Len = str_length( Path_Binaries );
-		Path_Binaries[ Path_Binaries.Len ] = '\\';
-		++ Path_Binaries.Len;
+		Path_Binaries.len = str_length( Path_Binaries );
+		Path_Binaries[ Path_Binaries.len ] = '\\';
+		++ Path_Binaries.len;
 
 		if ( SetCurrentDirectoryA( ".." ) == 0 )
 		{
 			fatal( "Failed to set current directory to root!");
 		}
 
-		if ( GetCurrentDirectoryA( S16_MAX, Path_Root.Data ) == 0 )
+		if ( GetCurrentDirectoryA( S16_MAX, Path_Root.ptr ) == 0 )
 		{
 			fatal( "Failed to get the root directory!" );
 		}
-		Path_Root.Len = str_length(Path_Root.Data);
-		Path_Root.Data[ Path_Root.Len ] = '\\';
-		++ Path_Root.Len;
+		Path_Root.len = str_length(Path_Root.ptr);
+		Path_Root.ptr[ Path_Root.len ] = '\\';
+		++ Path_Root.len;
 
 		Path_Engine_DLL.      concat( Path_Binaries, FName_Engine_DLL );
 		Path_Engine_DLL_InUse.concat( Path_Binaries, FName_Engine_DLL_InUse );
@@ -1257,8 +1343,8 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		path_pdb_lock.concat( Path_Binaries, FName_Engine_PDB_Lock );
 
 		Path_Scratch.concat( Path_Root, str_ascii("scratch") );
-		Path_Scratch.Data[ Path_Scratch.Len ] = '\\';
-		++ Path_Scratch.Len;
+		Path_Scratch.ptr[ Path_Scratch.len ] = '\\';
+		++ Path_Scratch.len;
 
 		CreateDirectoryA( Path_Scratch, 0 );
 	}
@@ -1291,6 +1377,8 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		platform_api.file_rewind        = & file_rewind;
 		platform_api.file_write_content = & file_write_content;
 		platform_api.file_write_stream  = & file_write_stream;
+
+		platform_api.memory_copy = & memory_copy;
 	}
 
 	// Load engine module
@@ -1306,29 +1394,29 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	u32               audio_time_markers_size = Engine_Refresh_Hz / 2;
 	assert( audio_time_markers_size <= Monitor_Refresh_Max_Supported )
 	{
-		ds_sound_buffer.IsPlaying        = 0;
-		ds_sound_buffer.SamplesPerSecond = 48000;
-		ds_sound_buffer.BytesPerSample   = sizeof(s16) * 2;
+		ds_sound_buffer.is_playing         = 0;
+		ds_sound_buffer.samples_per_second = 48000;
+		ds_sound_buffer.bytes_per_sample   = sizeof(s16) * 2;
 
-		ds_sound_buffer.SecondaryBufferSize = ds_sound_buffer.SamplesPerSecond * ds_sound_buffer.BytesPerSample;
+		ds_sound_buffer.secondary_buffer_size = ds_sound_buffer.samples_per_second * ds_sound_buffer.bytes_per_sample;
 		init_sound( window_handle, & ds_sound_buffer );
 
-		ds_sound_buffer.Samples = rcast( s16*, VirtualAlloc( 0, 48000 * 2 * sizeof(s16)
+		ds_sound_buffer.samples = rcast( s16*, VirtualAlloc( 0, 48000 * 2 * sizeof(s16)
 			, MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write ));
 
-		assert( ds_sound_buffer.Samples );
-		ds_sound_buffer.RunningSampleIndex = 0;
+		assert( ds_sound_buffer.samples );
+		ds_sound_buffer.running_sample_index = 0;
 		// ds_clear_sound_buffer( & sound_output );
-		ds_sound_buffer.SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
+		ds_sound_buffer.secondary_buffer->Play( 0, 0, DSBPLAY_LOOPING );
 
-		ds_sound_buffer.BytesPerSecond   = ds_sound_buffer.SamplesPerSecond * ds_sound_buffer.BytesPerSample;
-		ds_sound_buffer.GuardSampleBytes = (ds_sound_buffer.BytesPerSecond / Engine_Refresh_Hz) / 2;
+		ds_sound_buffer.bytes_per_second   = ds_sound_buffer.samples_per_second * ds_sound_buffer.bytes_per_sample;
+		ds_sound_buffer.guard_sample_bytes = (ds_sound_buffer.bytes_per_second / Engine_Refresh_Hz) / 2;
 
 		// TODO(Ed): When switching to core audio at minimum, this will be 1 ms of lag and guard samples wont really be needed.
 		u32 min_guard_sample_bytes = 1540;
-		if ( ds_sound_buffer.GuardSampleBytes < min_guard_sample_bytes )
+		if ( ds_sound_buffer.guard_sample_bytes < min_guard_sample_bytes )
 		{
-			ds_sound_buffer.GuardSampleBytes = min_guard_sample_bytes;
+			ds_sound_buffer.guard_sample_bytes = min_guard_sample_bytes;
 		}
 	}
 
@@ -1346,6 +1434,10 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	engine::KeyboardState* old_keyboard = & keyboard_states[0];
 	engine::KeyboardState* new_keyboard = & keyboard_states[1];
 	// Important: Assuming keyboard always connected for now, and assigning to first controller.
+
+	engine::MousesState mouse_states[2] {};
+	engine::MousesState* old_mouse = & mouse_states[0];
+	engine::MousesState* new_mouse = & mouse_states[1];
 
 	EngineXInputPadStates  xpad_states[2] {};
 	EngineXInputPadStates* old_xpads = & xpad_states[0];
@@ -1401,6 +1493,9 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 #endif
 #pragma endregion Startup
 
+	// Placeholder
+	engine::ThreadContext thread_context_placeholder {};
+
 	Running = true;
 #if 0
 // This tests the play & write cursor update frequency.
@@ -1441,15 +1536,24 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			engine_api = load_engine_module_api();
 		} while (0);
 
-		process_pending_window_messages( new_keyboard );
 
-		poll_input( & input, jsl_num_devices, jsl_device_handles
+		// Swapping at the beginning of the input frame instead of the end.
+		swap( old_keyboard, new_keyboard );
+		swap( old_mouse,    new_mouse );
+		swap( old_xpads,    new_xpads );
+		swap( old_ds_pads,  new_ds_pads );
+
+		poll_input( window_handle, & input, jsl_num_devices, jsl_device_handles
 			, old_keyboard, new_keyboard
+			, old_mouse, new_mouse
 			, old_xpads, new_xpads
 			, old_ds_pads, new_ds_pads );
 
+		process_pending_window_messages( new_keyboard, new_mouse );
+
 		// Engine's logical iteration and rendering process
-		engine_api.update_and_render( & input, rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.Memory), & engine_memory, & platform_api );
+		engine_api.update_and_render( & input, rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.memory )
+			, & engine_memory, & platform_api, & thread_context_placeholder );
 
 		u64   audio_frame_start = timing_get_wall_clock();
 		f32   flip_to_audio_ms  = timing_get_ms_elapsed( flip_wall_clock, audio_frame_start );
@@ -1469,7 +1573,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			If its after (sync boundary), we cannot sync audio.
 			Write a frame's worth of audio plus some number of "guard" samples. (High Latency)
 		*/
-			if ( ! SUCCEEDED( ds_sound_buffer.SecondaryBuffer->GetCurrentPosition( & ds_play_cursor, & ds_write_cursor ) ))
+			if ( ! SUCCEEDED( ds_sound_buffer.secondary_buffer->GetCurrentPosition( & ds_play_cursor, & ds_write_cursor ) ))
 			{
 				sound_is_valid = false;
 				break;
@@ -1477,7 +1581,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 
 			if ( ! sound_is_valid )
 			{
-				ds_sound_buffer.RunningSampleIndex = ds_write_cursor / ds_sound_buffer.BytesPerSample;
+				ds_sound_buffer.running_sample_index = ds_write_cursor / ds_sound_buffer.bytes_per_sample;
 				sound_is_valid = true;
 			}
 
@@ -1485,9 +1589,9 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			DWORD target_cursor  = 0;
 			DWORD bytes_to_write = 0;
 
-			byte_to_lock = (ds_sound_buffer.RunningSampleIndex * ds_sound_buffer.BytesPerSample) % ds_sound_buffer.SecondaryBufferSize;
+			byte_to_lock = (ds_sound_buffer.running_sample_index * ds_sound_buffer.bytes_per_sample) % ds_sound_buffer.secondary_buffer_size;
 
-			DWORD bytes_per_second = ds_sound_buffer.BytesPerSample * ds_sound_buffer.SamplesPerSecond;
+			DWORD bytes_per_second = ds_sound_buffer.bytes_per_sample * ds_sound_buffer.samples_per_second;
 
 			DWORD expected_samplebytes_per_frame = bytes_per_second / Engine_Refresh_Hz;
 
@@ -1500,11 +1604,11 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			if ( sync_write_cursor < ds_play_cursor )
 			{
 				// unwrap the cursor so its ahead of the play curosr linearly.
-				sync_write_cursor += ds_sound_buffer.SecondaryBufferSize;
+				sync_write_cursor += ds_sound_buffer.secondary_buffer_size;
 			}
 			assert( sync_write_cursor >= ds_play_cursor );
 
-			sync_write_cursor += ds_sound_buffer.GuardSampleBytes;
+			sync_write_cursor += ds_sound_buffer.guard_sample_bytes;
 
 			b32 audio_interface_is_low_latency = sync_write_cursor < expected_sync_boundary_byte;
 			if ( audio_interface_is_low_latency )
@@ -1513,14 +1617,14 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			}
 			else
 			{
-				target_cursor = (ds_write_cursor +  expected_samplebytes_per_frame + ds_sound_buffer.GuardSampleBytes);
+				target_cursor = (ds_write_cursor +  expected_samplebytes_per_frame + ds_sound_buffer.guard_sample_bytes);
 			}
-			target_cursor %= ds_sound_buffer.SecondaryBufferSize;
+			target_cursor %= ds_sound_buffer.secondary_buffer_size;
 
 			if ( byte_to_lock > target_cursor)
 			{
 				// Infront of play cursor |--play--byte_to_write-->--|
-				bytes_to_write =  ds_sound_buffer.SecondaryBufferSize - byte_to_lock;
+				bytes_to_write =  ds_sound_buffer.secondary_buffer_size - byte_to_lock;
 				bytes_to_write += target_cursor;
 			}
 			else
@@ -1532,18 +1636,18 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		// Engine Sound
 			// s16 samples[ 48000 * 2 ];
 			engine::AudioBuffer sound_buffer {};
-			sound_buffer.NumSamples         = bytes_to_write / ds_sound_buffer.BytesPerSample;
-			sound_buffer.RunningSampleIndex = ds_sound_buffer.RunningSampleIndex;
-			sound_buffer.SamplesPerSecond   = ds_sound_buffer.SamplesPerSecond;
-			sound_buffer.Samples            = ds_sound_buffer.Samples;
-			engine_api.update_audio( & sound_buffer, & engine_memory, & platform_api );
+			sound_buffer.num_samples          = bytes_to_write / ds_sound_buffer.bytes_per_sample;
+			sound_buffer.running_sample_index = ds_sound_buffer.running_sample_index;
+			sound_buffer.samples_per_second   = ds_sound_buffer.samples_per_second;
+			sound_buffer.samples              = ds_sound_buffer.samples;
+			engine_api.update_audio( & sound_buffer, & engine_memory, & platform_api, & thread_context_placeholder );
 
 			AudioTimeMarker* marker = & audio_time_markers[ audio_marker_index ];
-			marker->OutputPlayCusror   = ds_play_cursor;
-			marker->OutputWriteCursor  = ds_write_cursor;
-			marker->OutputLocation     = byte_to_lock;
-			marker->OutputByteCount    = bytes_to_write;
-			marker->ExpectedFlipCursor = expected_sync_boundary_byte;
+			marker->output_play_cursor   = ds_play_cursor;
+			marker->output_write_cursor  = ds_write_cursor;
+			marker->output_location      = byte_to_lock;
+			marker->output_byte_count    = bytes_to_write;
+			marker->expected_flip_cursor = expected_sync_boundary_byte;
 
 		// Update audio buffer
 			if ( ! sound_is_valid )
@@ -1576,14 +1680,14 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			ds_fill_sound_buffer( & ds_sound_buffer, byte_to_lock, bytes_to_write  );
 
 			DWORD ds_status = 0;
-			if ( SUCCEEDED( ds_sound_buffer.SecondaryBuffer->GetStatus( & ds_status ) ) )
+			if ( SUCCEEDED( ds_sound_buffer.secondary_buffer->GetStatus( & ds_status ) ) )
 			{
-				ds_sound_buffer.IsPlaying = ds_status & DSBSTATUS_PLAYING;
+				ds_sound_buffer.is_playing = ds_status & DSBSTATUS_PLAYING;
 			}
-			if ( ds_sound_buffer.IsPlaying )
+			if ( ds_sound_buffer.is_playing )
 				break;
 
-			ds_sound_buffer.SecondaryBuffer->Play( 0, 0, DSBPLAY_LOOPING );
+			ds_sound_buffer.secondary_buffer->Play( 0, 0, DSBPLAY_LOOPING );
 		} while(0);
 
 		// Timing Update
@@ -1638,9 +1742,9 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 				, Engine_Frame_Target_MS );
 		#endif
 
-			display_buffer_in_window( device_context, dimensions.Width, dimensions.Height, &Surface_Back_Buffer
+			display_buffer_in_window( device_context, dimensions.width, dimensions.height, &Surface_Back_Buffer
 				, 0, 0
-				, dimensions.Width, dimensions.Height );
+				, dimensions.width, dimensions.height );
 			ReleaseDC( window_handle, device_context );
 		}
 
@@ -1650,19 +1754,19 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			// Audio Debug
 			DWORD play_cursor  = 0;
 			DWORD write_cursor = 0;
-			if ( SUCCEEDED( ds_sound_buffer.SecondaryBuffer->GetCurrentPosition( & play_cursor, & write_cursor ) ) )
+			if ( SUCCEEDED( ds_sound_buffer.secondary_buffer->GetCurrentPosition( & play_cursor, & write_cursor ) ) )
 			{
 				if ( ! sound_is_valid )
 				{
-					ds_sound_buffer.RunningSampleIndex = write_cursor / ds_sound_buffer.BytesPerSample;
+					ds_sound_buffer.running_sample_index = write_cursor / ds_sound_buffer.bytes_per_sample;
 					sound_is_valid = true;
 				}
 
 				assert( audio_marker_index < audio_time_markers_size )
 				AudioTimeMarker* marker = & audio_time_markers[ audio_marker_index ];
 
-				marker->FlipPlayCursor  = play_cursor;
-				marker->FlipWriteCursor = write_cursor;
+				marker->flip_play_curosr = play_cursor;
+				marker->flip_write_cursor = write_cursor;
 			}
 		}
 		#endif

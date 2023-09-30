@@ -8,6 +8,8 @@
 #include "dependencies/gen.hpp"
 #undef ccast
 #undef pcast
+#undef rcast
+#undef scast
 #undef do_once
 #undef do_once_start
 #undef do_once_end

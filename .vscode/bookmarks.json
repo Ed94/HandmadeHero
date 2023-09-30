@@ -14,22 +14,22 @@
 					"label": "Static Data"
 				},
 				{
-					"line": 640,
+					"line": 655,
 					"column": 0,
 					"label": "Timing"
 				},
 				{
-					"line": 1471,
+					"line": 1575,
 					"column": 4,
 					"label": "Main Loop : Audio Processing"
 				},
 				{
-					"line": 1590,
+					"line": 1694,
 					"column": 2,
 					"label": "Main Loop : Timing Update"
 				},
 				{
-					"line": 1674,
+					"line": 1778,
 					"column": 0,
 					"label": "Main Loop : End"
 				}

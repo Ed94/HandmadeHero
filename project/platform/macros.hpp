@@ -10,19 +10,19 @@
 
 // Casting
 
-#define ccast( Type, Value ) ( const_cast< Type >( (Value) ) )
-#define pcast( Type, Value ) ( * reinterpret_cast< Type* >( & ( Value ) ) )
-#define rcast( Type, Value ) reinterpret_cast< Type >( Value )
-#define scast( Type, Value ) static_cast< Type >( Value )
+#define ccast( type, value ) ( const_cast< type >( (value) ) )
+#define pcast( type, value ) ( * reinterpret_cast< type* >( & ( value ) ) )
+#define rcast( type, value ) reinterpret_cast< type >( value )
+#define scast( type, value ) static_cast< type >( value )
 
 #define do_once()          \
 	do                     \
 	{                      \
 		local_persist      \
-		bool Done = false; \
-		if ( Done )        \
+		bool done = false; \
+		if ( done )        \
 			return;        \
-		Done = true;       \
+		done = true;       \
 	}                      \
 	while(0)
 
@@ -30,10 +30,10 @@
 	do                     \
 	{                      \
 		local_persist      \
-		bool Done = false; \
-		if ( Done )        \
+		bool done = false; \
+		if ( done )        \
 			break;         \
-		Done = true;
+		done = true;
 
 #define do_once_end        \
 	}                      \

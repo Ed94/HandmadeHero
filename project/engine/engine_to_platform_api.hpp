@@ -16,12 +16,12 @@ using ShutdownFn       = void( Memory* memory, platform::ModuleAPI* platform_api
 
 // Needs a contextual reference to four things:
 // Timing, Input, Bitmap Buffer
-using UpdateAndRenderFn = void ( InputState* input, OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI* platform_api );
+using UpdateAndRenderFn = void ( InputState* input, OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI* platform_api, ThreadContext* thread );
 
 // Audio timing is complicated, processing samples must be done at a different period from the rest of the engine's usual update.
 // IMPORTANT: This has very tight timing, and cannot be more than a millisecond in execution.
 // TODO(Ed) : Reduce timing pressure on performance by measuring it or pinging its time.
-using UpdateAudioFn = void ( AudioBuffer* audio_buffer, Memory* memory, platform::ModuleAPI* platform_api );
+using UpdateAudioFn = void ( AudioBuffer* audio_buffer, Memory* memory, platform::ModuleAPI* platform_api, ThreadContext* thread );
 
 struct ModuleAPI
 {

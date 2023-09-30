@@ -11,6 +11,7 @@
 #pragma warning( disable: 4820 ) // Support auto-adding padding to structs
 #pragma warning( disable: 4711 ) // Support automatic inline expansion
 #pragma warning( disable: 4710 ) // Support automatic inline expansion
+#pragma warning( disable: 4805 ) // Support comparisons of s32 to bool.
 #endif
 
 #ifdef __clang__

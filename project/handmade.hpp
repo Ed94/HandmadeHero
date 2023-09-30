@@ -11,22 +11,27 @@ struct Memory
 {
 	// Subscection of engine memory for the game to use.
 
-	void* Persistent;
-	u64   PersistentSize;
+	void* persistent;
+	u64   persistent_size;
 
 	// void* Frame;
 	// u64   FrameSize;
 
-	void* Transient;
-	u64   TransientSize;
+	void* transient;
+	u64   transient_size;
+
+	u64 total_size()
+	{
+		return persistent_size + transient_size;
+	}
 };
 
 // We want a 'binding' to have multiple binds to active it (most likely)
 struct Actionable
 {
-	char const*                Name;
-	engine::InputBindCallback* Binds;
-	s32                        NumBinds;
+	char const*                name;
+	engine::InputBindCallback* binds;
+	s32                        num_binds;
 };
 
 struct ActionableMode
@@ -58,18 +63,28 @@ struct ActionableMode
 struct Player
 {
 	// So far just has an assigned controller.
-	engine::ControllerState* Controller;
+	engine::ControllerState* controller;
 
 	// Possilby some other stuff in the future.
 };
 
 struct PlayerState
 {
-	s32 Pos_X;
-	s32 Pos_Y;
+	s32 pos_x;
+	s32 pos_y;
 
-	b32 MidJump;
-	f32 JumpTime;
+	b32 mid_jump;
+	f32 jump_time;
+};
+
+struct PlayerActions
+{
+	s32 player_x_move_digital;
+	s32 player_y_move_digital;
+	f32 player_x_move_analog;
+	f32 player_y_move_analog;
+
+	b32 jump = false;
 };
 
 NS_HANDMADE_END

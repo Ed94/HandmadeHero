@@ -34,10 +34,10 @@ using DebugSetPauseRenderingFn = void (b32 value);
 
 struct File
 {
-	void* OpaqueHandle;
-	Str   Path;
-	void* Data;
-	u32   Size;
+	void* opaque_handle;
+	Str   path;
+	void* data;
+	u32   size;
 };
 
 #pragma region Settings Exposure
@@ -57,7 +57,7 @@ using SetEngineFrameTargetFn = void ( u32 rate_in_hz );
 
 struct BinaryModule
 {
-	void* OpaqueHandle;
+	void* opaque_handle;
 };
 
 using LoadBinaryModuleFn   = BinaryModule ( char const* module_path );
@@ -77,6 +77,8 @@ using FileReadStreamFn   = b32 ( File* file, u32 content_size, void* content_mem
 using FileWriteContentFn = u32 ( File* file, u32 content_size, void* content_memory );
 using FileWriteStreamFn  = u32 ( File* file, u32 content_size, void* content_memory );
 using FileRewindFn       = void ( File* file );
+
+using MemoryCopyFn = void( void* dest, u64 src_size, void* src );
 
 struct ModuleAPI
 {
@@ -106,6 +108,8 @@ struct ModuleAPI
 	FileRewindFn*       file_rewind;        // Rewinds the file stream to the beginning
 	FileWriteContentFn* file_write_content; // Writes content to file (overwrites)
 	FileWriteStreamFn*  file_write_stream;  // Appends content to file
+
+	MemoryCopyFn* memory_copy;
 };
 
 #pragma endregion Settings Exposure

@@ -12,32 +12,32 @@ u32 str_length( char const* str );
 // Length tracked raw strings.
 struct Str
 {
-	u32   Len;
-	char* Data;
+	u32   len;
+	char* ptr;
 
 	void append( u32 src_len, char const* src ) {
-		str_append( Len, Data, src_len, src );
+		str_append( len, ptr, src_len, src );
 	}
 	void append( Str const src ) {
-		str_append( Len, Data, src.Len, src.Data );
+		str_append( len, ptr, src.len, src.ptr );
 	}
 
 	void concat( u32 dest_size, Str* dest, Str const str_a, Str const str_b )
 	{
-		str_concat( dest_size, dest->Data
-			, str_a.Len, str_a.Data
-			, str_b.Len, str_b.Data );
-		dest->Len = str_a.Len + str_b.Len;
+		str_concat( dest_size, dest->ptr
+			, str_a.len, str_a.ptr
+			, str_b.len, str_b.ptr );
+		dest->len = str_a.len + str_b.len;
 	}
 
 	operator char*() const {
-		return Data;
+		return ptr;
 	}
 	char& operator []( u32 idx ) {
-		return Data[idx];
+		return ptr[idx];
 	}
 	char const& operator []( u32 idx ) const {
-		return Data[idx];
+		return ptr[idx];
 	}
 };
 
@@ -47,35 +47,35 @@ struct StrFixed
 {
 	constexpr static u32 Capacity = capacity;
 
-	u32  Len;
-	char Data[capacity];
+	u32  len;
+	char ptr[capacity];
 
 	void append( u32 src_len, char const* src ) {
-		str_append( Len, Data, src_len, src );
+		str_append( len, data, src_len, src );
 	}
 	void append( Str const src ) {
-		str_append( Len, Data, src.Len, src.Data );
+		str_append( len, data, src.Len, src.data );
 	}
 
 	void concat( Str const str_a, Str const str_b )
 	{
-		str_concat( Capacity, Data
-			, str_a.Len, str_a.Data
-			, str_b.Len, str_b.Data );
-		Len = str_a.Len + str_b.Len;
+		str_concat( Capacity, ptr
+			, str_a.len, str_a.ptr
+			, str_b.len, str_b.ptr );
+		len = str_a.len + str_b.len;
 	}
 
-	operator char*()           { return Data;}
-	operator char const*()     { return Data; }
-	operator Str()             { return { Len, Data }; }
-	operator Str const() const { return { Len, Data }; }
+	operator char*()           { return ptr;}
+	operator char const*()     { return ptr; }
+	operator Str()             { return { len, ptr }; }
+	operator Str const() const { return { len, ptr }; }
 	char& operator []( u32 idx ) {
 		assert( idx < Capacity );
-		return Data[idx];
+		return ptr[idx];
 	}
 	char const& operator []( u32 idx ) const {
 		assert( idx < Capacity );
-		return Data[idx];
+		return ptr[idx];
 	}
 };
 

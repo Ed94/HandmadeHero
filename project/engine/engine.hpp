@@ -14,7 +14,18 @@ NS_ENGINE_BEGIN
 struct Clocks
 {
 	// TODO(Ed) : Clock values...
-	f32 SecondsElapsed;
+	f32 seconds_elapsed;
+};
+
+struct ThreadContext
+{
+	u32 placeholder;
+};
+
+struct MemorySnapshot
+{
+	Str   file_path;
+	void* memory;
 };
 
 struct Memory
@@ -22,51 +33,75 @@ struct Memory
 	// All memory for the engine is required to be zero initialized.
 
 	// Wiped on shutdown
-	void* Persistent;
-	u64   PersistentSize;
+	void* persistent;
+	u64   persistent_size;
 
 	// Wiped on a per-frame basis
 	// void* Frame;
 	// u64   FrameSize;
 
 	// Wiped whenever the engine wants to?
-	void* Transient;
-	u64   TransientSize;
+	void* transient;
+	u64   transient_size;
+
+	// TODO(Ed) : Move this crap to state & replay archive definitions?
+		static constexpr
+		s32 Num_Snapshot_Slots = 4;
+		// Abuse RAM to store snapshots of the Engine or Game state.
+		MemorySnapshot snapshots[ Num_Snapshot_Slots ];
+		s32 active_snapshot_slot;
+
+		// Recording and playback info is the same for either engine or game.
+
+		s32 input_recording_index;
+		s32 input_playback_index;
+
+		platform::File active_recording_file;
+		platform::File active_playback_file;
+
+		// Engine-wide recording & playback loop.
+		s32 engine_loop_active;
+		s32 game_loop_active;
+
+	u64 total_size()
+	{
+		return persistent_size + transient_size;
+	}
 };
 
 struct OffscreenBuffer
 {
-	void*      Memory; // Lets use directly mess with the "pixel's memory buffer"
-	u32        Width;
-	u32        Height;
-	u32        Pitch;
-	u32        BytesPerPixel;
+	void*      memory; // Lets use directly mess with the "pixel's memory buffer"
+	u32        width;
+	u32        height;
+	u32        pitch;
+	u32        bytes_per_pixel;
 };
 
 // TODO : Will be gutting this once we have other stuff lifted.
 struct AudioBuffer
 {
-	s16* Samples;
-	u32  RunningSampleIndex;
-	s32  SamplesPerSecond;
-	s32  NumSamples;
+	s16* samples;
+	u32  running_sample_index;
+	s32  samples_per_second;
+	s32  num_samples;
 };
 
 struct DigitalBtn
 {
-	s32 HalfTransitions;
-	b32 EndedDown;
+	s32 half_transitions;
+	b32 ended_down;
 };
 
 struct AnalogAxis
 {
-	f32 Start;
-	f32 End;
-	f32 Min;
-	f32 Max;
+	f32 start;
+	f32 end;
+	f32 min;
+	f32 max;
 
 	// Platform doesn't provide this, we process in the engine layer.
-	f32 Average;
+	f32 average;
 };
 
 struct AnalogStick
@@ -77,62 +112,70 @@ struct AnalogStick
 
 union KeyboardState
 {
-	DigitalBtn Keys[12];
+	DigitalBtn keys[12];
 	struct {
-		DigitalBtn Row_1;
+		DigitalBtn row_1;
 		DigitalBtn Q;
 		DigitalBtn E;
 		DigitalBtn W;
 		DigitalBtn A;
 		DigitalBtn S;
 		DigitalBtn D;
+		DigitalBtn K;
 		DigitalBtn L;
-		DigitalBtn Escape;
-		DigitalBtn Backspace;
-		DigitalBtn Up;
-		DigitalBtn Down;
-		DigitalBtn Left;
-		DigitalBtn Right;
-		DigitalBtn Space;
-		DigitalBtn Pause;
+		DigitalBtn escape;
+		DigitalBtn backspace;
+		DigitalBtn up;
+		DigitalBtn down;
+		DigitalBtn left;
+		DigitalBtn right;
+		DigitalBtn space;
+		DigitalBtn pause;
+		DigitalBtn right_shift;
+		DigitalBtn left_shift;
 	};
 };
 
 struct MousesState
 {
-	DigitalBtn Left;
-	DigitalBtn Middle;
-	DigitalBtn Right;
+	DigitalBtn left;
+	DigitalBtn middle;
+	DigitalBtn right;
+
+	AnalogAxis X;
+	AnalogAxis Y;
+	AnalogAxis vertical_wheel;
+	AnalogAxis horizontal_wheel;
 };
 
 struct XInputPadState
 {
 	struct
 	{
-		AnalogStick Left;
-		AnalogStick Right;
-	} Stick;
+		AnalogStick left;
+		AnalogStick right;
+	} stick;
 
-	AnalogAxis LeftTrigger;
-	AnalogAxis RightTrigger;
+	AnalogAxis left_trigger;
+	AnalogAxis right_trigger;
 
 	union {
-		DigitalBtn Btns[14];
+		DigitalBtn btns[14];
 		struct {
 			struct {
-				DigitalBtn Up;
-				DigitalBtn Down;
-				DigitalBtn Left;
-				DigitalBtn Right;
-			} DPad;
+				DigitalBtn up;
+				DigitalBtn down;
+				DigitalBtn left;
+				DigitalBtn right;
+			} dpad;
 			DigitalBtn A;
 			DigitalBtn B;
 			DigitalBtn X;
 			DigitalBtn Y;
-			DigitalBtn Back;
-			DigitalBtn Start;
-			DigitalBtn LeftShoulder;
-			DigitalBtn RightShoulder;
+			DigitalBtn back;
+			DigitalBtn start;
+			DigitalBtn left_shoulder;
+			DigitalBtn right_shoulder;
 		};
 	};
 };
@@ -141,28 +184,28 @@ struct DualsensePadState
 {
 	struct
 	{
-		AnalogStick Left;
-		AnalogStick Right;
-	} Stick;
+		AnalogStick left;
+		AnalogStick right;
+	} stick;
 
 	AnalogAxis L2;
 	AnalogAxis R2;
 
 	union {
-		DigitalBtn Btns[14];
+		DigitalBtn btns[14];
 		struct {
 			struct {
-				DigitalBtn Up;
-				DigitalBtn Down;
-				DigitalBtn Left;
-				DigitalBtn Right;
-			} DPad;
-			DigitalBtn X;
-			DigitalBtn Circle;
-			DigitalBtn Square;
-			DigitalBtn Triangle;
-			DigitalBtn Share;
-			DigitalBtn Options;
+				DigitalBtn up;
+				DigitalBtn down;
+				DigitalBtn left;
+				DigitalBtn right;
+			} dpad;
+			DigitalBtn cross;
+			DigitalBtn circle;
+			DigitalBtn square;
+			DigitalBtn triangle;
+			DigitalBtn share;
+			DigitalBtn options;
 			DigitalBtn L1;
 			DigitalBtn R1;
 		};
@@ -171,39 +214,39 @@ struct DualsensePadState
 
 struct ControllerState
 {
-	KeyboardState*     Keyboard;
-	MousesState*       Mouse;
-	XInputPadState*    XPad;
-	DualsensePadState* DSPad;
+	KeyboardState*     keyboard;
+	MousesState*       mouse;
+	XInputPadState*    xpad;
+	DualsensePadState* ds_pad;
 };
 
 struct ControllerStateSnapshot
 {
-	KeyboardState     Keyboard;
-	MousesState       Mouse;
-	XInputPadState    XPad;
-	DualsensePadState DSPad;
+	KeyboardState     keyboard;
+	MousesState       mouse;
+	XInputPadState    xpad;
+	DualsensePadState ds_pad;
 };
 
 struct InputState
 {
-	ControllerState Controllers[4];
+	ControllerState controllers[4];
 };
 
 struct InputStateSnapshot
 {
-	ControllerStateSnapshot Controllers[4];
+	ControllerStateSnapshot controllers[4];
 };
 
 using InputBindCallback             = void( void* );
-using InputBindCallback_DigitalBtn  = void( engine::DigitalBtn*  Button );
-using InputBindCallback_AnalogAxis  = void( engine::AnalogAxis*  Axis );
-using InputBindCallback_AnalogStick = void( engine::AnalogStick* Stick );
+using InputBindCallback_DigitalBtn  = void( engine::DigitalBtn*  button );
+using InputBindCallback_AnalogAxis  = void( engine::AnalogAxis*  axis );
+using InputBindCallback_AnalogStick = void( engine::AnalogStick* stick );
 
 struct InputMode
 {
-	InputBindCallback* Binds;
-	s32                NumBinds;
+	InputBindCallback* binds;
+	s32                num_binds;
 };
 
 void input_mode_pop( InputMode* mode );
@@ -212,8 +255,8 @@ void input_mode_pop( InputMode* mode );
 #if 0
 struct RecordedInput
 {
-	s32         Num;
-	InputState* Stream;
+	s32         num;
+	InputState* stream;
 };
 #endif
 
