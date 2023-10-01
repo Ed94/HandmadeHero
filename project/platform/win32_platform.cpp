@@ -1331,17 +1331,16 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 
 		window_handle = CreateWindowExW(
-			WS_EX_LAYERED | WS_EX_TOPMOST,
-			// WS_EX_LAYERED,
+			// WS_EX_LAYERED | WS_EX_TOPMOST,
+			WS_EX_LAYERED,
 			window_class.lpszClassName,
 			L"Handmade Hero",
 			WS_Overlapped_Window | WS_Initially_Visible,
 			CW_Use_Default, CW_Use_Default, // x, y
-			CW_Use_Default, CW_Use_Default, // width, height
+			1920, 1080, // width, height
 			0, 0,                         // parent, menu
 			instance, 0                   // instance, param
 		);
-
 
 		if ( ! window_handle )
 		{
@@ -1567,8 +1566,10 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 
 		process_pending_window_messages( new_keyboard, new_mouse );
 
+		f32 delta_time = timing_get_seconds_elapsed( last_frame_clock, timing_get_wall_clock() );
+
 		// Engine's logical iteration and rendering process
-		engine_api.update_and_render( & input, rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.memory )
+		engine_api.update_and_render( delta_time, & input, rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.memory )
 			, & engine_memory, & platform_api, & thread_context_placeholder );
 
 		u64   audio_frame_start = timing_get_wall_clock();
@@ -1650,13 +1651,15 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			}
 
 		// Engine Sound
+			delta_time = timing_get_seconds_elapsed( last_frame_clock, timing_get_wall_clock() );
+
 			// s16 samples[ 48000 * 2 ];
 			engine::AudioBuffer sound_buffer {};
 			sound_buffer.num_samples          = bytes_to_write / ds_sound_buffer.bytes_per_sample;
 			sound_buffer.running_sample_index = ds_sound_buffer.running_sample_index;
 			sound_buffer.samples_per_second   = ds_sound_buffer.samples_per_second;
 			sound_buffer.samples              = ds_sound_buffer.samples;
-			engine_api.update_audio( & sound_buffer, & engine_memory, & platform_api, & thread_context_placeholder );
+			engine_api.update_audio( delta_time, & sound_buffer, & engine_memory, & platform_api, & thread_context_placeholder );
 
 			AudioTimeMarker* marker = & audio_time_markers[ audio_marker_index ];
 			marker->output_play_cursor   = ds_play_cursor;

@@ -25,7 +25,7 @@ The build is done in two stages:
 
 ## Milestone
 
-Day 023: Looped Live Code Editing
+Day 026: Introduction to Game Architecture
 
 ## Gallery
 

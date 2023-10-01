@@ -52,105 +52,7 @@ struct EngineState
 	hh::Memory game_memory;
 };
 
-using GetSoundSampleValueFn = s16( EngineState* state, AudioBuffer* sound_buffer );
-
-internal s16
-square_wave_sample_value( EngineState* state, AudioBuffer* sound_buffer )
-{
-	s32 wave_period = sound_buffer->samples_per_second / state->wave_tone_hz;
-
-	s32 sample_value = (sound_buffer->running_sample_index /  (wave_period / 2) ) % 2 ?
-		state->tone_volume : - state->tone_volume;
-
-	return scast(s16, sample_value);
-}
-
-internal s16
-sine_wave_sample_value( EngineState* state, AudioBuffer* sound_buffer )
-{
-	f32& time = state->sample_wave_sine_time;
-
-	s32 wave_period = sound_buffer->samples_per_second / state->wave_tone_hz;
-
-	// time =  TAU * (f32)sound_buffer->RunningSampleIndex / (f32)SoundTest_WavePeriod;
-	f32 sine_value   = sinf( time );
-	s16 sample_value = scast(s16, sine_value * scast(f32, state->tone_volume));
-
-	time += TAU * 1.0f / scast(f32, wave_period );
-	if ( time > TAU )
-	{
-		time -= TAU;
-	}
-	return sample_value;
-}
-
-internal void
-output_sound( EngineState* state, AudioBuffer* sound_buffer, GetSoundSampleValueFn* get_sample_value )
-{
-	s16* sample_out = sound_buffer->samples;
-	for ( s32 sample_index = 0; sample_index < sound_buffer->num_samples; ++ sample_index )
-	{
-		s16 sample_value = get_sample_value( state, sound_buffer );
-		sound_buffer->running_sample_index++;
-
-		// char ms_timing_debug[256] {};
-		// wsprintfA( ms_timing_debug, "sample_value: %d\n", sample_value );
-		// OutputDebugStringA( ms_timing_debug );
-
-		*sample_out = sample_value;
-		++ sample_out;
-
-		*sample_out = sample_value;
-		++ sample_out;
-	}
-}
-
-internal void
-render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
-{
-	// TODO(Ed): See if with optimizer if buffer should be passed by value.
-
-	struct Pixel {
-		u8 Blue;
-		u8 Green;
-		u8 Red;
-		u8 Alpha;
-	};
-
-	u8* row   = rcast( u8*, buffer->memory);
-	local_persist float wildcard = 0;
-	for ( u32 y = 0; y < buffer->height; ++ y )
-	{
-		// u8* pixel = rcast(u8*, row);
-		// Pixel* pixel = rcast( Pixel*, row );
-		u32* pixel = rcast(u32*, row);
-		for ( u32 x = 0; x < buffer->width; ++ x )
-		{
-			/* Pixel in memory:
-			-----------------------------------------------
-				Pixel + 0  Pixel + 1  Pixel + 2   Pixel + 3
-				RR         GG         GG          XX
-			-----------------------------------------------
-				x86-64 : Little Endian Arch
-				0x XX BB GG RR
-			*/
-		#if 0
-			u8 blue  = scast(u8, x + x_offset * u8(wildcard) % 256);
-			u8 green = scast(u8, y + y_offset - u8(wildcard) % 128);
-			u8 red   = scast(u8, wildcard) % 256 - x * 0.4f;
-		#else
-			u8 red   = scast(u8, y + y_offset);
-			u8 green = scast(u8, x + x_offset);
-			u8 blue  = scast(u8, x + y_offset) - scast(u8, y + y_offset);
-			//    blue *= 2;
-		#endif
-
-			*pixel++ = u32(red/2 << 16) | u32(green/6 << 0) | blue/2 << 0;
-		}
-		wildcard += 0.5375f;
-		row += buffer->pitch;
-	}
-}
+#include "test_samples.cpp"
 
 internal void
 render_player( OffscreenBuffer* buffer, s32 pos_x, s32 pos_y )
@@ -236,8 +138,8 @@ void begin_recording_input( Memory* memory, InputState* input, platform::ModuleA
 	file_path.concat( platform_api->path_scratch, file_name );
 	snprintf( file_path.ptr, file_path.len, "%s%d.hm_replay", file_name.ptr, memory->active_snapshot_slot );
 
-	platform_api->file_delete( memory->active_input_replay_file.path );
 	memory->active_input_replay_file.path = file_path;
+	platform_api->file_delete( memory->active_input_replay_file.path );
 	memory->replay_mode                   = ReplayMode_Record;
 }
 
@@ -450,6 +352,76 @@ void input_poll_player_actions( InputState* input, hh::PlayerActions* actions )
 	}
 }
 
+internal void
+output_sound( EngineState* state, AudioBuffer* sound_buffer, GetSoundSampleValueFn* get_sample_value )
+{
+	s16* sample_out = sound_buffer->samples;
+	for ( s32 sample_index = 0; sample_index < sound_buffer->num_samples; ++ sample_index )
+	{
+		s16 sample_value = get_sample_value( state, sound_buffer );
+		sound_buffer->running_sample_index++;
+
+		// char ms_timing_debug[256] {};
+		// wsprintfA( ms_timing_debug, "sample_value: %d\n", sample_value );
+		// d ms_timing_debug );
+
+		*sample_out = sample_value;
+		++ sample_out;
+
+		*sample_out = sample_value;
+		++ sample_out;
+	}
+}
+
+s32 round_f32_to_s32( f32 value )
+{
+	// TODO(Ed) : Casey wants to use an intrinsic
+	return scast(s32, value + 0.5f);
+}
+
+internal
+void draw_rectangle( OffscreenBuffer* buffer
+	, f32 min_x, f32 min_y
+	, f32 max_x, f32 max_y
+	, f32 red, f32 green, f32 blue  )
+{
+	s32 min_x_32 = round_f32_to_s32( min_x );
+	s32 min_y_32 = round_f32_to_s32( min_y );
+	s32 max_x_32 = round_f32_to_s32( max_x );
+	s32 max_y_32 = round_f32_to_s32( max_y );
+
+	s32 buffer_width  = buffer->width;
+	s32 buffer_height = buffer->height;
+
+	if ( min_x_32 < 0 )
+		min_x_32 = 0;
+	if ( min_y_32 < 0 )
+		min_y_32 = 0;
+	if ( max_x_32 > buffer_width )
+		max_x_32 = buffer_width;
+	if ( max_y_32 > buffer_height )
+		max_y_32 = buffer_height;
+
+	s32 color = (scast(s32, red) << 16) | (scast(s32, green) << 8) | (scast(s32, blue) << 0);
+
+	// Start with the pixel on the top left corner of the rectangle
+	u8* row = rcast(u8*, buffer->memory )
+		+ min_x_32 * buffer->bytes_per_pixel
+		+ min_y_32 * buffer->pitch;
+
+	for ( s32 y = min_y_32; y < max_y_32; ++ y )
+	{
+		s32* pixel_32 = rcast(s32*, row);
+
+		for ( s32 x = min_x_32; x < max_x_32; ++ x )
+		{
+			*pixel_32 = color;
+			pixel_32++;
+		}
+		row += buffer->pitch;
+	}
+}
+
 Engine_API
 void on_module_reload( Memory* memory, platform::ModuleAPI* platfom_api )
 {
@@ -506,7 +478,7 @@ void shutdown( Memory* memory, platform::ModuleAPI* platform_api )
 
 Engine_API
 // TODO : I rather expose the back_buffer and sound_buffer using getters for access in any function.
-void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI* platform_api, ThreadContext* thread )
+void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI* platform_api, ThreadContext* thread )
 {
 	EngineState* state = rcast( EngineState*, memory->persistent );
 	assert( sizeof(EngineState) <= memory->persistent_size );
@@ -649,7 +621,14 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 		}
 	}
 
-	render_weird_graident( back_buffer, state->x_offset, state->y_offset );
+	f32 x_offset_f = scast(f32, state->x_offset);
+	f32 y_offset_f = scast(f32, state->y_offset);
+
+	// render_weird_graident( back_buffer, state->x_offset, state->y_offset );
+	draw_rectangle( back_buffer
+		, 0.f, 0.f
+		, scast(f32, back_buffer->width), scast(f32, back_buffer->height)
+		, 0x22, 0x22, 0x22 );
 	render_player( back_buffer, player->pos_x, player->pos_y );
 
 #if Build_Development
@@ -674,7 +653,7 @@ void update_and_render( InputState* input, OffscreenBuffer* back_buffer, Memory*
 }
 
 Engine_API
-void update_audio( AudioBuffer* audio_buffer, Memory* memory, platform::ModuleAPI* platform_api, ThreadContext* thread )
+void update_audio( f32 delta_time, AudioBuffer* audio_buffer, Memory* memory, platform::ModuleAPI* platform_api, ThreadContext* thread )
 {
 	EngineState* state = rcast( EngineState*, memory->persistent );
 	do_once_start
