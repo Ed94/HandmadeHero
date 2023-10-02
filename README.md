@@ -29,6 +29,7 @@ Day 026: Introduction to Game Architecture
 
 ## Gallery
 
+![img](docs/imgs/handmade_win32_2023-10-01_20-22-20.gif)
 ![img](docs/imgs/Code_2023-09-28_15-14-53.gif)
 ![img](https://files.catbox.moe/ruv97s.gif)
 ![img](https://files.catbox.moe/9zau4s.png)
