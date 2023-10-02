@@ -35,6 +35,7 @@ struct MemorySnapshot
 	void*   opaque_handle;
 	void*   opaque_handle_2;
 	void*   memory;
+	u64     age;
 };
 
 struct Memory
@@ -56,7 +57,7 @@ struct Memory
 	// TODO(Ed) : Move this crap to state & replay archive definitions?
 	#if Build_Development
 		static constexpr
-		s32 Num_Snapshot_Slots = 2;
+		s32 Num_Snapshot_Slots = 3;
 		// Abuse RAM to store snapshots of the Engine or Game state.
 		MemorySnapshot snapshots[ Num_Snapshot_Slots ];
 		s32 active_snapshot_slot;

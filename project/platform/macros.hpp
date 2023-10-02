@@ -67,47 +67,12 @@
 #	define compiler_decorated_func_name __FUNCDNAME__
 #endif
 
-// TODO(Ed) : Add this sauce later
-#if 0
-#define congrats( message )
-#define ensure( condition, expression )
-#define fatal( message )
-#endif
-
-// Just experimenting with a way to check for global variables being accessed from the wrong place.
-// (Could also be done with gencpp technically)
-#if 0
-enum class EGlobalVarsAllowFuncs
-{
-	ProcessPendingWindowMessages,
-	Num,
-	Invalid,
-};
-EGlobalVarsAllowFuncs to_type( char const* proc_name )
-{
-	char const* global_vars_allowed_funcs[] {
-		"process_pending_window_messages"
-	};
-
-	if ( proc_name )
-	{
-		for ( u32 idx = 0; idx < array_count( global_vars_allowed_funcs ); ++idx )
-		{
-			if ( strcmp( proc_name, global_vars_allowed_funcs[idx] ) == 0 )
-			{
-				return scast( EGlobalVarsAllowFuncs, idx );
-			}
-		}
-	}
-
-	return EGlobalVarsAllowFuncs::Invalid;
-}
-
 #if Build_Development
-#	define checked_global_getter( global_var, procedure ) \
-	( ensure( to_type(procedure) != EGlobalVarsAllowFuncs::Invalid), global_var )
+#	define congrats( message )          platform::impl_congrats( message )
+#	define ensure( condition, message ) platform::impl_ensure( condition, message )
+#	define fatal( message )             platform::impl_fatal( message )
 #else
-#	define checked_global_getter( global_var, procedure ) global_var
-#endif
-
+#	define congrats( message )
+#	define ensure( condition, message )
+#	define fatal( message )
 #endif

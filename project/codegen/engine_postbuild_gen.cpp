@@ -93,7 +93,7 @@ int gen_main()
 	builder.write();
 #pragma pop_macro("str_ascii")
 
-	log_fmt("Generaton finished for Handmade Hero: Engine Module\n");
+	log_fmt("Generaton finished for Handmade Hero: Engine Module\n\n");
 	// gen::deinit();
 	return 0;
 }

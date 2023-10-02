@@ -30,15 +30,21 @@ struct EngineActions
 #if Build_Development
 	b32 pause_renderer;
 
+	b32 load_auto_snapshot;
 	b32 set_snapshot_slot_1;
 	b32 set_snapshot_slot_2;
 	b32 set_snapshot_slot_3;
 	b32 set_snapshot_slot_4;
+
+	b32 force_null_access_violation;
 #endif
 };
 
 struct EngineState
 {
+	f32 auto_snapshot_interval;
+	f32 auto_snapshot_timer;
+
 	s32 wave_tone_hz;
 	s32 tone_volume;
 	s32 x_offset;
@@ -115,6 +121,7 @@ internal
 void take_engine_snapshot( Memory* memory, platform::ModuleAPI* platform_api )
 {
 	platform_api->memory_copy( memory->snapshots[ memory->active_snapshot_slot ].memory, memory->total_size(), memory->persistent );
+	memory->snapshots[ memory->active_snapshot_slot ].age = platform_api->get_wall_clock();
 }
 
 internal
@@ -128,6 +135,7 @@ void take_game_snapshot( Memory* memory, platform::ModuleAPI* platform_api )
 
 	platform_api->memory_copy( persistent_slot, state->game_memory.persistent_size, state->game_memory.persistent );
 	platform_api->memory_copy( transient_slot,  state->game_memory.transient_size,  state->game_memory.transient );
+	memory->snapshots[ memory->active_snapshot_slot ].age = platform_api->get_wall_clock();
 }
 
 internal
@@ -300,7 +308,7 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 
 	actions->toggle_wave_tone |= pressed( keyboard->Q );
 
-	actions->loop_mode_game   |= pressed( keyboard->L ) && ! keyboard->right_shift.ended_down;
+	actions->loop_mode_game   |= pressed( keyboard->L ) && ! keyboard->right_shift.ended_down && ! keyboard->right_alt.ended_down;
 	actions->loop_mode_engine |= pressed( keyboard->L ) &&   keyboard->right_shift.ended_down;
 
 	MousesState* mouse = controller->mouse;
@@ -311,6 +319,7 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 	actions->move_up    = (mouse->vertical_wheel.end > 0.f) * 10;
 	actions->move_down  = (mouse->vertical_wheel.end < 0.f) * 10;
 
+	actions->load_auto_snapshot |= pressed( keyboard->L ) && keyboard->right_alt.ended_down;
 }
 
 internal
@@ -402,7 +411,14 @@ void draw_rectangle( OffscreenBuffer* buffer
 	if ( max_y_32 > buffer_height )
 		max_y_32 = buffer_height;
 
-	s32 color = (scast(s32, red) << 16) | (scast(s32, green) << 8) | (scast(s32, blue) << 0);
+	s32 red_32   = round_f32_to_s32( 255.f * red );
+	s32 green_32 = round_f32_to_s32( 255.f * green );
+	s32 blue_32  = round_f32_to_s32( 255.f * blue );
+
+	s32 color =
+			(scast(s32, red_32)   << 16)
+		|	(scast(s32, green_32) << 8)
+		|	(scast(s32, blue_32)  << 0);
 
 	// Start with the pixel on the top left corner of the rectangle
 	u8* row = rcast(u8*, buffer->memory )
@@ -439,13 +455,17 @@ void startup( Memory* memory, platform::ModuleAPI* platform_api )
 	memory->game_loop_active         = false;
 #endif
 
+#if 0
 	for ( s32 slot = 0; slot < memory->Num_Snapshot_Slots; ++ slot )
 	{
 		// TODO(Ed) : Specify default file paths for saving slots ?
 	}
+#endif
 
 	EngineState* state = rcast( EngineState*, memory->persistent );
 	assert( sizeof(EngineState) <= memory->persistent_size );
+
+	state->auto_snapshot_interval = 10.f;
 
 	state->tone_volume = 1000;
 
@@ -465,8 +485,8 @@ void startup( Memory* memory, platform::ModuleAPI* platform_api )
 	hh::PlayerState* player = rcast( hh::PlayerState*, state->game_memory.persistent );
 	assert( sizeof(hh::PlayerState) <= state->game_memory.persistent_size );
 
-	player->pos_x     = 100;
-	player->pos_y     = 100;
+	player->pos_x     = 920;
+	player->pos_y     = 466;
 	player->mid_jump  = false;
 	player->jump_time = 0.f;
 }
@@ -483,12 +503,36 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	EngineState* state = rcast( EngineState*, memory->persistent );
 	assert( sizeof(EngineState) <= memory->persistent_size );
 
+	// Engine auto_snapshot
+	{
+		state->auto_snapshot_timer += delta_time;
+		if ( state->auto_snapshot_timer >= state->auto_snapshot_interval )
+		{
+			state->auto_snapshot_timer = 0.f;
+
+			s32 current_slot = memory->active_snapshot_slot;
+			memory->active_snapshot_slot = 0;
+
+			take_engine_snapshot( memory, platform_api );
+			memory->active_snapshot_slot = current_slot;
+			state->auto_snapshot_timer = 0.f;
+		}
+	}
+
 	ControllerState* controller = & input->controllers[0];
 
 	EngineActions     engine_actions {};
 	hh::PlayerActions player_actions {};
 
 	input_poll_engine_actions( input, & engine_actions );
+
+	if ( engine_actions.load_auto_snapshot )
+	{
+		s32 current_slot = memory->active_snapshot_slot;
+		memory->active_snapshot_slot = 0;
+		load_engine_snapshot( memory, platform_api );
+		memory->active_snapshot_slot = current_slot;
+	}
 
 #if Build_Development
 	// Ease of use: Allow user to press L key without shift if engine loop recording is active.
@@ -571,10 +615,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 		if ( ! memory->game_loop_active )
 		{
-			if ( engine_actions.set_snapshot_slot_1 ) memory->active_snapshot_slot = 0;
-			if ( engine_actions.set_snapshot_slot_2 ) memory->active_snapshot_slot = 1;
-			if ( engine_actions.set_snapshot_slot_3 ) memory->active_snapshot_slot = 2;
-			if ( engine_actions.set_snapshot_slot_4 ) memory->active_snapshot_slot = 3;
+			if ( engine_actions.set_snapshot_slot_1 ) memory->active_snapshot_slot = 1;
+			if ( engine_actions.set_snapshot_slot_2 ) memory->active_snapshot_slot = 2;
 		}
 	#endif
 	}
@@ -599,14 +641,18 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 	input_poll_player_actions( input, & player_actions );
 	{
-		player->pos_x += player_actions.player_x_move_digital * 5;
-		player->pos_y -= player_actions.player_y_move_digital * 5;
-		player->pos_x += scast(u32, player_actions.player_x_move_analog  * 5);
-		player->pos_y -= scast(u32, player_actions.player_y_move_analog  * 5) - scast(u32, sinf( player->jump_time * TAU ) * 10);
+		f32 move_speed = 200.f;
+
+		player->pos_x += scast(f32, player_actions.player_x_move_digital) * delta_time * move_speed;
+		player->pos_y -= scast(f32, player_actions.player_y_move_digital) * delta_time * move_speed;
+
+		player->pos_x += scast(f32, player_actions.player_x_move_analog  * delta_time * move_speed);
+		player->pos_y -= scast(f32, player_actions.player_y_move_analog  * delta_time * move_speed);
+		player->pos_y += sinf( player->jump_time * TAU ) * 200.f * delta_time;
 
 		if ( player->jump_time > 0.f )
 		{
-			player->jump_time -= 0.025f;
+			player->jump_time -= delta_time;
 		}
 		else
 		{
@@ -624,21 +670,97 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	f32 x_offset_f = scast(f32, state->x_offset);
 	f32 y_offset_f = scast(f32, state->y_offset);
 
-	// render_weird_graident( back_buffer, state->x_offset, state->y_offset );
 	draw_rectangle( back_buffer
 		, 0.f, 0.f
 		, scast(f32, back_buffer->width), scast(f32, back_buffer->height)
-		, 0x22, 0x22, 0x22 );
-	render_player( back_buffer, player->pos_x, player->pos_y );
+		, 1.f, 0.24f, 0.24f );
+
+	// Draw tilemap
+	u32 tilemap[9][16] = {
+		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 0, 1,  1, 1, 1, 1 },
+		{ 1, 1, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,  0, 0, 0, 1 },
+		{ 0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 },
+		{ 1, 1, 0, 0,  0, 1, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 1, 0, 0,  0, 1, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 1, 0, 0,  0, 0, 0, 1 },
+		{ 1, 1, 1, 1,  1, 1, 0, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
+	};
+
+	f32 upper_left_x = 0;
+	f32 upper_left_y = 0;
+
+	f32 tile_width   = 119;
+	f32 tile_height  = 116;
+
+	for ( s32 row = 0; row < 9; ++ row )
+	{
+		for ( s32 col = 0; col < 16; ++ col )
+		{
+			u32 tileID = tilemap[row][col];
+			f32 grey[3] = { 0.15f, 0.15f, 0.15f };
+
+			if ( tileID == 1 )
+			{
+				grey[0] = 0.22f;
+				grey[1] = 0.22f;
+				grey[2] = 0.22f;
+			}
+
+			f32 min_x = upper_left_x + scast(f32, col) * tile_width;
+			f32 min_y = upper_left_y + scast(f32, row) * tile_height;
+			f32 max_x = min_x + tile_width;
+			f32 max_y = min_y + tile_height;
+
+			draw_rectangle( back_buffer
+				, min_x, min_y
+				, max_x, max_y
+				, grey[0], grey[1], grey[2] );
+		}
+	}
+
+	// Player
+	f32 player_width  = 50.f;
+	f32 player_height = 100.f;
+
+	f32 player_red   = 0.3f;
+	f32 player_green = 0.3f;
+	f32 player_blue  = 0.3f;
+
+	draw_rectangle( back_buffer
+		, player->pos_x, player->pos_y
+		, player->pos_x + player_width, player->pos_y + player_height
+		, player_red, player_green, player_blue );
+
+	// Auto-Snapshot percent bar
+	if (1)
+	{
+		f32 snapshot_percent_x = ((state->auto_snapshot_timer / state->auto_snapshot_interval)) * (f32)back_buffer->width / 4.f;
+		draw_rectangle( back_buffer
+			, 0.f, 0.f
+			, snapshot_percent_x, 10.f
+			, 0x00, 0.15f, 0.35f );
+	}
 
 #if Build_Development
 	if ( memory->replay_mode == ReplayMode_Record )
-		render_player( back_buffer, player->pos_x + 20, player->pos_y - 20 );
+	{
+		draw_rectangle( back_buffer
+			, scast(f32, player->pos_x) + 50.f, scast(f32, player->pos_y) - 50.f
+			, scast(f32, player->pos_x) + 10.f, scast(f32, player->pos_y) + 40.f
+			, 1.f, 1.f, 1.f );
+	}
 #endif
 
-	render_player( back_buffer, (s32)input->controllers[0].mouse->X.end, (s32)input->controllers[0].mouse->Y.end );
+	// Change above to use draw rectangle
+	draw_rectangle( back_buffer
+		, (f32)input->controllers[0].mouse->X.end, (f32)input->controllers[0].mouse->Y.end
+		, (f32)input->controllers[0].mouse->X.end + 10.f, (f32)input->controllers[0].mouse->Y.end + 10.f
+		, 1.f, 1.f, 0.f );
 
 	// Mouse buttons test
+	#if 0
 	{
 		if ( input->controllers[0].mouse->left.ended_down == true )
 			render_player( back_buffer, 5, 5 );
@@ -650,6 +772,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		if ( input->controllers[0].mouse->right.ended_down == true )
 			render_player( back_buffer, 5, 35 );
 	}
+	#endif
 }
 
 Engine_API

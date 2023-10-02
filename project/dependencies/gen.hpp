@@ -18050,6 +18050,8 @@ namespace Parser
 							);
 							return { { nullptr }, 0 };
 						}
+						move_forward();
+						content.Length++;
 
 						while ( left && current != '"' && current != '>' )
 						{

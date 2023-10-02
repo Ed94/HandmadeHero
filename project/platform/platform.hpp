@@ -18,6 +18,7 @@
 #include "math_constants.hpp"
 #include "types.hpp"
 #include "strings.hpp"
+#include "context.hpp"
 
 #define NS_PLATFORM_BEGIN namespace platform {
 #define NS_PLATFORM_END }
@@ -80,6 +81,8 @@ using FileRewindFn       = void ( File* file );
 
 using MemoryCopyFn = void( void* dest, u64 src_size, void* src );
 
+using GetWallClockFn = u64();
+
 struct ModuleAPI
 {
 	Str path_root;
@@ -89,6 +92,8 @@ struct ModuleAPI
 #if Build_Development
 	DebugSetPauseRenderingFn* debug_set_pause_rendering;
 #endif
+
+	GetWallClockFn* get_wall_clock;
 
 	GetMonitorRefreshRateFn* get_monitor_refresh_rate;
 	SetMonitorRefreshRateFn* set_monitor_refresh_rate;
@@ -111,6 +116,12 @@ struct ModuleAPI
 
 	MemoryCopyFn* memory_copy;
 };
+
+#if Build_Development
+void impl_congrats( char const* message );
+bool impl_ensure( bool condition, char const* message );
+void impl_fatal( char const* message );
+#endif
 
 #pragma endregion Settings Exposure
 
