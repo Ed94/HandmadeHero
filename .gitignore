@@ -23,6 +23,7 @@ build
 **/*.dll
 **/*.exe
 **/*.pdb
+**/*.exe
 
 **/*.hmi
 **/*.symbols
