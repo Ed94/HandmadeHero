@@ -25,7 +25,7 @@ The build is done in two stages:
 
 ## Milestone
 
-Day 026: Introduction to Game Architecture
+Day 028: Drawing a Tile Map
 
 ## Gallery
 
