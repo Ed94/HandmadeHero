@@ -70,6 +70,9 @@ struct Player
 
 struct PlayerState
 {
+	f32 width;
+	f32 height;
+
 	f32 pos_x;
 	f32 pos_y;
 

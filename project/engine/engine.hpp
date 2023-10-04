@@ -275,4 +275,27 @@ struct RecordedInput
 };
 #endif
 
+struct TileMap
+{
+	f32 upper_left_X;
+	f32 upper_left_Y;
+
+	f32 width;
+	f32 height;
+
+	s32 num_x;
+	s32 num_y;
+
+	u32* tiles;
+};
+
+struct World
+{
+	// TODO(Ed) : Beginner's sparseness
+	s32 tilemaps_num_x;
+	s32 tilemaps_num_y;
+
+	TileMap* tile_maps;
+};
+
 NS_ENGINE_END

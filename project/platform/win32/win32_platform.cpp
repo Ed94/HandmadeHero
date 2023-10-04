@@ -169,17 +169,46 @@ get_window_dimensions( HWND window_handle )
 }
 
 internal void
-display_buffer_in_window( HDC device_context, u32 window_width, u32 window_height, OffscreenBuffer* buffer
-	, u32 x, u32 y
-	, u32 width, u32 height )
+display_buffer_in_window( HDC device_context, s32 window_width, s32 window_height, OffscreenBuffer* buffer
+	, s32 x, s32 y
+	, s32 width, s32 height )
 {
+	s32 offset_x = 0;
+	s32 offset_y = 0;
+
+	if ( window_width > buffer->width )
+		offset_x = (window_width - buffer->width) / 2;
+
+	if ( window_height > buffer->height )
+		offset_y = (window_height - buffer->height) / 2;
+
+	PatBlt( device_context
+		, 0, 0
+		, window_width, offset_y
+		, BLACKNESS );
+
+	PatBlt( device_context
+		, 0, 0
+		, offset_x, window_height
+		, BLACKNESS );
+
+	PatBlt( device_context
+		, offset_x + buffer->width, 0
+		, window_width, window_height
+		, BLACKNESS);
+
+	PatBlt( device_context
+		, 0, offset_y + buffer->height
+		, window_width, window_height
+		, BLACKNESS );
+
 	// TODO(Ed) : Aspect ratio correction
 	StretchDIBits( device_context
 	#if 0
 		, x, y, width, height
 		, x, y, width, height
 	#endif
-		, 0, 0, buffer->width, buffer->height
+		, offset_x, offset_y, buffer->width, buffer->height
 		// , 0, 0, window_width, window_height
 		, 0, 0, buffer->width, buffer->height
 		, buffer->memory, & buffer->info
@@ -242,7 +271,7 @@ main_window_callback( HWND handle
 			}
 			else
 			{
-				SetLayeredWindowAttributes( handle, RGB(0, 0, 0), 120, LWA_Alpha );
+				// SetLayeredWindowAttributes( handle, RGB(0, 0, 0), 120, LWA_Alpha );
 			}
 		}
 		break;
@@ -288,12 +317,12 @@ main_window_callback( HWND handle
             if (PtInRect(&rect, pt))
             {
                 // Hide the cursor when it's inside the window
-                while (ShowCursor(FALSE) >= 0);
+                // while (ShowCursor(FALSE) >= 0);
             }
             else
             {
                 // Show the cursor when it's outside the window
-                while (ShowCursor(TRUE) < 0);
+                // while (ShowCursor(TRUE) < 0);
             }
 		}
 		break;
@@ -613,13 +642,13 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 
 		window_handle = CreateWindowExW(
-			// WS_EX_LAYERED | WS_EX_TOPMOST,
-			WS_EX_LAYERED,
+			WS_EX_LAYERED | WS_EX_TOPMOST,
+			// WS_EX_LAYERED,
 			window_class.lpszClassName,
 			L"Handmade Hero",
 			WS_Overlapped_Window | WS_Initially_Visible,
 			300, 300, // x, y
-			1920, 1080, // width, height
+			1280, 720, // width, height
 			0, 0,                         // parent, menu
 			instance, 0                   // instance, param
 		);
@@ -631,7 +660,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 
 		// WinDimensions dimensions = get_window_dimensions( window_handle );
-		resize_dib_section( &Surface_Back_Buffer, 1920, 1080 );
+		resize_dib_section( &Surface_Back_Buffer, 1280, 720 );
 
 		// Setup monitor refresh and associated timers
 		HDC refresh_dc = GetDC( window_handle );
@@ -725,9 +754,9 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	// There can be 4 of any of each input API type : KB & Mouse, XInput, JSL.
 #if 0
 	using EngineKeyboardStates = engine::KeyboardState[ Max_Controllers ];
-	EngineKeyboardStates keyboard_states[2] {};
 	EngineKeyboardStates* old_keyboards = & keyboard_states[0];
 	EngineKeyboardStates* new_keyboards = & keyboard_states[1];
+	EngineKeyboardStates keyboard_states[2] {};
 #endif
 
 	engine::KeyboardState  keyboard_states[2] {};
