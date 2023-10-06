@@ -7,6 +7,7 @@
 #pragma warning( disable: 5105 )
 #pragma warning( disable: 4820 )
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
 #include <xinput.h>
 #include <mmeapi.h>

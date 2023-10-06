@@ -277,25 +277,50 @@ struct RecordedInput
 
 struct TileMap
 {
-	f32 upper_left_X;
-	f32 upper_left_Y;
-
-	f32 width;
-	f32 height;
-
-	s32 num_x;
-	s32 num_y;
-
 	u32* tiles;
 };
 
 struct World
 {
+	f32 tile_upper_left_x;
+	f32 tile_upper_left_y;
+
+	f32 tile_width;
+	f32 tile_height;
+
+	s32 num_tiles_x; // Number of tiles on the x-axis for a tilemap.
+	s32 num_tiles_y; // Number of tiles on the y-axis for a tilemap.
+
 	// TODO(Ed) : Beginner's sparseness
 	s32 tilemaps_num_x;
 	s32 tilemaps_num_y;
 
 	TileMap* tile_maps;
+};
+
+struct CanonPosition
+{
+	// Note: Tile-Relative position
+	// TODO(Ed) : These are still in pixels
+	f32 x;
+	f32 y;
+
+	s32 tile_map_x;
+	s32 tile_map_y;
+
+	s32 tile_x;
+	s32 tile_y;
+};
+
+// TODO(Ed) : Is this necessary?
+struct RawPosition
+{
+	// Note: TileMap-Relative position
+	f32 x;
+	f32 y;
+
+	s32 tile_map_x;
+	s32 tile_map_y;
 };
 
 NS_ENGINE_END

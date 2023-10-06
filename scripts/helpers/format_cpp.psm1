@@ -8,7 +8,7 @@ function format-cpp
 	Write-Host "Beginning format"
 	$formatParams = @(
 		'-i'          # In-place
-		'-style=file:./scripts/.clang-format'
+		'-style=file:.clang-format'
 		'-verbose'
 	)
 

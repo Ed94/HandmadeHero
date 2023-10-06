@@ -383,6 +383,13 @@ output_sound( EngineState* state, AudioBuffer* sound_buffer, GetSoundSampleValue
 }
 
 inline
+s32 floor_f32_to_s32( f32 value )
+{
+	// TODO : Casey wants to use an intrinsic
+	return scast(s32, floorf( value ));
+}
+
+inline
 s32 round_f32_to_s32( f32 value )
 {
 	// TODO(Ed) : Casey wants to use an intrinsic
@@ -472,7 +479,7 @@ void startup( Memory* memory, platform::ModuleAPI* platform_api )
 	EngineState* state = rcast( EngineState*, memory->persistent );
 	assert( sizeof(EngineState) <= memory->persistent_size );
 
-	state->auto_snapshot_interval = 10.f;
+	state->auto_snapshot_interval = 60.f;
 
 	state->tone_volume = 1000;
 
@@ -489,15 +496,17 @@ void startup( Memory* memory, platform::ModuleAPI* platform_api )
 	state->game_memory.transient_size  = memory->transient_size / 2;
 	state->game_memory.transient       = rcast(Byte*, memory->transient) + state->game_memory.transient_size;
 
-	hh::PlayerState* player = rcast( hh::PlayerState*, state->game_memory.persistent );
-	assert( sizeof(hh::PlayerState) <= state->game_memory.persistent_size );
+	hh::GameState* game_state = rcast( hh::GameState*, state->game_memory.persistent );
+	assert( sizeof(hh::GameState) <= state->game_memory.persistent_size );
 
-	player->width     = 50.f;
-	player->height	  = 100.f;
-	player->pos_x     = 920;
-	player->pos_y     = 466;
-	player->mid_jump  = false;
-	player->jump_time = 0.f;
+	game_state->tile_map_x = 0;
+	game_state->tile_map_y = 0;
+
+	hh::PlayerState* player = & game_state->player_state;
+	player->pos_x      = 920;
+	player->pos_y      = 466;
+	player->mid_jump   = false;
+	player->jump_time  = 0.f;
 }
 
 Engine_API
@@ -506,45 +515,110 @@ void shutdown( Memory* memory, platform::ModuleAPI* platform_api )
 }
 
 inline
-u32 tilemap_tile_value( TileMap* tile_map, s32 x, s32 y )
+CanonPosition get_cannonical_position( World* world, RawPosition raw_pos )
 {
-	assert( x >= 0 && x < scast(s32, tile_map->num_x) );
-	assert( y >= 0 && y < scast(s32, tile_map->num_y) );
-	return tile_map->tiles[ (y * tile_map->num_x) + x ];
+	s32 tile_map_x = raw_pos.tile_map_x;
+	s32 tile_map_y = raw_pos.tile_map_y;
+
+	f32 pos_x = ( raw_pos.x - world->tile_upper_left_x );
+	f32 pos_y = ( raw_pos.y - world->tile_upper_left_y );
+
+	s32 tile_x = floor_f32_to_s32( pos_x / world->tile_width );
+	s32 tile_y = floor_f32_to_s32( pos_y / world->tile_height );
+
+	f32 tile_rel_x = pos_x - scast(f32, tile_x) * world->tile_width;
+	f32 tile_rel_y = pos_y - scast(f32, tile_y) * world->tile_height;
+
+	assert( tile_rel_x >= 0.f );
+	assert( tile_rel_y >= 0.f );
+	assert( tile_rel_x < world->tile_width );
+	assert( tile_rel_y < world->tile_height );
+
+	/*
+		The puprpose of this is to be able to detect if the point is outside of the tilemap,
+		and if so, roll the point over to an adjacent tilemap.
+
+		For example : If the point is at x = -1, then it is outside of the tilemap, and
+		should be rolled over to the tilemap to the left of the current tilemap.
+	*/
+	if ( tile_x < 0 )
+	{
+		tile_x += world->num_tiles_x;
+		-- tile_map_x;
+	}
+	if ( tile_y < 0 )
+	{
+		tile_y += world->num_tiles_y;
+		-- tile_map_y;
+	}
+	if ( tile_x >= world->num_tiles_x )
+	{
+		tile_x -= world->num_tiles_x;
+		++ tile_map_x;
+	}
+	if ( tile_y >= world->num_tiles_y )
+	{
+		tile_y -= world->num_tiles_y;
+		++ tile_map_y;
+	}
+
+	return { tile_rel_x, tile_rel_y, tile_map_x, tile_map_y, tile_x, tile_y };
 }
 
 inline
-b32 tilemap_is_pos_empty( TileMap* tile_map, f32 x, f32 y )
+u32 tilemap_tile_value( TileMap* tile_map, World* world, s32 x, s32 y )
 {
-	s32 tile_x = truncate_f32_to_s32(( x - scast(f32, tile_map->upper_left_X)) / scast(f32, tile_map->width) );
-	s32 tile_y = truncate_f32_to_s32(( y - scast(f32, tile_map->upper_left_Y)) / scast(f32, tile_map->height) );
+	assert( tile_map != nullptr );
+	assert( world    != nullptr );
+	assert( x >= 0 && x < scast(s32, world->num_tiles_x) );
+	assert( y >= 0 && y < scast(s32, world->num_tiles_y) );
+	return tile_map->tiles[ (y * world->num_tiles_x) + x ];
+}
+
+inline
+b32 tilemap_is_point_empty( TileMap* tile_map, World* world, s32 tile_x, s32 tile_y )
+{
+	assert( tile_map != nullptr );
+	assert( world    != nullptr );
+
+	// Assume space is occupied if there is bad data
+	if ( tile_map == nullptr )
+		return false;
 
 	b32 is_empty = false;
-	if ( 	tile_x >= 0 && tile_x < scast(s32, tile_map->num_x)
-		&&	tile_y >= 0 && tile_y < scast(s32, tile_map->num_y) )
+	if ( 	tile_x >= 0 && tile_x < world->num_tiles_x
+		&&	tile_y >= 0 && tile_y < world->num_tiles_y )
 	{
-		u32 tile_value = tilemap_tile_value( tile_map, tile_x, tile_y );
+		u32 tile_value = tilemap_tile_value( tile_map, world, tile_x, tile_y );
 		is_empty = tile_value == 0;
 	}
 	return is_empty;
 }
 
 inline
-TileMap* world_tilemap( World* world, s32 x, s32 y )
+TileMap* world_get_tilemap( World* world, s32 tile_map_x, s32 tile_map_y )
 {
-	assert( x >= 0 && x < world->tilemaps_num_x );
-	assert( y >= 0 && y < world->tilemaps_num_y );
-	return & world->tile_maps[ (y * world->tilemaps_num_x) + x ];
+	assert( tile_map_x >= 0 && tile_map_x < world->tilemaps_num_x );
+	assert( tile_map_y >= 0 && tile_map_y < world->tilemaps_num_y );
+	return & world->tile_maps[ (tile_map_y * world->tilemaps_num_x) + tile_map_x ];
 }
 
 internal
-b32 world_is_pos_empty( World* world, s32 tm_x, s32 tm_y, f32 x, f32 y )
+b32 world_is_point_empty( World* world, RawPosition raw_pos )
 {
-	return false;
+	assert( world != nullptr );
+
+	b32 is_empty = false;
+
+	CanonPosition position = get_cannonical_position( world, raw_pos );
+
+	TileMap* tile_map = world_get_tilemap( world, position.tile_map_x, position.tile_map_y );
+	         is_empty = tilemap_is_point_empty( tile_map, world, position.tile_x, position.tile_y );
+
+	return is_empty;
 }
 
 Engine_API
-// TODO : I rather expose the back_buffer and sound_buffer using getters for access in any function.
 void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back_buffer
 	, Memory* memory, platform::ModuleAPI* platform_api, ThreadContext* thread )
 {
@@ -684,11 +758,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	}
 #endif
 
-	hh::PlayerState* player = rcast( hh::PlayerState*, state->game_memory.persistent );
-	assert( sizeof(hh::PlayerState) <= state->game_memory.persistent_size );
-
-	f32 half_width    = player->width  / 2.f;
-	f32 quater_height = player->height / 4.f;
+	hh::GameState*   game_state = rcast( hh::GameState*, state->game_memory.persistent );
+	hh::PlayerState* player     = & game_state->player_state;
 
 	f32 x_offset_f = scast(f32, state->x_offset);
 	f32 y_offset_f = scast(f32, state->y_offset);
@@ -696,70 +767,83 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	constexpr s32 tile_map_num_x = 16;
 	constexpr s32 tile_map_num_y = 9;
 
+	// tiles_XY
 	u32 tiles_00 [tile_map_num_y][tile_map_num_x] = {
 		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1,  1, 1, 1, 1 },
+	};
+	u32 tiles_10 [tile_map_num_y][tile_map_num_x] = {
+		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 1, 1, 1,  1, 0, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
 	};
 	u32 tiles_01 [tile_map_num_y][tile_map_num_x] = {
 		{ 1, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1,  1, 1, 1, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
 	};
-	u32 tiles_10 [tile_map_num_y][tile_map_num_x] = {
-		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
+	u32 tiles_11 [tile_map_num_y][tile_map_num_x] = {
+		{ 1, 1, 1, 1,  1, 0, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
-	};
-	u32 tiles_11 [tile_map_num_y][tile_map_num_x] = { { 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
 		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
 	};
 
 	TileMap tile_maps[2][2] {};
-	tile_maps[0][0].upper_left_X = 0;
-	tile_maps[0][0].upper_left_Y = 0;
-	tile_maps[0][0].width        = 80;
-	tile_maps[0][0].height       = 80;
-	tile_maps[0][0].num_x        = tile_map_num_x;
-	tile_maps[0][0].num_y        = tile_map_num_y;
-	tile_maps[0][0].tiles		 = rcast(u32*, tiles_00);
-
-	tile_maps[0][1] = tile_maps[0][0];
-	tile_maps[0][1].tiles = rcast(u32*, tiles_01);
-
-	tile_maps[1][0] = tile_maps[0][0];
-	tile_maps[1][0].tiles = rcast(u32*, tiles_10);
-
-	tile_maps[1][1] = tile_maps[0][0];
+	tile_maps[0][0].tiles = rcast(u32*, tiles_00);
+	tile_maps[0][1].tiles = rcast(u32*, tiles_10);
+	tile_maps[1][0].tiles = rcast(u32*, tiles_01);
 	tile_maps[1][1].tiles = rcast(u32*, tiles_11);
 
-	s32 current_tile_map_id[2] = { 0, 0 };
-	TileMap* current_tile_map = & tile_maps[current_tile_map_id[0] ][current_tile_map_id[1] ];
+	World world;
+	world.num_tiles_x = tile_map_num_x;
+	world.num_tiles_y = tile_map_num_y;
+
+	f32 scale = 85;
+
+	world.tile_width  = scale;
+	world.tile_height = scale * 1.05f;
+
+	world.tile_upper_left_x = -(world.tile_width  * 0.5f);
+	world.tile_upper_left_y = -(world.tile_height * 0.5f);
+
+	world.tilemaps_num_x = 2;
+	world.tilemaps_num_y = 2;
+
+	world.tile_maps = rcast(TileMap*, tile_maps);
+
+	TileMap* current_tile_map = world_get_tilemap( & world, game_state->tile_map_x, game_state->tile_map_y );
+	assert( current_tile_map != nullptr );
+
+	player->width     = world.tile_width * 0.75f;
+	player->height	  = world.tile_height;
+
+	f32 player_half_width     = player->width  / 2.f;
+	f32 player_quarter_height = player->height / 4.f;
 
 	input_poll_player_actions( input, & player_actions );
 	{
@@ -779,16 +863,35 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		}
 		new_player_pos_y += sinf( player->jump_time * TAU ) * 200.f * delta_time;
 
-		b32 valid_new_pos =
-				tilemap_is_pos_empty( current_tile_map, new_player_pos_x - half_width, new_player_pos_y - quater_height )
-			&&	tilemap_is_pos_empty( current_tile_map, new_player_pos_x + half_width, new_player_pos_y - quater_height )
-			&&	tilemap_is_pos_empty( current_tile_map, new_player_pos_x - half_width, new_player_pos_y )
-			&&	tilemap_is_pos_empty( current_tile_map, new_player_pos_x + half_width, new_player_pos_y );
+		b32 valid_new_pos = true;
+		{
+			RawPosition test_pos = { new_player_pos_x - player_half_width, new_player_pos_y - player_quarter_height, game_state->tile_map_x, game_state->tile_map_y };
+
+			valid_new_pos &= world_is_point_empty( & world, test_pos );
+
+			test_pos.x = new_player_pos_x + player_half_width;
+			valid_new_pos &= world_is_point_empty( & world, test_pos );
+
+			test_pos.x = new_player_pos_x - player_half_width;
+			test_pos.y = new_player_pos_y;
+			valid_new_pos &= world_is_point_empty( & world, test_pos );
+
+			test_pos.x = new_player_pos_x + player_half_width;
+			valid_new_pos &= world_is_point_empty( & world, test_pos );
+		}
 
 		if ( valid_new_pos )
 		{
-			player->pos_x = new_player_pos_x;
-			player->pos_y = new_player_pos_y;
+			RawPosition   raw_pos   = { new_player_pos_x, new_player_pos_y, game_state->tile_map_x, game_state->tile_map_y };
+			CanonPosition canon_pos = get_cannonical_position( & world, raw_pos);
+
+			game_state->tile_map_x = canon_pos.tile_map_x;
+			game_state->tile_map_y = canon_pos.tile_map_y;
+
+			// current_tile_map = world_get_tilemap( & world, game_state->tile_map_x, game_state->tile_map_y );
+
+			player->pos_x = world.tile_upper_left_x + world.tile_width  * scast(f32, canon_pos.tile_x) + canon_pos.x;
+			player->pos_y = world.tile_upper_left_y + world.tile_height * scast(f32, canon_pos.tile_y) + canon_pos.y;
 		}
 
 		// player_tile_x
@@ -821,7 +924,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	{
 		for ( s32 col = 0; col < 16; ++ col )
 		{
-			u32 tileID = tilemap_tile_value( & tile_maps[0][0], col, row );
+			u32 tileID = tilemap_tile_value( current_tile_map, & world, col, row );
 			f32 grey[3] = { 0.15f, 0.15f, 0.15f };
 
 			if ( tileID == 1 )
@@ -831,10 +934,10 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 				grey[2] = 0.22f;
 			}
 
-			f32 min_x = current_tile_map->upper_left_X + scast(f32, col) * current_tile_map->width;
-			f32 min_y = current_tile_map->upper_left_Y + scast(f32, row) * current_tile_map->height;
-			f32 max_x = min_x + current_tile_map->width;
-			f32 max_y = min_y + current_tile_map->height;
+			f32 min_x = world.tile_upper_left_x + scast(f32, col) * world.tile_width;
+			f32 min_y = world.tile_upper_left_y + scast(f32, row) * world.tile_height;
+			f32 max_x = min_x + world.tile_width;
+			f32 max_y = min_y + world.tile_height;
 
 			draw_rectangle( back_buffer
 				, min_x, min_y
@@ -849,8 +952,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	f32 player_blue  = 0.3f;
 
 	draw_rectangle( back_buffer
-		, player->pos_x - half_width, player->pos_y - player->height
-		, player->pos_x + half_width, player->pos_y
+		, player->pos_x - player_half_width, player->pos_y - player->height
+		, player->pos_x + player_half_width, player->pos_y
 		, player_red, player_green, player_blue );
 
 	// Auto-Snapshot percent bar

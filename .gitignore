@@ -19,7 +19,8 @@ build
 **/*.dll
 **/*.exe
 **/*.pdb
-**/*.exe
+**/*.exp
+**/*.lib
 
 **/*.hmi
 **/*.symbols

@@ -642,8 +642,8 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 
 		window_handle = CreateWindowExW(
-			WS_EX_LAYERED | WS_EX_TOPMOST,
-			// WS_EX_LAYERED,
+			// WS_EX_LAYERED | WS_EX_TOPMOST,
+			WS_EX_LAYERED,
 			window_class.lpszClassName,
 			L"Handmade Hero",
 			WS_Overlapped_Window | WS_Initially_Visible,

@@ -1,6 +1,4 @@
-if ( $CursorPosition ) {
-	Clear-Host
-}
+Clear-Host
 
 $target_arch      = Join-Path $PSScriptRoot 'helpers/target_arch.psm1'
 $devshell         = Join-Path $PSScriptRoot 'helpers/devshell.ps1'
@@ -8,12 +6,10 @@ $format_cpp	      = Join-Path $PSScriptRoot 'helpers/format_cpp.psm1'
 $config_toolchain = Join-Path $PSScriptRoot 'helpers/configure_toolchain.ps1'
 
 $path_root   = git rev-parse --show-toplevel
-$path_build  = Join-Path $path_root    'build'
+$path_build  = Join-Path $path_root 'build'
 
 Import-Module $target_arch
 Import-Module $format_cpp
-
-Push-Location $path_root
 
 #region Arguments
        $vendor       = $null
@@ -49,6 +45,8 @@ if ( $args ) { $args | ForEach-Object {
 . $config_toolchain
 
 #region Building
+write-host "Building HandmadeHero with $vendor"
+
 $path_project  = Join-Path $path_root    'project'
 $path_data     = Join-Path $path_root	 'data'
 $path_binaries = Join-Path $path_data    'binaries'
@@ -140,7 +138,7 @@ function build-engine
 	$unit            = Join-Path $path_project  'handmade_engine.cpp'
 	$dynamic_library = Join-Path $path_binaries 'handmade_engine.dll'
 
-	build-simple $includes $compiler_args $linker_args $unit $dynamic_library
+	build-simple $path_build $includes $compiler_args $linker_args $unit $dynamic_library
 
 	Remove-Item $path_pdb_lock -Force
 
@@ -233,7 +231,7 @@ function build-engine
 		$unit       = Join-Path $path_codegen 'engine_postbuild_gen.cpp'
 		$executable = Join-Path $path_build   'engine_postbuild_gen.exe'
 
-		build-simple $includes $compiler_args $linker_args $unit $executable
+		build-simple $path_build $includes $compiler_args $linker_args $unit $executable
 
 		Push-Location $path_build
 		$time_taken = Measure-Command {
@@ -279,7 +277,7 @@ function build-platform
 		$unit       = Join-Path $path_codegen 'platform_gen.cpp'
 		$executable = Join-Path $path_build 'platform_gen.exe'
 
-		build-simple $includes $compiler_args $linker_args $unit $executable
+		build-simple $path_build $includes $compiler_args $linker_args $unit $executable $path_build
 
 		Push-Location $path_platform
 		$time_taken = Measure-Command {
@@ -308,14 +306,14 @@ function build-platform
 
 		$lib_jsl,
 
-		$flag_link_win_subsystem_windows
+		$flag_link_win_subsystem_windows,
 		$flag_link_optimize_references
 	)
 
 	$unit       = Join-Path $path_project  'handmade_win32.cpp'
 	$executable = Join-Path $path_binaries 'handmade_win32.exe'
 
-	build-simple $includes $compiler_args $linker_args $unit $executable
+	build-simple $path_build $includes $compiler_args $linker_args $unit $executable
 
 	# if ( Test-Path $executable )
 	# {

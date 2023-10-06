@@ -7,10 +7,8 @@ if ($IsWindows) {
 
 if ( $vendor -eq $null ) {
 	write-host "No vendor specified, assuming clang available"
-	$compiler = "clang"
+	$vendor = "clang"
 }
-
-write-host "Building HandmadeHero with $vendor"
 
 if ( $dev ) {
 	if ( $debug -eq $null ) {
@@ -133,6 +131,8 @@ if ( $vendor -match "clang" )
 	$flag_set_stack_size			    = '-stack='
 	$flag_syntax_only				    = '-fsyntax-only'
 	$flag_target_arch				    = '-target'
+	$flag_time_trace					= '-ftime-trace'
+	$flag_verbose 					    = '-v'
 	$flag_wall 					        = '-Wall'
 	$flag_warning 					    = '-W'
 	$flag_warnings_as_errors            = '-Werror'
@@ -155,16 +155,15 @@ if ( $vendor -match "clang" )
 		# 'libucrt',
 		'libcmt'    # For the C Runtime (Static Linkage)
 	)
-
 	function build-simple
 	{
-		param( [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )
+		param( [string]$path_output, [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )
 		#Write-Host "build-simple: clang"
 
 		$object = $unit -replace '\.cpp', '.obj'
 		$map    = $unit -replace '\.cpp', '.map'
-		$object = join-path $path_build (split-path $object -Leaf)
-		$map    = join-path $path_build (split-path $map    -Leaf)
+		$object = join-path $path_output (split-path $object -Leaf)
+		$map    = join-path $path_output (split-path $map    -Leaf)
 
 		# The PDB file has to also be time-stamped so that we can reload the DLL at runtime
 		$pdb    = $binary -replace '\.(exe|dll)$', "_$(get-random).pdb"
@@ -174,11 +173,15 @@ if ( $vendor -match "clang" )
 			$flag_exceptions_disabled,
 			$flag_target_arch, $target_arch,
 			$flag_wall,
-			$flag_preprocess_on_intergrated,
+			$flag_preprocess_non_intergrated,
 			# $flag_section_data,
 			# $flag_section_functions,
 			( $flag_path_output + $object )
 		)
+		if ( $verbose ) {
+			# $compiler_args += $flag_verbose
+			# $compiler_args += $flag_time_trace
+		}
 		if ( $optimize ) {
 			$compiler_args += $flag_optimize_fast
 		}
@@ -278,13 +281,13 @@ if ( $vendor -match "msvc" )
 	# This works because this project uses a single unit to build
 	function build-simple
 	{
-		param( [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )
+		param( [string]$path_output, [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )
 		#Write-Host "build-simple: msvc"
 
 		$object = $unit -replace '\.(cpp)$', '.obj'
 		$map    = $unit -replace '\.(cpp)$', '.map'
-		$object = join-path $path_build (split-path $object -Leaf)
-		$map    = join-path $path_build (split-path $map    -Leaf)
+		$object = join-path $path_output (split-path $object -Leaf)
+		$map    = join-path $path_output (split-path $map    -Leaf)
 
 		# The PDB file has to also be time-stamped so that we can reload the DLL at runtime
 		$pdb    = $binary -replace '\.(exe|dll)$', "_$(get-random).pdb"
@@ -297,9 +300,12 @@ if ( $vendor -match "msvc" )
 			$flag_RTTI_disabled,
 			$flag_preprocess_conform,
 			$flag_full_src_path,
-			( $flag_path_interm + $path_build + '\' ),
-			( $flag_path_output + $path_build + '\' )
+			( $flag_path_interm + $path_output + '\' ),
+			( $flag_path_output + $path_output + '\' )
 		)
+
+		if ( $verbose ) {
+		}
 
 		if ( $optimize ) {
 			$compiler_args += $flag_optimize_fast
@@ -312,7 +318,7 @@ if ( $vendor -match "msvc" )
 		{
 			$compiler_args += $flag_debug
 			$compiler_args += ( $flag_define + 'Build_Debug=1' )
-			$compiler_args += ( $flag_path_debug + $path_build + '\' )
+			$compiler_args += ( $flag_path_debug + $path_output + '\' )
 			$compiler_args += $flag_link_win_rt_static_debug
 
 			if ( $optimize ) {

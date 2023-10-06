@@ -73,6 +73,7 @@ struct PlayerState
 	f32 width;
 	f32 height;
 
+	// TODO(Ed) : Should this be canonical position now?
 	f32 pos_x;
 	f32 pos_y;
 
@@ -88,6 +89,14 @@ struct PlayerActions
 	f32 player_y_move_analog;
 
 	b32 jump = false;
+};
+
+struct GameState
+{
+	s32 tile_map_x;
+	s32 tile_map_y;
+
+	PlayerState player_state;
 };
 
 NS_HANDMADE_END
