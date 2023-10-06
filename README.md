@@ -60,6 +60,7 @@ Features Done so far:
 
 ## Gallery
 
+![img](docs/imgs/handmade_win32_2023-10-06_12-43-47.gif)
 ![img](docs/imgs/handmade_win32_2023-10-01_20-22-20.gif)
 ![img](docs/imgs/Code_2023-10-01_19-20-56.gif)
 ![img](docs/imgs/Code_2023-09-28_15-14-53.gif)
