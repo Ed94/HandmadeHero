@@ -8,8 +8,8 @@
 		<ShowEmptyFolders>true</ShowEmptyFolders>
 		<IsVirtual>false</IsVirtual>
 		<IsFolder>false</IsFolder>
-		<BuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev debug engine</BuildCommand>
-		<RebuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev debug platform</RebuildCommand>
+		<BuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev engine</BuildCommand>
+		<RebuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev platform</RebuildCommand>
 		<BuildFileCommand></BuildFileCommand>
 		<CleanCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/clean.ps1</CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>
@@ -44,6 +44,7 @@
 			<Define>GEN_TIME</Define>
 			<Define>Build_Debug</Define>
 			<Define>Build_Development</Define>
+			<Define>INTELLISENSE_DIRECTIVES=1</Define>
 		</Defines>
 		<ConfigProperties>
 			<ConfigAndPlatform>
@@ -61,10 +62,11 @@
 				<Defines></Defines>
 				<ForceIncludes></ForceIncludes>
 			</ConfigAndPlatform>
-			<Config>
-				<Name>Debug</Name>
+			<ConfigAndPlatform>
+				<Name>Dev:x64</Name>
 				<Defines></Defines>
-			</Config>
+				<ForceIncludes></ForceIncludes>
+			</ConfigAndPlatform>
 			<Config>
 				<Name>Dev</Name>
 				<Defines></Defines>

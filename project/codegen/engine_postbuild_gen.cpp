@@ -15,7 +15,13 @@
 #undef do_once_end
 using namespace gen;
 
+#include "platform/grime.hpp"
+#include "platform/macros.hpp"
+#include "platform/types.hpp"
+#include "platform/strings.hpp"
+#include "platform/platform.hpp"
 
+#include "engine/engine.hpp"
 #include "engine/engine_to_platform_api.hpp"
 
 constexpr StrC fname_handmade_engine_symbols = txt("handmade_engine.symbols");

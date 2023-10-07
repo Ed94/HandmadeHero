@@ -1,7 +1,11 @@
-#include "platform/platform.hpp"
+#if INTELLISENSE_DIRECTIVES
+#include "platform.hpp"
+#include "engine/engine.hpp"
 #include "win32.hpp"
+#endif
 
 NS_PLATFORM_BEGIN
+using namespace win32;
 
 // TODO : This will def need to be looked over.
 struct DirectSoundBuffer

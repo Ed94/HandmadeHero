@@ -169,6 +169,7 @@ if ( $vendor -match "clang" )
 		$pdb    = $binary -replace '\.(exe|dll)$', "_$(get-random).pdb"
 
 		$compiler_args += @(
+			( $flag_define + 'INTELLISENSE_DIRECTIVES=0' ),
 			$flag_no_color_diagnostics,
 			$flag_exceptions_disabled,
 			$flag_target_arch, $target_arch,
@@ -294,6 +295,7 @@ if ( $vendor -match "msvc" )
 
 		$compiler_args += @(
 			$flag_nologo,
+			( $flag_define + 'INTELLISENSE_DIRECTIVES=0'),
 			# $flag_all_cpp,
 			$flag_exceptions_disabled,
 			( $flag_define + '_HAS_EXCEPTIONS=0' ),

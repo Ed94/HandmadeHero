@@ -8,7 +8,8 @@
 
 #pragma once
 
-// TODO(Ed) : REMOVE THESE WHEN HE GETS TO THEM
+#if INTELLISENSE_DIRECTIVES
+// TODO(Ed) : REMOVE THESE WHEN CASEY GETS TO THEM
 #include <math.h> // TODO : Implement math ourselves
 #include <stdio.h> // TODO : Implement output logging ourselves
 
@@ -17,8 +18,10 @@
 #include "generics.hpp"
 #include "math_constants.hpp"
 #include "types.hpp"
+#include "intrinsics.hpp"
 #include "strings.hpp"
 #include "context.hpp"
+#endif
 
 #define NS_PLATFORM_BEGIN namespace platform {
 #define NS_PLATFORM_END }

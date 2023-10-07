@@ -1,3 +1,9 @@
+#if INTELLISENSE_DIRECTIVES
+#include "engine.hpp"
+#endif
+
+NS_ENGINE_BEGIN
+
 using GetSoundSampleValueFn = s16( EngineState* state, AudioBuffer* sound_buffer );
 
 internal s16
@@ -76,3 +82,39 @@ render_weird_graident(OffscreenBuffer* buffer, u32 x_offset, u32 y_offset )
 		row += buffer->pitch;
 	}
 }
+
+internal
+void render_player( OffscreenBuffer* buffer, s32 pos_x, s32 pos_y )
+{
+	u8* end_of_buffer = rcast(u8*, buffer->memory)
+		- buffer->bytes_per_pixel * buffer->width
+		+ buffer->pitch * buffer->height;
+
+	s32 top    = pos_y;
+	s32 bottom = pos_y + 10;
+
+	u32 color = 0xFFFFFFFF;
+
+	for ( s32 coord_x = pos_x; coord_x < (pos_x+ 10); ++ coord_x )
+	{
+		u8*
+		pixel_byte  = rcast(u8*, buffer->memory);
+		pixel_byte += coord_x * buffer->bytes_per_pixel;
+		pixel_byte += top     * buffer->pitch;
+
+		for ( s32 coord_y = top; coord_y < bottom; ++ coord_y )
+		{
+			if ( pixel_byte < buffer->memory || pixel_byte >= end_of_buffer )
+				continue;
+
+			s32* pixel = rcast(s32*, pixel_byte);
+			*pixel = color;
+
+
+
+			pixel_byte += buffer->pitch;
+		}
+	}
+}
+
+NS_ENGINE_END

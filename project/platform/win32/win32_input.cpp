@@ -1,15 +1,19 @@
-#include "platform/platform.hpp"
-#include "platform/jsl.hpp"
+#if INTELLISENSE_DIRECTIVES
+#include "platform.hpp"
+#include "engine/engine.hpp"
+#include "jsl.hpp"
 #include "win32.hpp"
+#endif
 
 NS_PLATFORM_BEGIN
+using namespace win32;
 
 // Max controllers for the platform layer and thus for all other layers is 4. (Sanity and xinput limit)
 constexpr u32 Max_Controllers = 4;
 
-using JSL_DeviceHandle = int;
+using JSL_DeviceHandle      = int;
 using EngineXInputPadStates = engine::XInputPadState[ Max_Controllers ];
-using EngineDSPadStates = engine::DualsensePadState[Max_Controllers];
+using EngineDSPadStates     = engine::DualsensePadState[Max_Controllers];
 
 internal void
 input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* new_state, u32 raw_btns, u32 btn_flag )

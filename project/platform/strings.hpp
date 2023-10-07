@@ -1,5 +1,4 @@
-#include "macros.hpp"
-#include "types.hpp"
+#pragma once
 
 void str_append( u32 dest_len, char* dest, u32 src_len, char const* src );
 void str_concat( u32 dest_size, char* dest

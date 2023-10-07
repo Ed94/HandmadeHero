@@ -1,6 +1,7 @@
 #pragma once
-
+#if INTELLISENSE_DIRECTIVES
 #include "engine/engine.hpp"
+#endif
 
 #define NS_HANDMADE_BEGIN namespace hh {
 #define NS_HANDMADE_END   }
@@ -100,3 +101,4 @@ struct GameState
 };
 
 NS_HANDMADE_END
+

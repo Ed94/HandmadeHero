@@ -4,17 +4,17 @@
 			"path": "project/platform/win32/win32_platform.cpp",
 			"bookmarks": [
 				{
-					"line": 39,
+					"line": 32,
 					"column": 0,
 					"label": "Struct Defs"
 				},
 				{
-					"line": 58,
+					"line": 51,
 					"column": 0,
 					"label": "Static Data"
 				},
 				{
-					"line": 1009,
+					"line": 1002,
 					"column": 0,
 					"label": "Main Loop : End"
 				}

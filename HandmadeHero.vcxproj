@@ -15,12 +15,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
-    <IncludePath>$(ProjectDir)project;$(IncludePath);</IncludePath>
+    <IncludePath>$(ProjectDir)project;$(ProjectDir)project\engine;$(ProjectDir)project\platform;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProjectDir)data;$(windir)System32;$(LibraryPath)</LibraryPath>
     <NMakeBuildCommandLine>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(ProjectDir)scripts\build.ps1 msvc dev engine</NMakeBuildCommandLine>
     <NMakeCleanCommandLine>pwsh ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(ProjectDir)scripts\clean.ps1</NMakeCleanCommandLine>
-    <NMakePreprocessorDefinitions>GEN_TIME;Build_Development;Build_Debug;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
-    <ExternalIncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(UniversalCRT_IncludePath);</ExternalIncludePath>
+    <NMakePreprocessorDefinitions>GEN_TIME;INTELLISENSE_DIRECTIVES;Build_Development;Build_Debug;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <ExternalIncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(UniversalCRT_IncludePath);C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\ucrt;C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\um;C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\winrt;C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\shared;C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\cppwinrt;C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Tools\MSVC\14.37.32822\include</ExternalIncludePath>
     <NMakeReBuildCommandLine>
     </NMakeReBuildCommandLine>
   </PropertyGroup>
@@ -42,7 +42,6 @@
     <ClInclude Include="project\platform\platform.hpp" />
     <ClInclude Include="project\platform\strings.hpp" />
     <ClInclude Include="project\platform\types.hpp" />
-    <ClInclude Include="project\platform\win32.hpp" />
     <ClInclude Include="project\platform\win32\win32.hpp" />
   </ItemGroup>
   <ItemGroup>
@@ -57,7 +56,6 @@
     <ClCompile Include="project\platform\win32\win32_input.cpp" />
     <ClCompile Include="project\platform\win32\win32_platform.cpp" />
     <ClCompile Include="project\platform\win32\win32_platform_api.cpp" />
-    <ClCompile Include="project\platform\win32_platform.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="docs\Day 001.md" />
@@ -75,16 +73,32 @@
     <None Include="docs\Day 020.md" />
     <None Include="docs\Day 021.md" />
     <None Include="docs\Day 022.md" />
+    <None Include="docs\Day 023.md" />
+    <None Include="docs\Day 024.md" />
+    <None Include="docs\Day 025.md" />
+    <None Include="docs\Day 027.md" />
+    <None Include="docs\Day 030.md" />
+    <None Include="docs\Day 031.md" />
+    <None Include="scripts\.clang-format" />
     <None Include="scripts\build.ps1" />
     <None Include="scripts\clean.ps1" />
+    <None Include="scripts\genccp.natstepfilter" />
+    <None Include="scripts\handmade.natstepfilter" />
+    <None Include="scripts\helpers\configure_toolchain.ps1" />
     <None Include="scripts\helpers\devshell.ps1" />
+    <None Include="scripts\helpers\format_cpp.psm1" />
     <None Include="scripts\helpers\target_arch.psm1" />
+    <None Include="scripts\rebuild.ps1" />
     <None Include="scripts\update_deps.ps1" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="project\codegen\Readme.md" />
     <Content Include="project\gen\Readme.md" />
     <Content Include="scripts\rebuild.ps1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="scripts\gencpp.natvis" />
+    <Natvis Include="scripts\handmade.natvis" />
   </ItemGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'" Label="Configuration">
     <ConfigurationType>Makefile</ConfigurationType>

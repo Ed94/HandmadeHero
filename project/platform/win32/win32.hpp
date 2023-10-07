@@ -35,11 +35,6 @@
 // #	define CONST const
 // #endif
 
-// SAL BS
-#ifndef _In_
-#	define _In_
-#endif
-
 #define NS_WIN32_BEGIN namespace win32 {
 #define NS_WIN32_END }
 
@@ -130,18 +125,6 @@ ProcSignature* get_procedure_from_library( HMODULE library_module, char const* s
 }
 
 #pragma region XInput
-WIN_LIB_API DWORD WINAPI XInputGetState
-(
-	DWORD         dwUserIndex,  // Index of the gamer associated with the device
-	XINPUT_STATE* pState        // Receives the current state
-);
-
-WIN_LIB_API DWORD WINAPI XInputSetState
-(
-	DWORD             dwUserIndex,  // Index of the gamer associated with the device
-	XINPUT_VIBRATION* pVibration    // The vibration information to send to the controller
-);
-
 DWORD WINAPI xinput_get_state_stub( DWORD dwUserIndex, XINPUT_STATE* pVibration ) {
 	do_once_start
 		OutputDebugStringA( "xinput_get_state stubbed!\n");

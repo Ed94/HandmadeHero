@@ -1,5 +1,7 @@
 #pragma once
 
+// TODO(Ed) : Make a constant per type?
+
 #	define EPSILON    1.19209290e-7f
 #	define ZERO       0.0f
 #	define ONE        1.0f

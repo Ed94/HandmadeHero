@@ -48,6 +48,7 @@ if ( $args ) { $args | ForEach-Object {
 write-host "Building HandmadeHero with $vendor"
 
 $path_project  = Join-Path $path_root    'project'
+$path_scripts  = Join-Path $path_root    'scripts'
 $path_data     = Join-Path $path_root	 'data'
 $path_binaries = Join-Path $path_data    'binaries'
 $path_deps     = Join-Path $path_project 'dependencies'
@@ -95,8 +96,6 @@ $compiler_args = @(
 	$flag_wall
 	$flag_warnings_as_errors
 	$flag_optimize_intrinsics
-
-	($flag_define + 'Build_Unity=1' )
 )
 
 if ( $dev ) {
@@ -117,6 +116,9 @@ function build-engine
 		Remove-Item -Path $file.FullName -Force
 		if ( $verbose ) { Write-Host "Deleted $file" -ForegroundColor Green }
 	}
+
+	$local:includes = $script:includes
+	$includes      += $path_engine
 
 	$local:compiler_args = $script:compiler_args
 	$compiler_args      += ($flag_define + 'Build_DLL=1' )
@@ -231,7 +233,7 @@ function build-engine
 		$unit       = Join-Path $path_codegen 'engine_postbuild_gen.cpp'
 		$executable = Join-Path $path_build   'engine_postbuild_gen.exe'
 
-		build-simple $path_build $includes $compiler_args $linker_args $unit $executable
+		build-simple $path_build $local:includes $compiler_args $linker_args $unit $executable
 
 		Push-Location $path_build
 		$time_taken = Measure-Command {
@@ -266,6 +268,9 @@ function build-platform
 		if ( -not (Test-Path $path_platform_gen) ) {
 			New-Item $path_platform_gen -ItemType Directory
 		}
+
+		$local:includes = $script:includes
+		$includes      += $path_platform
 
 		$local:compiler_args  = @()
 		$compiler_args       += ( $flag_define + 'GEN_TIME' )
@@ -333,12 +338,14 @@ if ( (Test-Path $path_jsl_dll) -eq $false )
 }
 #endregion Handmade Runtime
 
+push-location $path_scripts
 $include = @(
 	'*.cpp'
 	'*.hpp'
 )
 format-cpp $path_gen $include
 format-cpp (Join-Path $path_platform 'gen' ) $include
+pop-location
 
 Pop-Location
 #endregion Building

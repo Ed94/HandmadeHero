@@ -1,14 +1,15 @@
-//#include "win32.h"
+#if INTELLISENSE_DIRECTIVES
 #include "engine.hpp"
 #include "engine_to_platform_api.hpp"
 #include "handmade.hpp"
+#endif
 
 NS_ENGINE_BEGIN
 
 #define pressed( btn ) (btn.ended_down && btn.half_transitions > 0)
 
 // Used to determine if analog input is at move threshold
-constexpr f32 analog__move_threshold = 0.5f;
+constexpr f32 analog_move_threshold = 0.5f;
 
 struct EngineActions
 {
@@ -58,41 +59,9 @@ struct EngineState
 	hh::Memory game_memory;
 };
 
+NS_ENGINE_END
 #include "test_samples.cpp"
-
-internal void
-render_player( OffscreenBuffer* buffer, s32 pos_x, s32 pos_y )
-{
-	u8* end_of_buffer = rcast(u8*, buffer->memory)
-		- buffer->bytes_per_pixel * buffer->width
-		+ buffer->pitch * buffer->height;
-
-	s32 top    = pos_y;
-	s32 bottom = pos_y + 10;
-
-	u32 color = 0xFFFFFFFF;
-
-	for ( s32 coord_x = pos_x; coord_x < (pos_x+ 10); ++ coord_x )
-	{
-		u8*
-		pixel_byte  = rcast(u8*, buffer->memory);
-		pixel_byte += coord_x * buffer->bytes_per_pixel;
-		pixel_byte += top     * buffer->pitch;
-
-		for ( s32 coord_y = top; coord_y < bottom; ++ coord_y )
-		{
-			if ( pixel_byte < buffer->memory || pixel_byte >= end_of_buffer )
-				continue;
-
-			s32* pixel = rcast(s32*, pixel_byte);
-			*pixel = color;
-
-
-
-			pixel_byte += buffer->pitch;
-		}
-	}
-}
+NS_ENGINE_BEGIN
 
 #if Build_Development
 using SnapshotFn = void ( Memory* memory, platform::ModuleAPI* platform_api );
@@ -382,26 +351,6 @@ output_sound( EngineState* state, AudioBuffer* sound_buffer, GetSoundSampleValue
 	}
 }
 
-inline
-s32 floor_f32_to_s32( f32 value )
-{
-	// TODO : Casey wants to use an intrinsic
-	return scast(s32, floorf( value ));
-}
-
-inline
-s32 round_f32_to_s32( f32 value )
-{
-	// TODO(Ed) : Casey wants to use an intrinsic
-	return scast(s32, value + 0.5f);
-}
-
-inline
-s32 truncate_f32_to_s32( f32 value )
-{
-	return scast(s32, value);
-}
-
 internal
 void draw_rectangle( OffscreenBuffer* buffer
 	, f32 min_x, f32 min_y
@@ -522,17 +471,19 @@ CanonPosition get_cannonical_position( World* world, RawPosition raw_pos )
 
 	f32 pos_x = ( raw_pos.x - world->tile_upper_left_x );
 	f32 pos_y = ( raw_pos.y - world->tile_upper_left_y );
+	
+	f32 tile_size = scast(f32, world->tile_size_in_pixels);
 
-	s32 tile_x = floor_f32_to_s32( pos_x / world->tile_width );
-	s32 tile_y = floor_f32_to_s32( pos_y / world->tile_height );
+	s32 tile_x = floor_f32_to_s32( pos_x / tile_size );
+	s32 tile_y = floor_f32_to_s32( pos_y / tile_size );
 
-	f32 tile_rel_x = pos_x - scast(f32, tile_x) * world->tile_width;
-	f32 tile_rel_y = pos_y - scast(f32, tile_y) * world->tile_height;
+	f32 tile_rel_x = pos_x - scast(f32, tile_x) * tile_size;
+	f32 tile_rel_y = pos_y - scast(f32, tile_y) * tile_size;
 
 	assert( tile_rel_x >= 0.f );
 	assert( tile_rel_y >= 0.f );
-	assert( tile_rel_x < world->tile_width );
-	assert( tile_rel_y < world->tile_height );
+	assert( tile_rel_x < tile_size );
+	assert( tile_rel_y < tile_size );
 
 	/*
 		The puprpose of this is to be able to detect if the point is outside of the tilemap,
@@ -820,16 +771,18 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	tile_maps[1][1].tiles = rcast(u32*, tiles_11);
 
 	World world;
+	world.tile_size_in_meters = 1.4f;
+	world.tile_size_in_pixels = 85;
+	
+	f32 tile_size_in_pixels = scast(f32, world.tile_size_in_pixels);
+	
 	world.num_tiles_x = tile_map_num_x;
 	world.num_tiles_y = tile_map_num_y;
 
 	f32 scale = 85;
 
-	world.tile_width  = scale;
-	world.tile_height = scale * 1.05f;
-
-	world.tile_upper_left_x = -(world.tile_width  * 0.5f);
-	world.tile_upper_left_y = -(world.tile_height * 0.5f);
+	world.tile_upper_left_x = -( tile_size_in_pixels * 0.5f);
+	world.tile_upper_left_y = -( tile_size_in_pixels * 0.25f);
 
 	world.tilemaps_num_x = 2;
 	world.tilemaps_num_y = 2;
@@ -839,8 +792,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	TileMap* current_tile_map = world_get_tilemap( & world, game_state->tile_map_x, game_state->tile_map_y );
 	assert( current_tile_map != nullptr );
 
-	player->width     = world.tile_width * 0.75f;
-	player->height	  = world.tile_height;
+	player->width  = tile_size_in_pixels * 0.70f;
+	player->height = tile_size_in_pixels * 0.9f;
 
 	f32 player_half_width     = player->width  / 2.f;
 	f32 player_quarter_height = player->height / 4.f;
@@ -865,18 +818,21 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 		b32 valid_new_pos = true;
 		{
-			RawPosition test_pos = { new_player_pos_x - player_half_width, new_player_pos_y - player_quarter_height, game_state->tile_map_x, game_state->tile_map_y };
+			RawPosition test_pos = { 
+				new_player_pos_x - player_half_width, new_player_pos_y - player_quarter_height, 
+				game_state->tile_map_x, game_state->tile_map_y 
+			};
 
 			valid_new_pos &= world_is_point_empty( & world, test_pos );
 
-			test_pos.x = new_player_pos_x + player_half_width;
+			test_pos.x     = new_player_pos_x + player_half_width;
 			valid_new_pos &= world_is_point_empty( & world, test_pos );
 
-			test_pos.x = new_player_pos_x - player_half_width;
-			test_pos.y = new_player_pos_y;
+			test_pos.x     = new_player_pos_x - player_half_width;
+			test_pos.y     = new_player_pos_y;
 			valid_new_pos &= world_is_point_empty( & world, test_pos );
 
-			test_pos.x = new_player_pos_x + player_half_width;
+			test_pos.x     = new_player_pos_x + player_half_width;
 			valid_new_pos &= world_is_point_empty( & world, test_pos );
 		}
 
@@ -890,8 +846,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 			// current_tile_map = world_get_tilemap( & world, game_state->tile_map_x, game_state->tile_map_y );
 
-			player->pos_x = world.tile_upper_left_x + world.tile_width  * scast(f32, canon_pos.tile_x) + canon_pos.x;
-			player->pos_y = world.tile_upper_left_y + world.tile_height * scast(f32, canon_pos.tile_y) + canon_pos.y;
+			player->pos_x = world.tile_upper_left_x + tile_size_in_pixels * scast(f32, canon_pos.tile_x) + canon_pos.x;
+			player->pos_y = world.tile_upper_left_y + tile_size_in_pixels * scast(f32, canon_pos.tile_y) + canon_pos.y;
 		}
 
 		// player_tile_x
@@ -934,10 +890,10 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 				grey[2] = 0.22f;
 			}
 
-			f32 min_x = world.tile_upper_left_x + scast(f32, col) * world.tile_width;
-			f32 min_y = world.tile_upper_left_y + scast(f32, row) * world.tile_height;
-			f32 max_x = min_x + world.tile_width;
-			f32 max_y = min_y + world.tile_height;
+			f32 min_x = world.tile_upper_left_x + scast(f32, col) * tile_size_in_pixels;
+			f32 min_y = world.tile_upper_left_y + scast(f32, row) * tile_size_in_pixels;
+			f32 max_x = min_x + tile_size_in_pixels;
+			f32 max_y = min_y + tile_size_in_pixels;
 
 			draw_rectangle( back_buffer
 				, min_x, min_y

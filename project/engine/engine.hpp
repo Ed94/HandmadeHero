@@ -4,7 +4,9 @@
 
 #pragma once
 
+#if INTELLISENSE_DIRECTIVES
 #include "platform/platform.hpp"
+#endif
 
 #define NS_ENGINE_BEGIN namespace engine {
 #define NS_ENGINE_END }
@@ -282,11 +284,11 @@ struct TileMap
 
 struct World
 {
+	f32 tile_size_in_meters;
+	s32 tile_size_in_pixels;
+	
 	f32 tile_upper_left_x;
 	f32 tile_upper_left_y;
-
-	f32 tile_width;
-	f32 tile_height;
 
 	s32 num_tiles_x; // Number of tiles on the x-axis for a tilemap.
 	s32 num_tiles_y; // Number of tiles on the y-axis for a tilemap.
@@ -300,11 +302,16 @@ struct World
 
 struct CanonPosition
 {
+	// TODO(Ed): Convert these to resolution-indenpent rep of world units (a proper vector space?))
 	// Note: Tile-Relative position
-	// TODO(Ed) : These are still in pixels
 	f32 x;
 	f32 y;
 
+	/* TODO(Ed) :
+	Take the tile map x & y and the tile x & y
+	where there is some low bits for the tile index
+	and the high bits are the tile "page".
+	*/
 	s32 tile_map_x;
 	s32 tile_map_y;
 

@@ -6,6 +6,7 @@
                 "${workspaceFolder}/project/",
                 "${workspaceFolder}/project/dependencies/",
                 "${workspaceFolder}/project/platform/",
+                "${workspaceFolder}/project/engine/",
             ],
             "defines": [
                 "_DEBUG",
@@ -26,6 +27,7 @@
                 "${workspaceFolder}/project/",
                 "${workspaceFolder}/project/dependencies/",
                 "${workspaceFolder}/project/platform/",
+                "${workspaceFolder}/project/engine/",
             ],
             "defines": [
                 "_DEBUG",

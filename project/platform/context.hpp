@@ -1,5 +1,4 @@
-#include "platform.hpp"
-
+#pragma once
 
 struct Context
 {

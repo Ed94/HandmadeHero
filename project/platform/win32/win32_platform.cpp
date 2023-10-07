@@ -1,3 +1,11 @@
+#if INTELLISENSE_DIRECTIVES
+#include "platform/platform.hpp"
+#include "engine/engine.hpp"
+#include "engine/engine_to_platform_api.hpp"
+#include "gen/engine_symbol_table.hpp"
+#include "win32.hpp"
+#include "jsl.hpp"
+#endif
 /*
 	TODO : This is not a final platform layer
 
@@ -16,17 +24,6 @@
 	- Hardware acceleration ( OpenGL or Direct3D or both )
 	- GetKeyboardLayout (for French keyboards, international WASD support)
 */
-
-// Platform Layer headers
-#include "platform/platform.hpp"
-#include "platform/jsl.hpp" // Using this to get dualsense controllers
-#include "win32.hpp"
-
-// Engine layer headers
-#include "engine/engine.hpp"
-#include "engine/engine_to_platform_api.hpp"
-
-#include "gen/engine_symbol_table.hpp"
 
 NS_PLATFORM_BEGIN
 using namespace win32;

@@ -1,6 +1,8 @@
-#include "platform/platform.hpp"
-#include "platform/jsl.hpp"
+#if INTELLISENSE_DIRECTIVES
+#include "platform.hpp"
+#include "jsl.hpp"
 #include "win32.hpp"
+#endif
 
 NS_PLATFORM_BEGIN
 
