@@ -97,15 +97,6 @@ FILETIME file_get_last_write_time( char const* path )
 	GetFileAttributesExA( path, GetFileExInfoStandard, & engine_dll_file_attributes );
 
 	return engine_dll_file_attributes.ftLastWriteTime;
-#if 0
-	WIN32_FIND_DATAA dll_file_info = {};
-	HANDLE dll_file_handle = FindFirstFileA( path, & dll_file_info );
-	if ( dll_file_handle == INVALID_HANDLE_VALUE )
-	{
-		FindClose( dll_file_handle );
-	}
-	return dll_file_info.ftLastWriteTime;
-#endif
 }
 
 #pragma region Timing
@@ -307,20 +298,20 @@ main_window_callback( HWND handle
 
 		case WM_MOUSEMOVE:
 		{
-            RECT rect;
-            POINT pt = { LOWORD(l_param), HIWORD(l_param) };
+			RECT rect;
+			POINT pt = { LOWORD(l_param), HIWORD(l_param) };
 
-            GetClientRect(handle, &rect);
-            if (PtInRect(&rect, pt))
-            {
-                // Hide the cursor when it's inside the window
-                // while (ShowCursor(FALSE) >= 0);
-            }
-            else
-            {
-                // Show the cursor when it's outside the window
-                // while (ShowCursor(TRUE) < 0);
-            }
+			GetClientRect(handle, &rect);
+			if (PtInRect(&rect, pt))
+			{
+				// Hide the cursor when it's inside the window
+				// while (ShowCursor(FALSE) >= 0);
+			}
+			else
+			{
+				// Show the cursor when it's outside the window
+				// while (ShowCursor(TRUE) < 0);
+			}
 		}
 		break;
 

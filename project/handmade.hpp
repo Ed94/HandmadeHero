@@ -75,9 +75,11 @@ struct PlayerState
 	f32 height;
 
 	// TODO(Ed) : Should this be canonical position now?
-	f32 pos_x;
-	f32 pos_y;
-
+	//f32 pos_x;
+	//f32 pos_y;
+	
+	engine::CanonPosition position;
+	
 	b32 mid_jump;
 	f32 jump_time;
 };
@@ -94,9 +96,6 @@ struct PlayerActions
 
 struct GameState
 {
-	s32 tile_map_x;
-	s32 tile_map_y;
-
 	PlayerState player_state;
 };
 

@@ -14,7 +14,6 @@ if ( $dev ) {
 	if ( $debug -eq $null ) {
 		$debug = $true
 	}
-
 	if ( $optimize -eq $null ) {
 		$optimize = $false
 	}
@@ -149,12 +148,15 @@ if ( $vendor -match "clang" )
 	)
 
 	# https://learn.microsoft.com/en-us/cpp/c-runtime-library/crt-library-features?view=msvc-170
-	$libraries = @(
-		'Kernel32' # For Windows API
-		# 'msvcrt', # For the C Runtime (Dynamically Linked)
-		# 'libucrt',
-		'libcmt'    # For the C Runtime (Static Linkage)
-	)
+	if ( $IsWindows ) {
+		$libraries = @(
+			'Kernel32' # For Windows API
+			# 'msvcrt', # For the C Runtime (Dynamically Linked)
+			# 'libucrt',
+			'libcmt'    # For the C Runtime (Static Linkage)
+		)
+	}
+
 	function build-simple
 	{
 		param( [string]$path_output, [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )

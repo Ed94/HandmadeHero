@@ -448,12 +448,14 @@ void startup( Memory* memory, platform::ModuleAPI* platform_api )
 	hh::GameState* game_state = rcast( hh::GameState*, state->game_memory.persistent );
 	assert( sizeof(hh::GameState) <= state->game_memory.persistent_size );
 
-	game_state->tile_map_x = 0;
-	game_state->tile_map_y = 0;
-
 	hh::PlayerState* player = & game_state->player_state;
-	player->pos_x      = 920;
-	player->pos_y      = 466;
+	player->position.tile_map_x = 0;
+	player->position.tile_map_y = 0;
+	player->position.tile_x     = 3;
+	player->position.tile_y     = 3;
+	player->position.x          = 0.f;
+	player->position.y          = 0.f;
+
 	player->mid_jump   = false;
 	player->jump_time  = 0.f;
 }
@@ -464,56 +466,43 @@ void shutdown( Memory* memory, platform::ModuleAPI* platform_api )
 }
 
 inline
-CanonPosition get_cannonical_position( World* world, RawPosition raw_pos )
+void cannonicalize_coord( World* world, s32 num_tiles, s32* tile_map_coord, s32* tile_coord, f32* pos_coord )
 {
-	s32 tile_map_x = raw_pos.tile_map_x;
-	s32 tile_map_y = raw_pos.tile_map_y;
+	s32 new_tile_map_coord = *tile_map_coord;
+	f32 tile_size          = scast(f32, world->tile_size_in_meters);
 
-	f32 pos_x = ( raw_pos.x - world->tile_upper_left_x );
-	f32 pos_y = ( raw_pos.y - world->tile_upper_left_y );
-	
-	f32 tile_size = scast(f32, world->tile_size_in_pixels);
+	// TODO(Ed) : Need to use an alt method for reconnonicalizing because this can end up rounding back up to the tile.
+	// TODO(Ed) : Add bounds checking to prevent wrapping
+	s32 offset         = floor_f32_to_s32( (* pos_coord) / tile_size );
+	s32 new_tile_coord = (* tile_coord) + offset;
+	f32 new_pos_coord  = (* pos_coord)  - scast(f32, offset) * tile_size;
 
-	s32 tile_x = floor_f32_to_s32( pos_x / tile_size );
-	s32 tile_y = floor_f32_to_s32( pos_y / tile_size );
+	assert( new_pos_coord >= 0.f );
+	assert( new_pos_coord < tile_size );
 
-	f32 tile_rel_x = pos_x - scast(f32, tile_x) * tile_size;
-	f32 tile_rel_y = pos_y - scast(f32, tile_y) * tile_size;
-
-	assert( tile_rel_x >= 0.f );
-	assert( tile_rel_y >= 0.f );
-	assert( tile_rel_x < tile_size );
-	assert( tile_rel_y < tile_size );
-
-	/*
-		The puprpose of this is to be able to detect if the point is outside of the tilemap,
-		and if so, roll the point over to an adjacent tilemap.
-
-		For example : If the point is at x = -1, then it is outside of the tilemap, and
-		should be rolled over to the tilemap to the left of the current tilemap.
-	*/
-	if ( tile_x < 0 )
+	if ( new_tile_coord  < 0 )
 	{
-		tile_x += world->num_tiles_x;
-		-- tile_map_x;
+		new_tile_coord += num_tiles;
+		-- new_tile_map_coord;
 	}
-	if ( tile_y < 0 )
+	if ( new_tile_coord >= num_tiles )
 	{
-		tile_y += world->num_tiles_y;
-		-- tile_map_y;
-	}
-	if ( tile_x >= world->num_tiles_x )
-	{
-		tile_x -= world->num_tiles_x;
-		++ tile_map_x;
-	}
-	if ( tile_y >= world->num_tiles_y )
-	{
-		tile_y -= world->num_tiles_y;
-		++ tile_map_y;
+		new_tile_coord -= num_tiles;
+		++ new_tile_map_coord;
 	}
 
-	return { tile_rel_x, tile_rel_y, tile_map_x, tile_map_y, tile_x, tile_y };
+	(* tile_map_coord) = new_tile_map_coord;
+	(* tile_coord)     = new_tile_coord;
+	(* pos_coord)      = new_pos_coord;
+}
+
+inline
+CanonPosition recannonicalize_position( World* world, CanonPosition pos )
+{
+	CanonPosition result = pos;
+	cannonicalize_coord( world, world->num_tiles_x, & result.tile_map_x, & result.tile_x, & result.x );
+	cannonicalize_coord( world, world->num_tiles_y, & result.tile_map_y, & result.tile_y, & result.y );
+	return result;
 }
 
 inline
@@ -555,18 +544,26 @@ TileMap* world_get_tilemap( World* world, s32 tile_map_x, s32 tile_map_y )
 }
 
 internal
-b32 world_is_point_empty( World* world, RawPosition raw_pos )
+b32 world_is_point_empty( World* world, CanonPosition position )
 {
 	assert( world != nullptr );
 
 	b32 is_empty = false;
 
-	CanonPosition position = get_cannonical_position( world, raw_pos );
-
 	TileMap* tile_map = world_get_tilemap( world, position.tile_map_x, position.tile_map_y );
 	         is_empty = tilemap_is_point_empty( tile_map, world, position.tile_x, position.tile_y );
 
 	return is_empty;
+}
+
+void draw_debug_point(OffscreenBuffer* back_buffer, World* world, CanonPosition pos, f32 red, f32 green, f32 blue)
+{
+	draw_rectangle(back_buffer,
+		pos.x * world->tile_meters_to_pixels + world->tile_upper_left_x + scast(f32, pos.tile_x	* world->tile_size_in_pixels),
+		pos.y * world->tile_meters_to_pixels + world->tile_upper_left_y + scast(f32, pos.tile_y	* world->tile_size_in_pixels),
+		(pos.x + 0.1f) * world->tile_meters_to_pixels + world->tile_upper_left_x + scast(f32, pos.tile_x	* world->tile_size_in_pixels),
+		(pos.y + 0.1f) * world->tile_meters_to_pixels + world->tile_upper_left_y + scast(f32, pos.tile_y	* world->tile_size_in_pixels),
+		red, green, blue);
 }
 
 Engine_API
@@ -773,9 +770,10 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	World world;
 	world.tile_size_in_meters = 1.4f;
 	world.tile_size_in_pixels = 85;
-	
+	world.tile_meters_to_pixels = scast(f32, world.tile_size_in_pixels) / world.tile_size_in_meters;
+
 	f32 tile_size_in_pixels = scast(f32, world.tile_size_in_pixels);
-	
+
 	world.num_tiles_x = tile_map_num_x;
 	world.num_tiles_y = tile_map_num_y;
 
@@ -789,65 +787,90 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 	world.tile_maps = rcast(TileMap*, tile_maps);
 
-	TileMap* current_tile_map = world_get_tilemap( & world, game_state->tile_map_x, game_state->tile_map_y );
+	TileMap* current_tile_map = world_get_tilemap( & world, player->position.tile_map_x, player->position.tile_map_y );
 	assert( current_tile_map != nullptr );
 
-	player->width  = tile_size_in_pixels * 0.70f;
-	player->height = tile_size_in_pixels * 0.9f;
+	player->height = 1.4f;
+	player->width  = player->height * 0.7f;
 
 	f32 player_half_width     = player->width  / 2.f;
 	f32 player_quarter_height = player->height / 4.f;
 
 	input_poll_player_actions( input, & player_actions );
 	{
-		f32 move_speed = 200.f;
+		f32 move_speed = 6.f;
 
-		f32 new_player_pos_x = player->pos_x;
-		f32 new_player_pos_y = player->pos_y;
+		f32 new_player_pos_x = player->position.x;
+		f32 new_player_pos_y = player->position.y;
 		if ( player_actions.player_x_move_analog || player_actions.player_y_move_analog )
 		{
-			new_player_pos_x += scast(f32, player_actions.player_x_move_analog  * delta_time * move_speed);
-			new_player_pos_y -= scast(f32, player_actions.player_y_move_analog  * delta_time * move_speed);
+			new_player_pos_x += scast(f32, player_actions.player_x_move_analog * delta_time * move_speed);
+			new_player_pos_y -= scast(f32, player_actions.player_y_move_analog * delta_time * move_speed);
 		}
 		else
 		{
 			new_player_pos_x += scast(f32, player_actions.player_x_move_digital) * delta_time * move_speed;
 			new_player_pos_y -= scast(f32, player_actions.player_y_move_digital) * delta_time * move_speed;
 		}
-		new_player_pos_y += sinf( player->jump_time * TAU ) * 200.f * delta_time;
+		new_player_pos_y += sinf( player->jump_time * TAU ) * 10.f * delta_time;
 
 		b32 valid_new_pos = true;
 		{
-			RawPosition test_pos = { 
-				new_player_pos_x - player_half_width, new_player_pos_y - player_quarter_height, 
-				game_state->tile_map_x, game_state->tile_map_y 
+			//RawPosition test_pos = {
+			//	new_player_pos_x - player_half_width, new_player_pos_y - player_quarter_height,
+			//	player->position.tile_map_x, player->position.tile_map_y
+			//};
+
+			CanonPosition test_pos = {
+				new_player_pos_x, new_player_pos_y,
+				player->position.tile_map_x, player->position.tile_map_y,
+				player->position.tile_x, player->position.tile_y
 			};
+			test_pos     = recannonicalize_position( & world, test_pos );
 
-			valid_new_pos &= world_is_point_empty( & world, test_pos );
+			// TODO(Ed) : Need a delta-function that auto-reconnonicalizes.
 
-			test_pos.x     = new_player_pos_x + player_half_width;
-			valid_new_pos &= world_is_point_empty( & world, test_pos );
+			CanonPosition test_pos_nw {
+				new_player_pos_x - player_half_width, new_player_pos_y - player_quarter_height,
+				player->position.tile_map_x, player->position.tile_map_y,
+				player->position.tile_x, player->position.tile_y
+			};
+			test_pos_nw       = recannonicalize_position( & world, test_pos_nw );
+			valid_new_pos    &= world_is_point_empty( & world, test_pos_nw );
 
-			test_pos.x     = new_player_pos_x - player_half_width;
-			test_pos.y     = new_player_pos_y;
-			valid_new_pos &= world_is_point_empty( & world, test_pos );
+			CanonPosition test_pos_ne {
+				new_player_pos_x + player_half_width, new_player_pos_y - player_quarter_height,
+				player->position.tile_map_x, player->position.tile_map_y,
+				player->position.tile_x, player->position.tile_y
+			};
+			test_pos_ne       = recannonicalize_position( & world, test_pos_ne );
+			valid_new_pos &= world_is_point_empty( & world, test_pos_ne );
 
-			test_pos.x     = new_player_pos_x + player_half_width;
-			valid_new_pos &= world_is_point_empty( & world, test_pos );
+			CanonPosition test_pos_sw {
+				new_player_pos_x - player_half_width, new_player_pos_y,
+				player->position.tile_map_x, player->position.tile_map_y,
+				player->position.tile_x, player->position.tile_y
+			};
+			test_pos_sw       = recannonicalize_position( & world, test_pos_sw );
+			valid_new_pos &= world_is_point_empty( & world, test_pos_sw );
+
+			CanonPosition test_pos_se {
+				new_player_pos_x + player_half_width, new_player_pos_y,
+				player->position.tile_map_x, player->position.tile_map_y,
+				player->position.tile_x, player->position.tile_y
+			};
+			test_pos_se       = recannonicalize_position( & world, test_pos_se );
+			valid_new_pos &= world_is_point_empty( & world, test_pos_se );
 		}
 
 		if ( valid_new_pos )
 		{
-			RawPosition   raw_pos   = { new_player_pos_x, new_player_pos_y, game_state->tile_map_x, game_state->tile_map_y };
-			CanonPosition canon_pos = get_cannonical_position( & world, raw_pos);
-
-			game_state->tile_map_x = canon_pos.tile_map_x;
-			game_state->tile_map_y = canon_pos.tile_map_y;
-
-			// current_tile_map = world_get_tilemap( & world, game_state->tile_map_x, game_state->tile_map_y );
-
-			player->pos_x = world.tile_upper_left_x + tile_size_in_pixels * scast(f32, canon_pos.tile_x) + canon_pos.x;
-			player->pos_y = world.tile_upper_left_y + tile_size_in_pixels * scast(f32, canon_pos.tile_y) + canon_pos.y;
+			CanonPosition new_pos = {
+				new_player_pos_x, new_player_pos_y,
+				player->position.tile_map_x, player->position.tile_map_y,
+				player->position.tile_x, player->position.tile_y
+			};
+			player->position = recannonicalize_position( & world, new_pos );
 		}
 
 		// player_tile_x
@@ -881,35 +904,50 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		for ( s32 col = 0; col < 16; ++ col )
 		{
 			u32 tileID = tilemap_tile_value( current_tile_map, & world, col, row );
-			f32 grey[3] = { 0.15f, 0.15f, 0.15f };
+			f32 color[3] = { 0.15f, 0.15f, 0.15f };
 
 			if ( tileID == 1 )
 			{
-				grey[0] = 0.22f;
-				grey[1] = 0.22f;
-				grey[2] = 0.22f;
+				color[0] = 0.22f;
+				color[1] = 0.22f;
+				color[2] = 0.22f;
+			}
+
+			if ( row == player->position.tile_y && col == player->position.tile_x )
+			{
+				color[0] = 0.44f;
+				color[1] = 0.3f;
+				color[2] = 0.3f;
 			}
 
 			f32 min_x = world.tile_upper_left_x + scast(f32, col) * tile_size_in_pixels;
 			f32 min_y = world.tile_upper_left_y + scast(f32, row) * tile_size_in_pixels;
+			// f32 min_x = scast(f32, col) * tile_size_in_pixels;
+			// f32 min_y = scast(f32, row) * tile_size_in_pixels;
 			f32 max_x = min_x + tile_size_in_pixels;
 			f32 max_y = min_y + tile_size_in_pixels;
 
 			draw_rectangle( back_buffer
 				, min_x, min_y
 				, max_x, max_y
-				, grey[0], grey[1], grey[2] );
+				, color[0], color[1], color[2] );
 		}
 	}
 
 	// Player
-	f32 player_red   = 0.3f;
-	f32 player_green = 0.3f;
+	f32 player_red   = 0.7f;
+	f32 player_green = 0.7f;
 	f32 player_blue  = 0.3f;
 
+	f32 player_tile_x_offset = scast(f32, player->position.tile_x * world.tile_size_in_pixels);
+	f32 player_tile_y_offset = scast(f32, player->position.tile_y * world.tile_size_in_pixels);
+
+	f32 player_screen_pos_x = world.tile_upper_left_x + player_tile_x_offset + player->position.x * world.tile_meters_to_pixels;
+	f32 player_screen_pos_y = world.tile_upper_left_y + player_tile_y_offset + player->position.y * world.tile_meters_to_pixels;
+
 	draw_rectangle( back_buffer
-		, player->pos_x - player_half_width, player->pos_y - player->height
-		, player->pos_x + player_half_width, player->pos_y
+		, player_screen_pos_x - player_half_width * world.tile_meters_to_pixels, player_screen_pos_y - player->height * world.tile_meters_to_pixels
+		, player_screen_pos_x + player_half_width * world.tile_meters_to_pixels, player_screen_pos_y
 		, player_red, player_green, player_blue );
 
 	// Auto-Snapshot percent bar
@@ -926,8 +964,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	if ( memory->replay_mode == ReplayMode_Record )
 	{
 		draw_rectangle( back_buffer
-			, scast(f32, player->pos_x) + 50.f, scast(f32, player->pos_y) - 50.f
-			, scast(f32, player->pos_x) + 10.f, scast(f32, player->pos_y) + 40.f
+			, player->position.x + 50.f, player->position.y - 50.f
+			, player->position.x + 10.f, player->position.y + 40.f
 			, 1.f, 1.f, 1.f );
 	}
 #endif

@@ -11,6 +11,11 @@
 #define NS_ENGINE_BEGIN namespace engine {
 #define NS_ENGINE_END }
 
+#ifndef Engine_API
+// The build system is reponsible for defining this API macro for exporting symbols.
+#	define Engine_API
+#endif
+
 NS_ENGINE_BEGIN
 
 enum ReplayMode : s32
@@ -286,7 +291,8 @@ struct World
 {
 	f32 tile_size_in_meters;
 	s32 tile_size_in_pixels;
-	
+	f32 tile_meters_to_pixels;
+
 	f32 tile_upper_left_x;
 	f32 tile_upper_left_y;
 
@@ -302,8 +308,7 @@ struct World
 
 struct CanonPosition
 {
-	// TODO(Ed): Convert these to resolution-indenpent rep of world units (a proper vector space?))
-	// Note: Tile-Relative position
+	// TODO(Ed) : Should this be from the center of the tile?
 	f32 x;
 	f32 y;
 
@@ -317,17 +322,6 @@ struct CanonPosition
 
 	s32 tile_x;
 	s32 tile_y;
-};
-
-// TODO(Ed) : Is this necessary?
-struct RawPosition
-{
-	// Note: TileMap-Relative position
-	f32 x;
-	f32 y;
-
-	s32 tile_map_x;
-	s32 tile_map_y;
 };
 
 NS_ENGINE_END

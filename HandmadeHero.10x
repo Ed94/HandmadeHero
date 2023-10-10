@@ -8,8 +8,8 @@
 		<ShowEmptyFolders>true</ShowEmptyFolders>
 		<IsVirtual>false</IsVirtual>
 		<IsFolder>false</IsFolder>
-		<BuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev engine</BuildCommand>
-		<RebuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev platform</RebuildCommand>
+		<BuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/build.ps1 msvc dev</BuildCommand>
+		<RebuildCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/rebuild.ps1 msvc dev</RebuildCommand>
 		<BuildFileCommand></BuildFileCommand>
 		<CleanCommand>pwsh -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(WorkspaceDirectory)/scripts/clean.ps1</CleanCommand>
 		<BuildWorkingDirectory></BuildWorkingDirectory>

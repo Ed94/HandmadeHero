@@ -3,10 +3,6 @@
 */
 #pragma once
 
-#ifndef Engine_API
-#	define Engine_API
-#endif
-
 NS_ENGINE_BEGIN
 
 using OnModuleRelaodFn = void( Memory* memory, platform::ModuleAPI* platform_api );

@@ -12,15 +12,16 @@ Import-Module $target_arch
 Import-Module $format_cpp
 
 #region Arguments
-       $vendor       = $null
-       $optimize     = $null
-	   $debug 	     = $null
-	   $analysis	 = $false
-	   $dev          = $false
-	   $platform     = $null
-	   $engine       = $null
-	   $game         = $null
-	   $verbose      = $null
+       $vendor           = $null
+       $optimize         = $null
+	   $debug 	         = $null
+	   $analysis	     = $false
+	   $dev              = $false
+	   $verbose          = $null
+	   $platform         = $null
+	   $engine           = $null
+	   $game             = $null
+	   $module_specified = $false
 
 [array] $vendors = @( "clang", "msvc" )
 
@@ -33,16 +34,60 @@ if ( $args ) { $args | ForEach-Object {
 		"debug"               { $debug     = $true }
 		"analysis"            { $analysis  = $true }
 		"dev"                 { $dev       = $true }
-		"platform"            { $platform  = $true }
-		"engine"              { $engine    = $true }
-		"game"                { $game      = $true }
 		"verbose"             { $verbose   = $true }
+		"platform"            { $platform  = $true }
+		"engine"              { $engine    = $true; $module_specified = $true }
+		"game"                { $game      = $true; $module_specified = $true }
 	}
 }}
 #endregion Argument
 
+if ( -not $module_specified )
+{
+	$platform = $true
+	$engine   = $true
+	$game     = $true
+}
+
 # Load up toolchain configuraion
 . $config_toolchain
+
+# Check to see if the module has changed files since the last build
+function check-ModuleForChanges
+{
+	param( [string]$path_module )
+
+	$module_name = split-path $path_module -leaf
+	$path_csv    = Join-Path $path_build ($module_name + "_module_hashes.csv")
+
+	$csv_file_hashes = $null
+	if ( test-path $path_csv ) {
+		$csv_file_hashes = @{}
+		import-csv $path_csv | foreach-object {
+			$csv_file_hashes[ $_.name ] = $_.value
+		}
+	}
+
+	$file_hashes = @{}
+	get-childitem -path $path_module -recurse -file | foreach-object {
+		$id                 = $_.fullname
+		$hash_info          = get-filehash -path $id -Algorithm MD5
+		$file_hashes[ $id ] = $hash_info.Hash
+	}
+
+	$file_hashes.GetEnumerator() | foreach-object { [PSCustomObject]$_ } |
+		export-csv $path_csv -NoTypeInformation
+
+	if ( -not $csv_file_hashes )                         { return $true }
+	if ( $csv_file_hashes.Count -ne $file_hashes.Count ) { return $true }
+
+	foreach ( $key in $csv_file_hashes.Keys ) {
+		if ( $csv_file_hashes[ $key ] -ne $file_hashes[ $key ] ) {
+			return $true
+		}
+	}
+	return $false
+}
 
 #region Building
 write-host "Building HandmadeHero with $vendor"
@@ -105,8 +150,16 @@ else {
 	$compiler_args += ( $flag_define + 'Build_Development=0' )
 }
 
+$should_format_gen = $false
+
 function build-engine
 {
+	$should_build = check-ModuleForChanges $path_engine
+	if ( $should_build -eq $false ) {
+		write-host "No changes detected in engine module, skipping build" -ForegroundColor Yellow
+		return
+	}
+
 	$path_pdb_lock = Join-Path $path_binaries 'handmade_engine.pdb.lock'
 	New-Item $path_pdb_lock -ItemType File -Force
 
@@ -123,12 +176,10 @@ function build-engine
 	$local:compiler_args = $script:compiler_args
 	$compiler_args      += ($flag_define + 'Build_DLL=1' )
 
-	if ( $vendor -eq 'msvc' )
-	{
+	if ( $vendor -eq 'msvc' ) {
 		$compiler_args += ($flag_define + 'Engine_API=__declspec(dllexport)')
 	}
-	if ( $vendor -eq 'clang' )
-	{
+	if ( $vendor -eq 'clang' ) {
 		$compiler_args += ($flag_define + 'Engine_API=__attribute__((visibility("default")))')
 	}
 
@@ -146,6 +197,8 @@ function build-engine
 
 	#region CodeGen Post-Build
 	if ( -not $handmade_process_active ) {
+		$path_engine_symbols = Join-Path $path_build 'handmade_engine.symbols'
+
 		# Create the symbol table
 		if ( Test-Path $dynamic_library )
 		{
@@ -212,7 +265,6 @@ function build-engine
 			}
 
 			# Write the symbol table to a file
-			$path_engine_symbols = Join-Path $path_build 'handmade_engine.symbols'
 			$engine_symbols.Values | Out-File -Path $path_engine_symbols
 		}
 
@@ -245,6 +297,7 @@ function build-engine
 
 		$path_generated_file = Join-Path $path_build 'engine_symbol_table.hpp'
 		move-item $path_generated_file (join-path $path_gen (split-path $path_generated_file -leaf)) -Force
+		$should_format_gen = $true
 	}
 }
 if ( $engine ) {
@@ -253,6 +306,17 @@ if ( $engine ) {
 
 function build-platform
 {
+	if ( $handmade_process_active ) {
+		write-host "Handmade process is active, skipping platform build" -ForegroundColor Yellow
+		return
+	}
+
+	$should_build = check-ModuleForChanges $path_platform
+	if ( $should_build -eq $false ) {
+		write-host "No changes detected in platform module, skipping build" -ForegroundColor Yellow
+		return
+	}
+
 	# CodeGen Pre-Build
 	if ( $true )
 	{
@@ -280,7 +344,7 @@ function build-platform
 		)
 
 		$unit       = Join-Path $path_codegen 'platform_gen.cpp'
-		$executable = Join-Path $path_build 'platform_gen.exe'
+		$executable = Join-Path $path_build   'platform_gen.exe'
 
 		build-simple $path_build $includes $compiler_args $linker_args $unit $executable $path_build
 
@@ -291,6 +355,8 @@ function build-platform
 			}
 		}
 		Pop-Location
+
+		$should_format_gen = $true
 	}
 
 	# Delete old PDBs
@@ -319,12 +385,6 @@ function build-platform
 	$executable = Join-Path $path_binaries 'handmade_win32.exe'
 
 	build-simple $path_build $includes $compiler_args $linker_args $unit $executable
-
-	# if ( Test-Path $executable )
-	# {
-	# 	$data_path = Join-Path $path_data 'handmade_win32.exe'
-	# 	move-item $executable $data_path -Force
-	# }
 }
 if ( $platform ) {
 	build-platform
@@ -338,14 +398,17 @@ if ( (Test-Path $path_jsl_dll) -eq $false )
 }
 #endregion Handmade Runtime
 
-push-location $path_scripts
-$include = @(
-	'*.cpp'
-	'*.hpp'
-)
-format-cpp $path_gen $include
-format-cpp (Join-Path $path_platform 'gen' ) $include
-pop-location
+if ( $should_format_gen )
+{
+	push-location $path_scripts
+	$include = @(
+		'*.cpp'
+		'*.hpp'
+	)
+	format-cpp $path_gen $include
+	format-cpp (Join-Path $path_platform 'gen' ) $include
+	pop-location
+}
 
 Pop-Location
 #endregion Building
