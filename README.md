@@ -39,6 +39,7 @@ Features Done so far:
 
 * Tailor made build system via powershell scripts
   * Supports building the repo with msvc or clang
+  * Will only build a module if it detects changes (md5 is cached)
   * Can stage codegen metaprograms to run before building the module
     * Will automatically not run if app process is found (for engine module).
   * Can emit exported mangled symbols for the engine module for hot-reload with the platform module without needing to use C linkage symbols or a complex hot-reload library (Live++, etc).
