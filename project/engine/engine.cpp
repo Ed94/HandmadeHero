@@ -60,194 +60,15 @@ struct EngineState
 };
 
 NS_ENGINE_END
+
 #include "test_samples.cpp"
-NS_ENGINE_BEGIN
 
 #if Build_Development
-using SnapshotFn = void ( Memory* memory, platform::ModuleAPI* platform_api );
-
-internal
-void load_engine_snapshot( Memory* memory, platform::ModuleAPI* platform_api )
-{
-	platform_api->memory_copy( memory->persistent, memory->total_size()
-		, memory->snapshots[ memory->active_snapshot_slot ].memory );
-}
-
-internal
-void load_game_snapshot( Memory* memory, platform::ModuleAPI* platform_api )
-{
-	s32          slot  = memory->active_snapshot_slot;
-	EngineState* state = rcast( EngineState*, memory->persistent );
-
-	void* persistent_slot = memory->snapshots[ slot ].memory;
-	void* transient_slot  = rcast( Byte*, memory->snapshots[ slot ].memory ) + state->game_memory.persistent_size;
-
-	platform_api->memory_copy( state->game_memory.persistent, state->game_memory.persistent_size, persistent_slot );
-	platform_api->memory_copy( state->game_memory.transient,  state->game_memory.transient_size,  transient_slot );
-}
-
-internal
-void take_engine_snapshot( Memory* memory, platform::ModuleAPI* platform_api )
-{
-	platform_api->memory_copy( memory->snapshots[ memory->active_snapshot_slot ].memory, memory->total_size(), memory->persistent );
-	memory->snapshots[ memory->active_snapshot_slot ].age = platform_api->get_wall_clock();
-}
-
-internal
-void take_game_snapshot( Memory* memory, platform::ModuleAPI* platform_api )
-{
-	s32          slot  = memory->active_snapshot_slot;
-	EngineState* state = rcast( EngineState*, memory->persistent );
-
-	void* persistent_slot = memory->snapshots[ slot ].memory;
-	void* transient_slot  = rcast( Byte*, memory->snapshots[ slot ].memory ) + state->game_memory.persistent_size;
-
-	platform_api->memory_copy( persistent_slot, state->game_memory.persistent_size, state->game_memory.persistent );
-	platform_api->memory_copy( transient_slot,  state->game_memory.transient_size,  state->game_memory.transient );
-	memory->snapshots[ memory->active_snapshot_slot ].age = platform_api->get_wall_clock();
-}
-
-internal
-void begin_recording_input( Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
-{
-	Str file_name = str_ascii("test_input_");
-	StrPath file_path = {};
-	file_path.concat( platform_api->path_scratch, file_name );
-	snprintf( file_path.ptr, file_path.len, "%s%d.hm_replay", file_name.ptr, memory->active_snapshot_slot );
-
-	memory->active_input_replay_file.path = file_path;
-	platform_api->file_delete( memory->active_input_replay_file.path );
-	memory->replay_mode                   = ReplayMode_Record;
-}
-
-internal
-void end_recording_input( Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
-{
-	memory->replay_mode = ReplayMode_Off;
-	platform_api->file_close( & memory->active_input_replay_file );
-}
-
-internal
-void begin_playback_input( Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
-{
-	Str     file_name = str_ascii("test_input_");
-	StrPath file_path = {};
-	file_path.concat( platform_api->path_scratch, file_name );
-	snprintf( file_path.ptr, file_path.len, "%s%d.hm_replay", file_name.ptr, memory->active_snapshot_slot );
-
-	// TODO(Ed - From Casey): Recording system still seems to take too long
-	// on record start - find out what Windows is doing and if
-	// we can speed up / defer some of that processing.
-
-	if ( platform_api->file_check_exists( file_path ) )
-	{
-		memory->active_input_replay_file.path = file_path;
-		memory->replay_mode = ReplayMode_Playback;
-	}
-	else
-	{
-		// TODO(Ed) : Logging
-	}
-}
-
-internal
-void end_playback_input( Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
-{
-	memory->replay_mode = ReplayMode_Off;
-	platform_api->file_close( & memory->active_input_replay_file );
-}
-
-InputStateSnapshot input_state_snapshot( InputState* input )
-{
-	InputStateSnapshot snapshot = {};
-	for ( s32 idx = 0; idx < array_count( snapshot.controllers ); ++ idx )
-	{
-		ControllerState* controller = & input->controllers[idx];
-		if ( controller == nullptr )
-			continue;
-
-		if ( controller->ds_pad )
-			snapshot.controllers[idx].ds_pad = *controller->ds_pad;
-
-		if ( controller->xpad )
-			snapshot.controllers[idx].xpad = *controller->xpad;
-
-		if ( controller->keyboard )
-		{
-			snapshot.controllers[idx].keyboard = *controller->keyboard;
-		}
-
-		if ( controller->mouse )
-			snapshot.controllers[idx].mouse = *controller->mouse;
-	}
-	return snapshot;
-}
-
-internal
-void record_input( Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
-{
-	InputStateSnapshot snapshot = input_state_snapshot( input );
-	if ( platform_api->file_write_stream( & memory->active_input_replay_file, sizeof(snapshot), &snapshot ) == 0 )
-	{
-		// TODO(Ed) : Logging
-	}
-}
-
-internal
-void play_input( SnapshotFn* load_snapshot, Memory* memory, InputState* input, platform::ModuleAPI* platform_api )
-{
-	InputStateSnapshot new_input;
-	if ( platform_api->file_read_stream( & memory->active_input_replay_file, sizeof(InputStateSnapshot), & new_input ) == 0 )
-	{
-		load_snapshot( memory, platform_api );
-		platform_api->file_rewind( & memory->active_input_replay_file );
-		return;
-	}
-
-	for ( s32 idx = 0; idx < array_count( new_input.controllers ); ++ idx )
-	{
-		ControllerState* controller = & input->controllers[idx];
-		if ( controller == nullptr )
-			continue;
-
-		if ( controller->ds_pad )
-			*controller->ds_pad = new_input.controllers[idx].ds_pad;
-
-		if ( controller->xpad )
-			*controller->xpad = new_input.controllers[idx].xpad;
-
-		if ( controller->keyboard )
-		{
-			*controller->keyboard = new_input.controllers[idx].keyboard;
-		}
-
-		if ( controller->mouse )
-			*controller->mouse = new_input.controllers[idx].mouse;
-	}
-}
-
-void process_loop_mode( SnapshotFn* take_snapshot, SnapshotFn* load_snapshot
-	, Memory* memory, EngineState* state, InputState* input, platform::ModuleAPI* platform_api )
-{
-	if ( memory->replay_mode == ReplayMode_Off )
-	{
-		take_snapshot( memory, platform_api );
-		begin_recording_input( memory, input, platform_api );
-	}
-	else if ( memory->replay_mode == ReplayMode_Playback )
-	{
-		end_playback_input( memory, input, platform_api );
-		load_snapshot( memory, platform_api );
-	}
-	else if ( memory->replay_mode == ReplayMode_Record )
-	{
-		end_recording_input( memory, input, platform_api );
-		load_snapshot( memory, platform_api );
-		begin_playback_input( memory, input, platform_api );
-	}
-}
+#include "state_and_replay.cpp"
 // Build_Development
 #endif
+
+NS_ENGINE_BEGIN
 
 internal
 void input_poll_engine_actions( InputState* input, EngineActions* actions )
@@ -357,10 +178,10 @@ void draw_rectangle( OffscreenBuffer* buffer
 	, f32 max_x, f32 max_y
 	, f32 red, f32 green, f32 blue  )
 {
-	s32 min_x_32 = round_f32_to_s32( min_x );
-	s32 min_y_32 = round_f32_to_s32( min_y );
-	s32 max_x_32 = round_f32_to_s32( max_x );
-	s32 max_y_32 = round_f32_to_s32( max_y );
+	s32 min_x_32 = round( min_x );
+	s32 min_y_32 = round( min_y );
+	s32 max_x_32 = round( max_x );
+	s32 max_y_32 = round( max_y );
 
 	s32 buffer_width  = buffer->width;
 	s32 buffer_height = buffer->height;
@@ -374,9 +195,9 @@ void draw_rectangle( OffscreenBuffer* buffer
 	if ( max_y_32 > buffer_height )
 		max_y_32 = buffer_height;
 
-	s32 red_32   = round_f32_to_s32( 255.f * red );
-	s32 green_32 = round_f32_to_s32( 255.f * green );
-	s32 blue_32  = round_f32_to_s32( 255.f * blue );
+	s32 red_32   = round( 255.f * red );
+	s32 green_32 = round( 255.f * green );
+	s32 blue_32  = round( 255.f * blue );
 
 	s32 color =
 			(scast(s32, red_32)   << 16)
@@ -399,6 +220,125 @@ void draw_rectangle( OffscreenBuffer* buffer
 		}
 		row += buffer->pitch;
 	}
+}
+
+inline
+void cannonicalize_coord( World* world, u32* tile_coord, f32* pos_coord )
+{
+	f32 tile_size = scast(f32, world->tile_size_in_meters);
+
+	// Note(Ed) : World is assumed to be a "torodial topology"
+	s32 offset         = floor( (* pos_coord) / tile_size );
+	u32 new_tile_coord = (* tile_coord) + offset;
+	f32 new_pos_coord  = (* pos_coord)  - scast(f32, offset) * tile_size;
+
+	assert( new_pos_coord >= 0 );
+	assert( new_pos_coord <= tile_size );
+
+	(* tile_coord) = new_tile_coord;
+	(* pos_coord)  = new_pos_coord;
+}
+
+inline
+WorldPosition recannonicalize_position( World* world, WorldPosition pos )
+{
+	WorldPosition result = pos;
+	cannonicalize_coord( world, & result.tile_x, & result.x );
+	cannonicalize_coord( world, & result.tile_y, & result.y );
+	return result;
+}
+
+inline
+	u32 TileChunk_tile_value( TileChunk* tile_chunk, World* world, u32 x, u32 y )
+{
+	assert( world      != nullptr );
+	assert( tile_chunk != nullptr );
+	assert( x < world->chunk_dimension );
+	assert( y < world->chunk_dimension );
+
+	u32 value = tile_chunk->tiles[ (y * world->chunk_dimension) + x ];
+	return value;
+}
+
+// TODO(Ed) : Review if this is needed anymore?
+#if 0
+inline
+b32 TileChunk_is_tile_empty( TileChunk* tile_chunk, World* world, u32 tile_x, u32 tile_y )
+{
+	//assert( tile_chunk != nullptr );
+	assert( world    != nullptr );
+
+	// Assume space is occupied if there is bad data
+	if ( tile_chunk == nullptr )
+		return false;
+
+	b32 is_empty = false;
+	u32 tile_value = TileChunk_tile_value( tile_chunk, world, tile_x, tile_y );
+		is_empty = tile_value == 0;
+	return is_empty;
+}
+#endif
+
+inline
+TileChunk* World_get_tile_chunk( World* world, s32 tile_chunk_x, s32 tile_chunk_y )
+{
+	TileChunk* chunk = nullptr;
+
+	if (	tile_chunk_x >= 0 && tile_chunk_x < scast(s32, world->tile_chunks_num_x)
+	    &&	tile_chunk_y >= 0 && tile_chunk_y < scast(s32, world->tile_chunks_num_y) )
+	{
+		chunk = & world->tile_chunks[ tile_chunk_y * world->tile_chunks_num_x + tile_chunk_x ];
+	}
+
+	return chunk;
+}
+
+inline
+TileChunkPosition get_tile_chunk_position_for( World* world, u32 abs_tile_x, u32 abs_tile_y )
+{
+	TileChunkPosition chunk_pos {};
+	chunk_pos.tile_chunk_x = abs_tile_x >> world->chunk_shift;
+	chunk_pos.tile_chunk_y = abs_tile_y >> world->chunk_shift;
+	chunk_pos.tile_x       = abs_tile_x &  world->chunk_mask;
+	chunk_pos.tile_y       = abs_tile_y &  world->chunk_mask;
+
+	return chunk_pos;
+}
+
+internal // TODO(Ed) : Review if he keeps this crap.
+u32 piggy_get_tile_value( World* world, u32 tile_x, u32 tile_y )
+{
+	assert( world != nullptr );
+
+	u32 value = 0;
+
+	TileChunkPosition chunk_pos = get_tile_chunk_position_for( world, tile_x, tile_y );
+	TileChunk*        chunk     = World_get_tile_chunk( world, chunk_pos.tile_chunk_x, chunk_pos.tile_chunk_y );
+
+	if ( chunk )
+		value = TileChunk_tile_value( chunk, world, chunk_pos.tile_x, chunk_pos.tile_y );
+	return value;
+}
+
+internal
+b32 world_is_point_empty( World* world, WorldPosition position )
+{
+	assert( world != nullptr );
+
+	u32 chunk_value = piggy_get_tile_value( world, position.tile_x, position.tile_y );
+	b32 is_empty    = chunk_value == 0;
+	return is_empty;
+}
+
+inline
+void draw_debug_point(OffscreenBuffer* back_buffer, World* world, WorldPosition pos, f32 red, f32 green, f32 blue)
+{
+	draw_rectangle(back_buffer,
+		pos.x          * world->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * world->tile_size_in_pixels),
+		pos.y          * world->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * world->tile_size_in_pixels),
+		(pos.x + 0.1f) * world->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * world->tile_size_in_pixels),
+		(pos.y + 0.1f) * world->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * world->tile_size_in_pixels),
+		red, green, blue);
 }
 
 Engine_API
@@ -449,8 +389,6 @@ void startup( Memory* memory, platform::ModuleAPI* platform_api )
 	assert( sizeof(hh::GameState) <= state->game_memory.persistent_size );
 
 	hh::PlayerState* player = & game_state->player_state;
-	player->position.tile_map_x = 0;
-	player->position.tile_map_y = 0;
 	player->position.tile_x     = 3;
 	player->position.tile_y     = 3;
 	player->position.x          = 0.f;
@@ -463,107 +401,6 @@ void startup( Memory* memory, platform::ModuleAPI* platform_api )
 Engine_API
 void shutdown( Memory* memory, platform::ModuleAPI* platform_api )
 {
-}
-
-inline
-void cannonicalize_coord( World* world, s32 num_tiles, s32* tile_map_coord, s32* tile_coord, f32* pos_coord )
-{
-	s32 new_tile_map_coord = *tile_map_coord;
-	f32 tile_size          = scast(f32, world->tile_size_in_meters);
-
-	// TODO(Ed) : Need to use an alt method for reconnonicalizing because this can end up rounding back up to the tile.
-	// TODO(Ed) : Add bounds checking to prevent wrapping
-	s32 offset         = floor_f32_to_s32( (* pos_coord) / tile_size );
-	s32 new_tile_coord = (* tile_coord) + offset;
-	f32 new_pos_coord  = (* pos_coord)  - scast(f32, offset) * tile_size;
-
-	assert( new_pos_coord >= 0.f );
-	assert( new_pos_coord < tile_size );
-
-	if ( new_tile_coord  < 0 )
-	{
-		new_tile_coord += num_tiles;
-		-- new_tile_map_coord;
-	}
-	if ( new_tile_coord >= num_tiles )
-	{
-		new_tile_coord -= num_tiles;
-		++ new_tile_map_coord;
-	}
-
-	(* tile_map_coord) = new_tile_map_coord;
-	(* tile_coord)     = new_tile_coord;
-	(* pos_coord)      = new_pos_coord;
-}
-
-inline
-CanonPosition recannonicalize_position( World* world, CanonPosition pos )
-{
-	CanonPosition result = pos;
-	cannonicalize_coord( world, world->num_tiles_x, & result.tile_map_x, & result.tile_x, & result.x );
-	cannonicalize_coord( world, world->num_tiles_y, & result.tile_map_y, & result.tile_y, & result.y );
-	return result;
-}
-
-inline
-u32 tilemap_tile_value( TileMap* tile_map, World* world, s32 x, s32 y )
-{
-	assert( tile_map != nullptr );
-	assert( world    != nullptr );
-	assert( x >= 0 && x < scast(s32, world->num_tiles_x) );
-	assert( y >= 0 && y < scast(s32, world->num_tiles_y) );
-	return tile_map->tiles[ (y * world->num_tiles_x) + x ];
-}
-
-inline
-b32 tilemap_is_point_empty( TileMap* tile_map, World* world, s32 tile_x, s32 tile_y )
-{
-	assert( tile_map != nullptr );
-	assert( world    != nullptr );
-
-	// Assume space is occupied if there is bad data
-	if ( tile_map == nullptr )
-		return false;
-
-	b32 is_empty = false;
-	if ( 	tile_x >= 0 && tile_x < world->num_tiles_x
-		&&	tile_y >= 0 && tile_y < world->num_tiles_y )
-	{
-		u32 tile_value = tilemap_tile_value( tile_map, world, tile_x, tile_y );
-		is_empty = tile_value == 0;
-	}
-	return is_empty;
-}
-
-inline
-TileMap* world_get_tilemap( World* world, s32 tile_map_x, s32 tile_map_y )
-{
-	assert( tile_map_x >= 0 && tile_map_x < world->tilemaps_num_x );
-	assert( tile_map_y >= 0 && tile_map_y < world->tilemaps_num_y );
-	return & world->tile_maps[ (tile_map_y * world->tilemaps_num_x) + tile_map_x ];
-}
-
-internal
-b32 world_is_point_empty( World* world, CanonPosition position )
-{
-	assert( world != nullptr );
-
-	b32 is_empty = false;
-
-	TileMap* tile_map = world_get_tilemap( world, position.tile_map_x, position.tile_map_y );
-	         is_empty = tilemap_is_point_empty( tile_map, world, position.tile_x, position.tile_y );
-
-	return is_empty;
-}
-
-void draw_debug_point(OffscreenBuffer* back_buffer, World* world, CanonPosition pos, f32 red, f32 green, f32 blue)
-{
-	draw_rectangle(back_buffer,
-		pos.x * world->tile_meters_to_pixels + world->tile_upper_left_x + scast(f32, pos.tile_x	* world->tile_size_in_pixels),
-		pos.y * world->tile_meters_to_pixels + world->tile_upper_left_y + scast(f32, pos.tile_y	* world->tile_size_in_pixels),
-		(pos.x + 0.1f) * world->tile_meters_to_pixels + world->tile_upper_left_x + scast(f32, pos.tile_x	* world->tile_size_in_pixels),
-		(pos.y + 0.1f) * world->tile_meters_to_pixels + world->tile_upper_left_y + scast(f32, pos.tile_y	* world->tile_size_in_pixels),
-		red, green, blue);
 }
 
 Engine_API
@@ -712,83 +549,53 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	f32 x_offset_f = scast(f32, state->x_offset);
 	f32 y_offset_f = scast(f32, state->y_offset);
 
-	constexpr s32 tile_map_num_x = 16;
-	constexpr s32 tile_map_num_y = 9;
+	constexpr s32 tile_map_num_x = 256;
+	constexpr s32 tile_map_num_y = 256;
 
 	// tiles_XY
-	u32 tiles_00 [tile_map_num_y][tile_map_num_x] = {
-		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1,  1, 1, 1, 1 },
+	u32 temp_tiles [tile_map_num_y][tile_map_num_x] = {
+		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,    1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,    0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1,  1, 1, 1, 1,    1, 1, 1, 1,  1, 0, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
+		{ 1, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1,  1, 1, 1, 1,    1, 1, 1, 1,  1, 0, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,    0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1,    1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
+		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,    1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
 	};
-	u32 tiles_10 [tile_map_num_y][tile_map_num_x] = {
-		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 1, 1, 1,  1, 0, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
-	};
-	u32 tiles_01 [tile_map_num_y][tile_map_num_x] = {
-		{ 1, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1,  1, 1, 1, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
-	};
-	u32 tiles_11 [tile_map_num_y][tile_map_num_x] = {
-		{ 1, 1, 1, 1,  1, 0, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 1 },
-		{ 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 },
-	};
-
-	TileMap tile_maps[2][2] {};
-	tile_maps[0][0].tiles = rcast(u32*, tiles_00);
-	tile_maps[0][1].tiles = rcast(u32*, tiles_10);
-	tile_maps[1][0].tiles = rcast(u32*, tiles_01);
-	tile_maps[1][1].tiles = rcast(u32*, tiles_11);
 
 	World world;
-	world.tile_size_in_meters = 1.4f;
-	world.tile_size_in_pixels = 85;
+	world.chunk_shift     = 8;
+	world.chunk_mask      = (1 << world.chunk_shift) - 1;
+	world.chunk_dimension = 256;
+
+	world.tile_chunks_num_x = 1;
+	world.tile_chunks_num_y = 1;
+
+	TileChunk temp_chunk;
+	temp_chunk.tiles  = rcast( u32*, & temp_tiles );
+	world.tile_chunks = & temp_chunk;
+
+	world.tile_size_in_meters   = 1.4f;
+	world.tile_size_in_pixels   = 85;
 	world.tile_meters_to_pixels = scast(f32, world.tile_size_in_pixels) / world.tile_size_in_meters;
 
 	f32 tile_size_in_pixels = scast(f32, world.tile_size_in_pixels);
 
-	world.num_tiles_x = tile_map_num_x;
-	world.num_tiles_y = tile_map_num_y;
-
 	f32 scale = 85;
 
-	world.tile_upper_left_x = -( tile_size_in_pixels * 0.5f);
-	world.tile_upper_left_y = -( tile_size_in_pixels * 0.25f);
-
-	world.tilemaps_num_x = 2;
-	world.tilemaps_num_y = 2;
-
-	world.tile_maps = rcast(TileMap*, tile_maps);
-
-	TileMap* current_tile_map = world_get_tilemap( & world, player->position.tile_map_x, player->position.tile_map_y );
-	assert( current_tile_map != nullptr );
+	world.tile_lower_left_x = -( tile_size_in_pixels * 0.5f);
+	world.tile_lower_left_y = +( tile_size_in_pixels * 0.25f) + scast(f32, back_buffer->height);
 
 	player->height = 1.4f;
 	player->width  = player->height * 0.7f;
@@ -798,82 +605,70 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 	input_poll_player_actions( input, & player_actions );
 	{
-		f32 move_speed = 6.f;
+		f32 move_speed = 4.f;
 
 		f32 new_player_pos_x = player->position.x;
 		f32 new_player_pos_y = player->position.y;
 		if ( player_actions.player_x_move_analog || player_actions.player_y_move_analog )
 		{
 			new_player_pos_x += scast(f32, player_actions.player_x_move_analog * delta_time * move_speed);
-			new_player_pos_y -= scast(f32, player_actions.player_y_move_analog * delta_time * move_speed);
+			new_player_pos_y += scast(f32, player_actions.player_y_move_analog * delta_time * move_speed);
 		}
 		else
 		{
 			new_player_pos_x += scast(f32, player_actions.player_x_move_digital) * delta_time * move_speed;
-			new_player_pos_y -= scast(f32, player_actions.player_y_move_digital) * delta_time * move_speed;
+			new_player_pos_y += scast(f32, player_actions.player_y_move_digital) * delta_time * move_speed;
 		}
 		new_player_pos_y += sinf( player->jump_time * TAU ) * 10.f * delta_time;
 
 		b32 valid_new_pos = true;
 		{
-			//RawPosition test_pos = {
-			//	new_player_pos_x - player_half_width, new_player_pos_y - player_quarter_height,
-			//	player->position.tile_map_x, player->position.tile_map_y
-			//};
-
-			CanonPosition test_pos = {
+			WorldPosition test_pos = {
 				new_player_pos_x, new_player_pos_y,
-				player->position.tile_map_x, player->position.tile_map_y,
 				player->position.tile_x, player->position.tile_y
 			};
-			test_pos     = recannonicalize_position( & world, test_pos );
+			test_pos = recannonicalize_position( & world, test_pos );
 
 			// TODO(Ed) : Need a delta-function that auto-reconnonicalizes.
 
-			CanonPosition test_pos_nw {
+			WorldPosition test_pos_nw {
 				new_player_pos_x - player_half_width, new_player_pos_y - player_quarter_height,
-				player->position.tile_map_x, player->position.tile_map_y,
 				player->position.tile_x, player->position.tile_y
 			};
 			test_pos_nw       = recannonicalize_position( & world, test_pos_nw );
 			valid_new_pos    &= world_is_point_empty( & world, test_pos_nw );
 
-			CanonPosition test_pos_ne {
+			WorldPosition test_pos_ne {
 				new_player_pos_x + player_half_width, new_player_pos_y - player_quarter_height,
-				player->position.tile_map_x, player->position.tile_map_y,
 				player->position.tile_x, player->position.tile_y
 			};
-			test_pos_ne       = recannonicalize_position( & world, test_pos_ne );
+			test_pos_ne    = recannonicalize_position( & world, test_pos_ne );
 			valid_new_pos &= world_is_point_empty( & world, test_pos_ne );
 
-			CanonPosition test_pos_sw {
+			WorldPosition test_pos_sw {
 				new_player_pos_x - player_half_width, new_player_pos_y,
-				player->position.tile_map_x, player->position.tile_map_y,
 				player->position.tile_x, player->position.tile_y
 			};
-			test_pos_sw       = recannonicalize_position( & world, test_pos_sw );
+			test_pos_sw    = recannonicalize_position( & world, test_pos_sw );
 			valid_new_pos &= world_is_point_empty( & world, test_pos_sw );
 
-			CanonPosition test_pos_se {
+			WorldPosition test_pos_se {
 				new_player_pos_x + player_half_width, new_player_pos_y,
-				player->position.tile_map_x, player->position.tile_map_y,
 				player->position.tile_x, player->position.tile_y
 			};
-			test_pos_se       = recannonicalize_position( & world, test_pos_se );
+			test_pos_se    = recannonicalize_position( & world, test_pos_se );
 			valid_new_pos &= world_is_point_empty( & world, test_pos_se );
 		}
 
 		if ( valid_new_pos )
 		{
-			CanonPosition new_pos = {
+			WorldPosition new_pos = {
 				new_player_pos_x, new_player_pos_y,
-				player->position.tile_map_x, player->position.tile_map_y,
 				player->position.tile_x, player->position.tile_y
 			};
 			player->position = recannonicalize_position( & world, new_pos );
 		}
 
-		// player_tile_x
 
 		if ( player->jump_time > 0.f )
 		{
@@ -898,12 +693,19 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		, 1.f, 0.24f, 0.24f );
 
 
-	// Draw tilemap
-	for ( s32 row = 0; row < 9; ++ row )
+// Scrolling shitshow
+#if 1
+	f32 center_x = 0.5f * scast(f32, back_buffer->width);
+	f32 center_y = 0.5f * scast(f32, back_buffer->height);
+
+	for ( s32 relative_row = -10; relative_row < +10; ++ relative_row )
 	{
-		for ( s32 col = 0; col < 16; ++ col )
+		for ( s32 relative_col = -20; relative_col < +20; ++ relative_col )
 		{
-			u32 tileID = tilemap_tile_value( current_tile_map, & world, col, row );
+			u32 col = player->position.tile_x + relative_col;
+			u32 row = player->position.tile_y + relative_row;
+
+			u32 tileID   = piggy_get_tile_value( & world, col, row );
 			f32 color[3] = { 0.15f, 0.15f, 0.15f };
 
 			if ( tileID == 1 )
@@ -920,17 +722,15 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 				color[2] = 0.3f;
 			}
 
-			f32 min_x = world.tile_upper_left_x + scast(f32, col) * tile_size_in_pixels;
-			f32 min_y = world.tile_upper_left_y + scast(f32, row) * tile_size_in_pixels;
-			// f32 min_x = scast(f32, col) * tile_size_in_pixels;
-			// f32 min_y = scast(f32, row) * tile_size_in_pixels;
-			f32 max_x = min_x + tile_size_in_pixels;
-			f32 max_y = min_y + tile_size_in_pixels;
+			f32 min_x = center_x + scast(f32, relative_col) * tile_size_in_pixels;
+			f32 min_y = center_y - scast(f32, relative_row) * tile_size_in_pixels;
+			f32 max_x = min_x    + tile_size_in_pixels;
+			f32 max_y = min_y    - tile_size_in_pixels;
 
 			draw_rectangle( back_buffer
-				, min_x, min_y
-				, max_x, max_y
-				, color[0], color[1], color[2] );
+			               , min_x, max_y
+			               , max_x, min_y
+			               , color[0], color[1], color[2] );
 		}
 	}
 
@@ -939,16 +739,88 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	f32 player_green = 0.7f;
 	f32 player_blue  = 0.3f;
 
-	f32 player_tile_x_offset = scast(f32, player->position.tile_x * world.tile_size_in_pixels);
-	f32 player_tile_y_offset = scast(f32, player->position.tile_y * world.tile_size_in_pixels);
+	f32 player_tile_x_offset = center_x + scast(f32, player->position.tile_x) * world.tile_meters_to_pixels;
+	f32 player_tile_y_offset = center_y - scast(f32, player->position.tile_y) * world.tile_meters_to_pixels;
 
-	f32 player_screen_pos_x = world.tile_upper_left_x + player_tile_x_offset + player->position.x * world.tile_meters_to_pixels;
-	f32 player_screen_pos_y = world.tile_upper_left_y + player_tile_y_offset + player->position.y * world.tile_meters_to_pixels;
+	f32 player_screen_pos_x = center_x + player->position.x * world.tile_meters_to_pixels;
+	f32 player_screen_pos_y = center_y - player->position.y * world.tile_meters_to_pixels;
+
+//	player_min_x = player_tile_x_offset - player_half_width * world;
 
 	draw_rectangle( back_buffer
-		, player_screen_pos_x - player_half_width * world.tile_meters_to_pixels, player_screen_pos_y - player->height * world.tile_meters_to_pixels
-		, player_screen_pos_x + player_half_width * world.tile_meters_to_pixels, player_screen_pos_y
-		, player_red, player_green, player_blue );
+	               , player_screen_pos_x - player_half_width * world.tile_meters_to_pixels, player_screen_pos_y - player->height * world.tile_meters_to_pixels
+	               , player_screen_pos_x + player_half_width * world.tile_meters_to_pixels, player_screen_pos_y
+	               , player_red, player_green, player_blue );
+#endif
+
+// Non-scrolling screen
+#if 0
+	// Draw TileChunk
+	for ( u32 row = 0; row < 9; ++ row )
+	{
+		for ( u32 col = 0; col < 16; ++ col )
+		{
+			u32 tileID   = piggy_get_tile_value( & world, col, row );
+			f32 color[3] = { 0.15f, 0.15f, 0.15f };
+
+			if ( tileID == 1 )
+			{
+				color[0] = 0.22f;
+				color[1] = 0.22f;
+				color[2] = 0.22f;
+			}
+
+			if ( row == player->position.tile_y && col == player->position.tile_x )
+			{
+				color[0] = 0.44f;
+				color[1] = 0.3f;
+				color[2] = 0.3f;
+			}
+
+		#if 0
+			// Was able to flip Y properly but not get the center alignemnt with the world.tile_lower_left that I wanted..
+			f32 min_x = world.tile_lower_left_x + scast(f32, col) * tile_size_in_pixels;
+			f32 min_y = scast(f32, row) * tile_size_in_pixels;
+			f32 max_x = min_x + tile_size_in_pixels;
+			f32 max_y = min_y + tile_size_in_pixels;
+
+			draw_rectangle( back_buffer
+				, min_x, min_y
+				, max_x, max_y
+				//, min_x, max_y
+				//, max_x, min_y
+				, color[0], color[1], color[2] );
+		#else
+			f32 min_x = world.tile_lower_left_x + scast(f32, col) * tile_size_in_pixels;
+			f32 min_y = world.tile_lower_left_y - scast(f32, row) * tile_size_in_pixels;
+			f32 max_x = min_x + tile_size_in_pixels;
+			f32 max_y = min_y - tile_size_in_pixels;
+
+			draw_rectangle( back_buffer
+				, min_x, max_y
+				, max_x, min_y
+				, color[0], color[1], color[2] );
+		#endif
+		}
+	}
+
+	// Player
+	f32 player_red   = 0.7f;
+	f32 player_green = 0.7f;
+	f32 player_blue  = 0.3f;
+
+	f32 player_tile_x_offset =  scast(f32, player->position.tile_x * world.tile_size_in_pixels);
+	f32 player_tile_y_offset = -scast(f32, player->position.tile_y * world.tile_size_in_pixels);
+
+	f32 player_screen_pos_x = world.tile_lower_left_x + player_tile_x_offset + player->position.x * world.tile_meters_to_pixels;
+	f32 player_screen_pos_y = world.tile_lower_left_y + player_tile_y_offset - player->position.y * world.tile_meters_to_pixels;
+
+	draw_rectangle( back_buffer
+	               , player_screen_pos_x - player_half_width * world.tile_meters_to_pixels, player_screen_pos_y - player->height * world.tile_meters_to_pixels
+	               , player_screen_pos_x + player_half_width * world.tile_meters_to_pixels, player_screen_pos_y
+	               , player_red, player_green, player_blue );
+#endif
+
 
 	// Auto-Snapshot percent bar
 	if (1)

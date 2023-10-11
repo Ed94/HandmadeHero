@@ -78,7 +78,7 @@ struct PlayerState
 	//f32 pos_x;
 	//f32 pos_y;
 	
-	engine::CanonPosition position;
+	engine::WorldPosition position;
 	
 	b32 mid_jump;
 	f32 jump_time;

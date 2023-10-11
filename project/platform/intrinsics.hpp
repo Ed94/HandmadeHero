@@ -6,22 +6,28 @@
 
 // TODO(Ed) : Convert all of these to platform-efficient versions
 
+//inline
+//s32 abs( s32 value )
+//{
+//	return ;
+//}
+
 inline
-s32 floor_f32_to_s32( f32 value )
+s32 floor( f32 value )
 {
 	s32 result = scast(s32, floorf( value ));
 	return result;
 }
 
 inline
-s32 round_f32_to_s32( f32 value )
+s32 round( f32 value )
 {
 	s32 result = scast(s32, value + 0.5f);
 	return result;
 }
 
 inline
-s32 truncate_f32_to_s32( f32 value )
+s32 truncate( f32 value )
 {
 	s32 result = scast(s32, value);
 	return result;

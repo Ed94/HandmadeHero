@@ -46,11 +46,13 @@ function run-compiler
 		}
 	}
 
-	if ( Test-Path($unit) ) {
+	if ( $LASTEXITCODE -eq 0 ) {
 		write-host "$unit compile finished in $($time_taken.TotalMilliseconds) ms`n"
+		return $true
 	}
 	else {
 		write-host "Compile failed for $unit`n" -ForegroundColor Red
+		return $false
 	}
 }
 
@@ -77,11 +79,13 @@ function run-linker
 		}
 	}
 
-	if ( Test-Path($binary) ) {
+	if ( $LASTEXITCODE -eq 0 ) {
 		write-host "$binary linking finished in $($time_taken.TotalMilliseconds) ms`n"
+		return $true
 	}
 	else {
 		write-host "Linking failed for $binary`n" -ForegroundColor Red
+		return $false
 	}
 }
 
@@ -160,6 +164,7 @@ if ( $vendor -match "clang" )
 	function build-simple
 	{
 		param( [string]$path_output, [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )
+		$result = $false
 		#Write-Host "build-simple: clang"
 
 		$object = $unit -replace '\.cpp', '.obj'
@@ -205,7 +210,9 @@ if ( $vendor -match "clang" )
 		$compiler_args += $includes | ForEach-Object { $flag_include + $_ }
 
 		$compiler_args += $flag_compile, $unit
-		run-compiler $compiler $unit $compiler_args
+		if ( (run-compiler $compiler $unit $compiler_args) -eq $false ) {
+			return $false
+		}
 
 		$linker_args += @(
 			$flag_link_win_machine_64,
@@ -222,7 +229,7 @@ if ( $vendor -match "clang" )
 		}
 
 		$linker_args += $object
-		run-linker $linker $binary $linker_args
+		return run-linker $linker $binary $linker_args
 
 		# $compiler_args += $unit
 		# $linker_args | ForEach-Object {
@@ -285,6 +292,7 @@ if ( $vendor -match "msvc" )
 	function build-simple
 	{
 		param( [string]$path_output, [array]$includes, [array]$compiler_args, [array]$linker_args, [string]$unit, [string]$binary )
+		$result = $false
 		#Write-Host "build-simple: msvc"
 
 		$object = $unit -replace '\.(cpp)$', '.obj'
@@ -336,7 +344,9 @@ if ( $vendor -match "msvc" )
 		$compiler_args += $includes | ForEach-Object { $flag_include + $_ }
 
 		$compiler_args += $flag_compile, $unit
-		run-compiler $compiler $unit $compiler_args
+		if ( (run-compiler $compiler $unit $compiler_args) -eq $false ) {
+			return $false;
+		}
 
 		$linker_args += @(
 			$flag_nologo,
@@ -353,7 +363,7 @@ if ( $vendor -match "msvc" )
 		}
 
 		$linker_args += $object
-		run-linker $linker $binary $linker_args
+		return run-linker $linker $binary $linker_args
 
 		# $compiler_args += $unit
 		# $compiler_args += $flag_linker

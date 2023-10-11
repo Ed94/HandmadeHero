@@ -33,7 +33,7 @@ Module build order:
 
 ## Milestone
 
-Day 30 : Moving Between Tile Maps
+Day 33 : Virtualized Tile Maps
 
 Features Done so far:
 
@@ -61,6 +61,8 @@ Features Done so far:
 
 ## Gallery
 
+![img](docs/imgs/handmade_win32_2023-10-11_00-47-19.gif)
+![img](docs/imgs/handmade_win32_2023-10-10_13-13-14.gif)
 ![img](docs/imgs/handmade_win32_2023-10-06_12-43-47.gif)
 ![img](docs/imgs/handmade_win32_2023-10-01_20-22-20.gif)
 ![img](docs/imgs/Code_2023-10-01_19-20-56.gif)

@@ -282,46 +282,59 @@ struct RecordedInput
 };
 #endif
 
-struct TileMap
+struct TileChunk
 {
 	u32* tiles;
 };
 
 struct World
 {
+	// TODO(Ed) : Remove
+	f32 tile_lower_left_x;
+	f32 tile_lower_left_y;
+
+
+	u32 chunk_shift;
+	u32 chunk_mask;
+
 	f32 tile_size_in_meters;
 	s32 tile_size_in_pixels;
 	f32 tile_meters_to_pixels;
 
-	f32 tile_upper_left_x;
-	f32 tile_upper_left_y;
-
-	s32 num_tiles_x; // Number of tiles on the x-axis for a tilemap.
-	s32 num_tiles_y; // Number of tiles on the y-axis for a tilemap.
+	u32 chunk_dimension;
 
 	// TODO(Ed) : Beginner's sparseness
-	s32 tilemaps_num_x;
-	s32 tilemaps_num_y;
+	s32 tile_chunks_num_x;
+	s32 tile_chunks_num_y;
 
-	TileMap* tile_maps;
+	TileChunk* tile_chunks;
 };
 
-struct CanonPosition
+/*
+	This is a "backend" transient datatype for handling lookup of tile data from "chunks" of tiles.
+*/
+struct TileChunkPosition
+{
+	u32 tile_chunk_x;
+	u32 tile_chunk_y;
+
+	// "Chunk-relative (x, y)
+
+	u32 tile_x;
+	u32 tile_y;
+};
+
+struct WorldPosition
 {
 	// TODO(Ed) : Should this be from the center of the tile?
+
 	f32 x;
 	f32 y;
 
-	/* TODO(Ed) :
-	Take the tile map x & y and the tile x & y
-	where there is some low bits for the tile index
-	and the high bits are the tile "page".
-	*/
-	s32 tile_map_x;
-	s32 tile_map_y;
+	// "World-relative (x, y), AKA: Absolute Position, etc
 
-	s32 tile_x;
-	s32 tile_y;
+	u32 tile_x;
+	u32 tile_y;
 };
 
 NS_ENGINE_END

@@ -157,11 +157,11 @@ function build-engine
 	$should_build = check-ModuleForChanges $path_engine
 	if ( $should_build -eq $false ) {
 		write-host "No changes detected in engine module, skipping build" -ForegroundColor Yellow
-		return
+		return $true
 	}
 
 	$path_pdb_lock = Join-Path $path_binaries 'handmade_engine.pdb.lock'
-	New-Item $path_pdb_lock -ItemType File -Force
+	New-Item $path_pdb_lock -ItemType File -Force > $null
 
 	# Delete old PDBs
 	[Array]$pdb_files = Get-ChildItem -Path $path_binaries -Filter "handmade_engine_*.pdb"
@@ -191,12 +191,17 @@ function build-engine
 	$unit            = Join-Path $path_project  'handmade_engine.cpp'
 	$dynamic_library = Join-Path $path_binaries 'handmade_engine.dll'
 
-	build-simple $path_build $includes $compiler_args $linker_args $unit $dynamic_library
+	$build_result = build-simple $path_build $includes $compiler_args $linker_args $unit $dynamic_library
 
 	Remove-Item $path_pdb_lock -Force
 
+	if ( $build_result -eq $false ) {
+		return $false
+	}
+
 	#region CodeGen Post-Build
-	if ( -not $handmade_process_active ) {
+	if ( -not $handmade_process_active -and $build_result )
+	{
 		$path_engine_symbols = Join-Path $path_build 'handmade_engine.symbols'
 
 		# Create the symbol table
@@ -285,36 +290,45 @@ function build-engine
 		$unit       = Join-Path $path_codegen 'engine_postbuild_gen.cpp'
 		$executable = Join-Path $path_build   'engine_postbuild_gen.exe'
 
-		build-simple $path_build $local:includes $compiler_args $linker_args $unit $executable
-
-		Push-Location $path_build
-		$time_taken = Measure-Command {
-			& $executable 2>&1 | ForEach-Object {
-				write-host `t $_ -ForegroundColor Green
+		if ( build-simple $path_build $local:includes $compiler_args $linker_args $unit $executable ) 
+		{
+			Push-Location $path_build
+			$time_taken = Measure-Command {
+				& $executable 2>&1 | ForEach-Object {
+					write-host `t $_ -ForegroundColor Green
+				}
 			}
-		}
-		Pop-Location
+			Pop-Location
 
-		$path_generated_file = Join-Path $path_build 'engine_symbol_table.hpp'
-		move-item $path_generated_file (join-path $path_gen (split-path $path_generated_file -leaf)) -Force
-		$should_format_gen = $true
+			$path_generated_file = Join-Path $path_build 'engine_symbol_table.hpp'
+			move-item $path_generated_file (join-path $path_gen (split-path $path_generated_file -leaf)) -Force
+			$should_format_gen = $true
+
+			return $true
+		}
+
+		return $false
 	}
 }
 if ( $engine ) {
-	build-engine
+	$build_result = build-engine
+	if ( $build_result -eq $false ) {
+		$path_csv = Join-Path $path_build 'engine_module_hashes.csv'
+		Remove-Item $path_csv -Force
+	}
 }
 
 function build-platform
 {
 	if ( $handmade_process_active ) {
 		write-host "Handmade process is active, skipping platform build" -ForegroundColor Yellow
-		return
+		return $true
 	}
 
 	$should_build = check-ModuleForChanges $path_platform
 	if ( $should_build -eq $false ) {
 		write-host "No changes detected in platform module, skipping build" -ForegroundColor Yellow
-		return
+		return $true
 	}
 
 	# CodeGen Pre-Build
@@ -330,7 +344,7 @@ function build-platform
 		$path_platform_gen = Join-Path $path_platform 'gen'
 
 		if ( -not (Test-Path $path_platform_gen) ) {
-			New-Item $path_platform_gen -ItemType Directory
+			New-Item $path_platform_gen -ItemType Directory > $null
 		}
 
 		$local:includes = $script:includes
@@ -346,7 +360,10 @@ function build-platform
 		$unit       = Join-Path $path_codegen 'platform_gen.cpp'
 		$executable = Join-Path $path_build   'platform_gen.exe'
 
-		build-simple $path_build $includes $compiler_args $linker_args $unit $executable $path_build
+		$build_result = build-simple $path_build $includes $compiler_args $linker_args $unit $executable $path_build
+		if ( $build_result -eq $false ) {
+			return $false
+		}
 
 		Push-Location $path_platform
 		$time_taken = Measure-Command {
@@ -384,10 +401,15 @@ function build-platform
 	$unit       = Join-Path $path_project  'handmade_win32.cpp'
 	$executable = Join-Path $path_binaries 'handmade_win32.exe'
 
-	build-simple $path_build $includes $compiler_args $linker_args $unit $executable
+	return build-simple $path_build $includes $compiler_args $linker_args $unit $executable
+
 }
 if ( $platform ) {
-	build-platform
+	$build_result = build-platform
+	if ( -not $build_result ) {
+		$path_csv = Join-Path $path_build 'platform_module_hashes.csv'
+		Remove-Item $path_csv -Force
+	}
 }
 
 $path_jsl_dll = Join-Path $path_binaries 'JoyShockLibrary.dll'
