@@ -7,6 +7,7 @@ Handmade Win32 Platform Translation Unit
 #include <math.h>  // TEMP
 #include <stdio.h> // TEMP
 
+#include "platform_module.hpp"
 #include "grime.hpp"
 #include "macros.hpp"
 #include "generics.hpp"
@@ -18,6 +19,9 @@ Handmade Win32 Platform Translation Unit
 #include "platform.hpp"
 
 // Engine layer headers
+#include "engine/engine_module.hpp"
+#include "engine/input.hpp"
+#include "engine/tile_map.hpp"
 #include "engine/engine.hpp"
 #include "engine/engine_to_platform_api.hpp"
 #include "gen/engine_symbol_table.hpp"

@@ -2,11 +2,14 @@
 	This represents the API only accessible to the platform layer to fullfill for the engine layer.
 */
 #pragma once
+#if INTELLISENSE_DIRECTIVES
+#include "engine_module.hpp"
+#endif
 
 NS_ENGINE_BEGIN
 
 using OnModuleRelaodFn = void( Memory* memory, platform::ModuleAPI* platform_api );
-using StartupFn        = void( Memory* memory, platform::ModuleAPI* platform_api );
+using StartupFn        = void( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI* platform_api );
 using ShutdownFn       = void( Memory* memory, platform::ModuleAPI* platform_api );
 
 // Needs a contextual reference to four things:

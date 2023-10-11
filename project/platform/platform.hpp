@@ -10,9 +10,9 @@
 
 #if INTELLISENSE_DIRECTIVES
 // TODO(Ed) : REMOVE THESE WHEN CASEY GETS TO THEM
-#include <math.h> // TODO : Implement math ourselves
 #include <stdio.h> // TODO : Implement output logging ourselves
 
+#include "platform_module.hpp"
 #include "grime.hpp"
 #include "macros.hpp"
 #include "generics.hpp"
@@ -22,9 +22,6 @@
 #include "strings.hpp"
 #include "context.hpp"
 #endif
-
-#define NS_PLATFORM_BEGIN namespace platform {
-#define NS_PLATFORM_END }
 
 NS_PLATFORM_BEGIN
 
@@ -121,6 +118,8 @@ struct ModuleAPI
 };
 
 #if Build_Development
+// TODO(Ed): This can't be done this way, we need a separate interface for other modules to use this.
+// (At least, we need to hookup the symbols statically or at runtime somehow, and right now the only thing that does is the module api passthrough via the Engine API)
 void impl_congrats( char const* message );
 bool impl_ensure( bool condition, char const* message );
 void impl_fatal( char const* message );

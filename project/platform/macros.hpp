@@ -15,16 +15,7 @@
 #define rcast( type, value ) reinterpret_cast< type >( value )
 #define scast( type, value ) static_cast< type >( value )
 
-#define do_once()          \
-	do                     \
-	{                      \
-		local_persist      \
-		bool done = false; \
-		if ( done )        \
-			return;        \
-		done = true;       \
-	}                      \
-	while(0)
+#define do_once() for ( local_persist b32 once = true; once; once = false )
 
 #define do_once_start      \
 	do                     \

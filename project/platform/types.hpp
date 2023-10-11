@@ -79,10 +79,10 @@ static_assert( sizeof( u16 ) == 2, "sizeof(u16) != 2" );
 static_assert( sizeof( u32 ) == 4, "sizeof(u32) != 4" );
 static_assert( sizeof( u64 ) == 8, "sizeof(u64) != 8" );
 
-typedef size_t    uw;
-typedef ptrdiff_t sw;
+typedef size_t    usize;
+typedef ptrdiff_t ssize;
 
-static_assert( sizeof( uw ) == sizeof( sw ), "sizeof(uw) != sizeof(sw)" );
+static_assert( sizeof( usize ) == sizeof( ssize ), "sizeof(usize) != sizeof(ssize)" );
 
 #if defined( _WIN64 )
 typedef signed   __int64 sptr;

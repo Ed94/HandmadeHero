@@ -22,7 +22,7 @@ s32 floor( f32 value )
 inline
 s32 round( f32 value )
 {
-	s32 result = scast(s32, value + 0.5f);
+	s32 result = scast(s32, roundf( value ));
 	return result;
 }
 

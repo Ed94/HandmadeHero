@@ -1,3 +1,0 @@
-/*
-	This represents the API only accessible to the engine to fullfill for the game module.
-*/

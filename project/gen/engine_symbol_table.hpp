@@ -6,7 +6,7 @@ NS_ENGINE_BEGIN
 constexpr 
 Str const  symbol_on_module_load = str_ascii("?on_module_reload@engine@@YAXPEAUMemory@1@PEAUModuleAPI@platform@@@Z");
 constexpr 
-Str const  symbol_startup = str_ascii("?startup@engine@@YAXPEAUMemory@1@PEAUModuleAPI@platform@@@Z");
+Str const  symbol_startup = str_ascii("?startup@engine@@YAXPEAUOffscreenBuffer@1@PEAUMemory@1@PEAUModuleAPI@platform@@@Z");
 constexpr 
 Str const  symbol_shutdown = str_ascii("?shutdown@engine@@YAXPEAUMemory@1@PEAUModuleAPI@platform@@@Z");
 constexpr 

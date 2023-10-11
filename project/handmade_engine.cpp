@@ -7,6 +7,7 @@ Handmade Engine Translation Unit
 #include <math.h>  // TEMP
 #include <stdio.h> // TEMP
 
+#include "platform/platform_module.hpp"
 #include "platform/grime.hpp"
 #include "platform/macros.hpp"
 #include "platform/generics.hpp"
@@ -17,10 +18,14 @@ Handmade Engine Translation Unit
 #include "platform/context.hpp"
 #include "platform/platform.hpp"
 
+#include "engine_module.hpp"
+#include "input.hpp"
+#include "tile_map.hpp"
 #include "engine.hpp"
 #include "engine_to_platform_api.hpp"
 
 // Game layer headers
 #include "handmade.hpp"
 
+#include "tile_map.cpp"
 #include "engine.cpp"

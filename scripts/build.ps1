@@ -152,6 +152,7 @@ else {
 
 $should_format_gen = $false
 
+# TODO(Ed) : Support detecting codegen changes separate from the module's runtime builds (so that it can be rebuild only when necessary as well)
 function build-engine
 {
 	$should_build = check-ModuleForChanges $path_engine

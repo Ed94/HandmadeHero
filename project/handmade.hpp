@@ -13,15 +13,15 @@ struct Memory
 	// Subscection of engine memory for the game to use.
 
 	void* persistent;
-	u64   persistent_size;
+	ssize persistent_size;
 
 	// void* Frame;
 	// u64   FrameSize;
 
 	void* transient;
-	u64   transient_size;
+	ssize transient_size;
 
-	u64 total_size()
+	ssize total_size()
 	{
 		return persistent_size + transient_size;
 	}
@@ -74,12 +74,8 @@ struct PlayerState
 	f32 width;
 	f32 height;
 
-	// TODO(Ed) : Should this be canonical position now?
-	//f32 pos_x;
-	//f32 pos_y;
-	
-	engine::WorldPosition position;
-	
+	engine::TileMapPosition position;
+
 	b32 mid_jump;
 	f32 jump_time;
 };
@@ -91,7 +87,8 @@ struct PlayerActions
 	f32 player_x_move_analog;
 	f32 player_y_move_analog;
 
-	b32 jump = false;
+	b32 sprint;
+	b32 jump;
 };
 
 struct GameState

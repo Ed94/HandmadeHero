@@ -15,12 +15,16 @@
 #undef do_once_end
 using namespace gen;
 
+#include "platform/platform_module.hpp"
 #include "platform/grime.hpp"
 #include "platform/macros.hpp"
 #include "platform/types.hpp"
 #include "platform/strings.hpp"
 #include "platform/platform.hpp"
 
+#include "engine/engine_module.hpp"
+#include "engine/input.hpp"
+#include "engine/tile_map.hpp"
 #include "engine/engine.hpp"
 #include "engine/engine_to_platform_api.hpp"
 

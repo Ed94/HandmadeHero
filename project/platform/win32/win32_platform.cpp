@@ -135,7 +135,6 @@ timing_get_wall_clock()
 	return clock;
 }
 #pragma endregion Timing
-
 NS_PLATFORM_END
 
 #include "win32_audio.cpp"
@@ -540,8 +539,8 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		void* base_address = 0;
 	#endif
 
-		engine_memory.persistent = VirtualAlloc( base_address, total_size , MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write );
-		engine_memory.transient  = rcast( u8*, engine_memory.persistent ) + engine_memory.persistent_size;
+		engine_memory.persistent = rcast( Byte*, VirtualAlloc( base_address, total_size , MEM_Commit_Zeroed | MEM_Reserve, Page_Read_Write ));
+		engine_memory.transient  = rcast( Byte*, engine_memory.persistent ) + engine_memory.persistent_size;
 
 	#if Build_Development
 		// First slot is for restore
@@ -794,7 +793,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 	}
 
-	engine_api.startup( & engine_memory, & platform_api );
+	engine_api.startup( rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.memory), & engine_memory, & platform_api );
 
 	u64 last_frame_clock = timing_get_wall_clock();
 	u64 last_frame_cycle = __rdtsc();
