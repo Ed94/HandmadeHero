@@ -1,6 +1,7 @@
 #if INTELLISENSE_DIRECTIVES
 #include "platform.hpp"
 #include "engine/engine.hpp"
+#include "engine/input.hpp"
 #include "jsl.hpp"
 #include "win32.hpp"
 #endif

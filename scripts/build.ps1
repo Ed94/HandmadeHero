@@ -303,7 +303,7 @@ function build-engine
 
 			$path_generated_file = Join-Path $path_build 'engine_symbol_table.hpp'
 			move-item $path_generated_file (join-path $path_gen (split-path $path_generated_file -leaf)) -Force
-			$should_format_gen = $true
+			$script:should_format_gen = $true
 
 			return $true
 		}
@@ -374,7 +374,7 @@ function build-platform
 		}
 		Pop-Location
 
-		$should_format_gen = $true
+		$script:should_format_gen = $true
 	}
 
 	# Delete old PDBs
@@ -423,6 +423,7 @@ if ( (Test-Path $path_jsl_dll) -eq $false )
 
 if ( $should_format_gen )
 {
+	write-host 'Formatting...'
 	push-location $path_scripts
 	$include = @(
 		'*.cpp'

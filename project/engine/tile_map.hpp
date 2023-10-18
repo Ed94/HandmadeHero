@@ -23,6 +23,7 @@ struct TileChunkPosition
 {
 	u32 tile_chunk_x;
 	u32 tile_chunk_y;
+	u32 tile_chunk_z;
 
 	// "Chunk-relative (x, y)
 
@@ -35,11 +36,11 @@ struct TileMap
 	// TODO(Ed) : Beginner's sparseness
 	s32 tile_chunks_num_x;
 	s32 tile_chunks_num_y;
+	s32 tile_chunks_num_z;
 
-	s32 tile_size_in_pixels;
 	f32 tile_size_in_meters;
-	f32 tile_meters_to_pixels;
 
+	// TODO(Ed) : Real sparseness ? (not use the giant pointer array)
 	u32 chunk_shift;
 	u32 chunk_mask;
 	u32 chunk_dimension;
@@ -60,6 +61,7 @@ struct TileMapPosition
 
 	u32 tile_x;
 	u32 tile_y;
+	u32 tile_z;
 };
 
 NS_ENGINE_END

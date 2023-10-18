@@ -7,6 +7,7 @@
 #include "handmade.hpp"
 
 #include "tile_map.cpp"
+#include "random.cpp
 #endif
 
 NS_ENGINE_BEGIN
@@ -49,10 +50,10 @@ struct EngineActions
 struct EngineState
 {
 	hh::Memory game_memory;
-	
+
 	MemoryArena world_arena;
-	World* world;
-	
+	World*      world;
+
 	f32 auto_snapshot_interval;
 	f32 auto_snapshot_timer;
 
@@ -164,7 +165,7 @@ void input_poll_player_actions( InputState* input, hh::PlayerActions* actions )
 	}
 }
 
-internal 
+internal
 void output_sound( EngineState* state, AudioBuffer* sound_buffer, GetSoundSampleValueFn* get_sample_value )
 {
 	s16* sample_out = sound_buffer->samples;
@@ -241,51 +242,13 @@ void draw_debug_point(OffscreenBuffer* back_buffer, World* world, TileMapPositio
 	TileMap* tile_map = world->tile_map;
 
 	draw_rectangle(back_buffer,
-		pos.x          * tile_map->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * tile_map->tile_size_in_pixels),
-		pos.y          * tile_map->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * tile_map->tile_size_in_pixels),
-		(pos.x + 0.1f) * tile_map->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * tile_map->tile_size_in_pixels),
-		(pos.y + 0.1f) * tile_map->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * tile_map->tile_size_in_pixels),
+		pos.x          * world->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * world->tile_size_in_pixels),
+		pos.y          * world->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * world->tile_size_in_pixels),
+		(pos.x + 0.1f) * world->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * world->tile_size_in_pixels),
+		(pos.y + 0.1f) * world->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * world->tile_size_in_pixels),
 		red, green, blue);
 }
 
-
-internal 
-void MemoryArena_init( MemoryArena* arena, ssize size, Byte* storage )
-{
-	arena->storage = storage;
-	arena->size    = size;
-	arena->used    = 0;
-}
-
-#define MemoryArena_push_struct( arena, type ) MemoryArena__push_struct<type>( arena )
-template< typename Type > inline
-Type* MemoryArena__push_struct( MemoryArena* arena )
-{
-	assert( arena != nullptr );
-	
-	ssize type_size = sizeof( Type );
-	assert( arena->used + type_size <= arena->size );
-	
-	Type* result = rcast(Type*, arena->storage + arena->used);
-	arena->used += type_size;
-	
-	return result;
-}
-
-#define MemoryArena_push_array( arena, type, num ) MemoryArena__push_array<type>( arena, num )
-template< typename Type> inline
-Type* MemoryArena__push_array( MemoryArena* arena, ssize num )
-{
-	assert( arena != nullptr );
-	
-	ssize mem_amount = sizeof( Type ) * num;
-	assert( arena->used + mem_amount <= arena->size );
-	
-	Type* result = rcast(Type*, arena->storage + arena->used);
-	arena->used += mem_amount;
-	
-	return result;
-}
 
 Engine_API
 void on_module_reload( Memory* memory, platform::ModuleAPI* platfom_api )
@@ -330,17 +293,18 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 	state->game_memory.persistent      = rcast(Byte*, memory->persistent) + state->game_memory.persistent_size;
 	state->game_memory.transient_size  = memory->transient_size / Memory::game_memory_factor;
 	state->game_memory.transient       = rcast(Byte*, memory->transient) + state->game_memory.transient_size;
-		
+
 	// World setup
 	{
 		ssize world_arena_size    = memory->engine_persistent_size() - sizeof(EngineState);
 		Byte* world_arena_storage = memory->persistent + sizeof(EngineState);
-		MemoryArena_init( & state->world_arena, world_arena_size, world_arena_storage );
-		
-		state->world = MemoryArena_push_struct( & state->world_arena, World);
+		MemoryArena::init( & state->world_arena, world_arena_size, world_arena_storage );
+
+		//state->world = MemoryArena_push_struct( & state->world_arena, World);
+		state->world = state->world_arena.push_struct( World );
 		World* world = state->world;
-		
-		TileMap* tile_map = MemoryArena_push_struct( & state->world_arena, TileMap);
+
+		TileMap* tile_map = state->world_arena.push_struct( TileMap );
 		world->tile_map = tile_map;
 
 		tile_map->chunk_shift     = 4;
@@ -349,51 +313,172 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 
 		tile_map->tile_chunks_num_x = 128;
 		tile_map->tile_chunks_num_y = 128;
+		tile_map->tile_chunks_num_z = 2;
 		
-		tile_map->chunks = MemoryArena_push_array( & state->world_arena, TileChunk, tile_map->tile_chunks_num_x * tile_map->tile_chunks_num_y );
-		
-		for ( s32 y = 0; y < tile_map->tile_chunks_num_y; ++ y )
-		{
-			for ( s32 x = 0; x < tile_map->tile_chunks_num_x; ++ x )
-			{
-				ssize num_tiles = tile_map->chunk_dimension * tile_map->chunk_dimension;
-				tile_map->chunks[ (y * tile_map->tile_chunks_num_x) + x  ].tiles = MemoryArena_push_array( & state->world_arena, u32, num_tiles );
-			}
-		}
+		ssize num_chunks = tile_map->tile_chunks_num_x * tile_map->tile_chunks_num_y * tile_map->tile_chunks_num_z;
+		tile_map->chunks = state->world_arena.push_array( TileChunk, num_chunks );
 
 		//TileChunk temp_chunk;
 		//temp_chunk.tiles  = rcast( u32*, & temp_tiles );
 		//tile_map->chunks = & temp_chunk;
 
-		tile_map->tile_size_in_meters   = 1.4f;
-		tile_map->tile_size_in_pixels   = 85;
-		tile_map->tile_meters_to_pixels = scast(f32, tile_map->tile_size_in_pixels) / tile_map->tile_size_in_meters;
+		tile_map->tile_size_in_meters = 1.4f;
+		world->tile_size_in_pixels    = 85;
+		world->tile_meters_to_pixels  = scast(f32, world->tile_size_in_pixels) / tile_map->tile_size_in_meters;
 
-		f32 tile_size_in_pixels = scast(f32, tile_map->tile_size_in_pixels);
+		f32 tile_size_in_pixels = scast(f32, world->tile_size_in_pixels);
 
 		world->tile_lower_left_x = -( tile_size_in_pixels * 0.5f);
 		world->tile_lower_left_y = +( tile_size_in_pixels * 0.25f) + scast(f32, back_buffer->height);
 
 		u32 tiles_per_screen_x = 17;
 		u32 tiles_per_screen_y = 9;
-		for ( u32 screen_y = 0; screen_y < 32; ++ screen_y )
+		
+		u32 screen_x  = 0;
+		u32 screen_y  = 0;
+		u32 rng_index = 0;
+		
+		b32 door_left   = false;
+		b32 door_right  = false;
+		b32 door_top    = false;
+		b32 door_bottom = false;
+		b32 door_up     = false;
+		b32 door_down   = false;
+		
+		u32 abs_tile_z = 0;
+			
+		for ( u32 screen_index = 0; screen_index < 100; ++ screen_index )
 		{
-			for ( u32 screen_x = 0; screen_x < 32; ++ screen_x )
+			// TODO(Ed) : We need a proper RNG.
+			assert( rng_index < array_count(RNG_Table) )
+			u32 random_choice;
+			if ( door_up || door_down )
 			{
-				for (u32 tile_y = 0; tile_y < tiles_per_screen_y; ++ tile_y )
+				random_choice = RNG_Table[ rng_index ] % 2;
+			}
+			else
+			{
+				random_choice = RNG_Table[ rng_index ] % 3;
+			}
+			++ rng_index;
+			
+			if ( random_choice == 2 )
+			{
+				if ( abs_tile_z == 0 )
 				{
-					for ( u32 tile_x = 0; tile_x < tiles_per_screen_x; ++ tile_x )
-					{
-						u32 abs_tile_x = screen_x * tiles_per_screen_x + tile_x;
-						u32 abs_tile_y = screen_y * tiles_per_screen_y + tile_y;
-						u32 tile_value = tile_x == tile_y && tile_y % 2 ? 1 : 0;
-						TileMap_set_tile_value( & state->world_arena, world->tile_map, abs_tile_x, abs_tile_y, tile_value );
-					}
+					door_up = true;
 				}
+				else
+				{
+					door_down = true;
+				}
+			}
+			else if ( random_choice == 1 )
+			{
+				door_right = true;
+			}
+			else
+			{
+				door_top = true;
+			}
+
+			for (u32 tile_y = 0; tile_y < tiles_per_screen_y; ++ tile_y )
+			{
+				for ( u32 tile_x = 0; tile_x < tiles_per_screen_x; ++ tile_x )
+				{
+					u32 abs_tile_x = screen_x * tiles_per_screen_x + tile_x;
+					u32 abs_tile_y = screen_y * tiles_per_screen_y + tile_y;
+
+					u32 tile_value = 1;
+					
+					bool in_middle_x = tile_x == (tiles_per_screen_x / 2);
+					bool in_middle_y = tile_y == (tiles_per_screen_y / 2);
+					
+					bool on_right = tile_x == (tiles_per_screen_x - 1);
+					bool on_left  = tile_x == 0;
+					
+					bool on_bottom = tile_y == 0;
+					bool on_top    = tile_y == (tiles_per_screen_y - 1);
+					
+					if ( on_left && (! in_middle_y || ! door_left ))
+					{
+						tile_value = 2;
+					}
+					if ( on_right && (! in_middle_y || ! door_right ))
+					{
+						tile_value = 2;
+					}
+					
+					if ( on_bottom && (! in_middle_x || ! door_bottom ))
+					{
+						tile_value = 2;
+					}
+					if ( on_top && (! in_middle_x || ! door_top ))
+					{
+						tile_value = 2;
+					}
+					
+					if ( tile_x == 6 && tile_y == 6 )
+					{
+						if ( door_up )
+						{
+							tile_value = 3;
+						}
+						else if ( door_down )
+						{
+							tile_value = 4;
+						}
+					}
+					
+					// u32 tile_value = tile_x == tile_y && tile_y % 2 ? 1 : 0;
+					TileMap_set_tile_value( & state->world_arena, world->tile_map, abs_tile_x, abs_tile_y, abs_tile_z, tile_value );
+				}
+			}
+			
+			door_left   = door_right;
+			door_bottom = door_top;
+			
+			if ( door_up )
+			{
+				door_down = true;
+				door_up   = false;
+			}
+			else if ( door_down )
+			{
+				door_up   = true;
+				door_down = false;
+			}
+			else
+			{
+				door_up   = false; 
+				door_down = false;
+			}
+			
+			door_right  = false;
+			door_top    = false;
+
+			if ( random_choice == 2 )
+			{
+				if ( abs_tile_z == 0 )
+				{
+					abs_tile_z = 1;
+				}
+				else
+				{
+					abs_tile_z = 0;
+				}
+			}
+			else if ( random_choice == 1 )
+			{
+				screen_x += 1;
+			}
+			else
+			{
+				screen_y += 1;
 			}
 		}
 	}
-	
+
 	hh::GameState* game_state = rcast( hh::GameState*, state->game_memory.persistent );
 	assert( sizeof(hh::GameState) <= state->game_memory.persistent_size );
 
@@ -563,18 +648,18 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 	World*   world    = state->world;
 	TileMap* tile_map = world->tile_map;
-	
-	f32 tile_size_in_pixels   = scast(f32, tile_map->tile_size_in_pixels);
+
+	f32 tile_size_in_pixels   = scast(f32, world->tile_size_in_pixels);
 	f32 player_half_width     = player->width  / 2.f;
 	f32 player_quarter_height = player->height / 4.f;
 
 	input_poll_player_actions( input, & player_actions );
 	{
-		f32 move_speed = 2.f;
+		f32 move_speed = 6.f;
 
 		if ( player_actions.sprint )
 		{
-			move_speed = 6.f;
+			move_speed = 24.f;
 		}
 
 		f32 new_player_pos_x = player->position.x;
@@ -672,36 +757,51 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		{
 			u32 col = player->position.tile_x + relative_col;
 			u32 row = player->position.tile_y + relative_row;
-
-			u32 tileID   = TileMap_get_tile_value( tile_map, col, row );
+			
+			u32 tile_id  = TileMap_get_tile_value( tile_map, col, row, player->position.tile_z );
 			f32 color[3] = { 0.15f, 0.15f, 0.15f };
-
-			if ( tileID == 1 )
+			
+			if ( tile_id > 0 )
 			{
-				color[0] = 0.22f;
-				color[1] = 0.22f;
-				color[2] = 0.22f;
+				if ( tile_id == 2 )
+				{
+					color[0] = 0.22f;
+					color[1] = 0.22f;
+					color[2] = 0.22f;
+				}
+				if ( tile_id == 3 )
+				{
+					color[0] = 0.12f;
+					color[1] = 0.12f;
+					color[2] = 0.12f;
+				}
+				if ( tile_id == 4 )
+				{
+					color[0] = 0.52f;
+					color[1] = 0.52f;
+					color[2] = 0.52f;
+				}
+				
+				if ( row == player->position.tile_y && col == player->position.tile_x )
+				{
+					color[0] = 0.44f;
+					color[1] = 0.3f;
+					color[2] = 0.3f;
+				}
+
+				f32 center_x = screen_center_x + scast(f32, relative_col) * tile_size_in_pixels - player->position.x * world->tile_meters_to_pixels;
+				f32 center_y = screen_center_y - scast(f32, relative_row) * tile_size_in_pixels + player->position.y * world->tile_meters_to_pixels;
+
+				f32 min_x = center_x - tile_size_in_pixels * 0.5f;
+				f32 min_y = center_y - tile_size_in_pixels * 0.5f;
+				f32 max_x = center_x + tile_size_in_pixels * 0.5f;
+				f32 max_y = center_y + tile_size_in_pixels * 0.5f;
+
+				draw_rectangle( back_buffer
+				               , min_x, min_y
+				               , max_x, max_y
+				               , color[0], color[1], color[2] );
 			}
-
-			if ( row == player->position.tile_y && col == player->position.tile_x )
-			{
-				color[0] = 0.44f;
-				color[1] = 0.3f;
-				color[2] = 0.3f;
-			}
-
-			f32 center_x = screen_center_x + scast(f32, relative_col) * tile_size_in_pixels - player->position.x * tile_map->tile_meters_to_pixels;
-			f32 center_y = screen_center_y - scast(f32, relative_row) * tile_size_in_pixels + player->position.y * tile_map->tile_meters_to_pixels;
-
-			f32 min_x = center_x - tile_size_in_pixels * 0.5f;
-			f32 min_y = center_y - tile_size_in_pixels * 0.5f;
-			f32 max_x = center_x + tile_size_in_pixels * 0.5f;
-			f32 max_y = center_y + tile_size_in_pixels * 0.5f;
-
-			draw_rectangle( back_buffer
-			               , min_x, min_y
-			               , max_x, max_y
-			               , color[0], color[1], color[2] );
 		}
 	}
 
@@ -710,8 +810,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	f32 player_green = 0.7f;
 	f32 player_blue  = 0.3f;
 
-	f32 player_tile_x_offset = screen_center_x + scast(f32, player->position.tile_x) * tile_map->tile_meters_to_pixels + player->position.x * tile_map->tile_meters_to_pixels;
-	f32 player_tile_y_offset = screen_center_y - scast(f32, player->position.tile_y) * tile_map->tile_meters_to_pixels + player->position.y * tile_map->tile_meters_to_pixels;
+	f32 player_tile_x_offset = screen_center_x + scast(f32, player->position.tile_x) * world->tile_meters_to_pixels + player->position.x * world->tile_meters_to_pixels;
+	f32 player_tile_y_offset = screen_center_y - scast(f32, player->position.tile_y) * world->tile_meters_to_pixels + player->position.y * world->tile_meters_to_pixels;
 
 	f32 player_screen_pos_x = screen_center_x;
 	f32 player_screen_pos_y = screen_center_y;
@@ -719,8 +819,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 //	player_min_x = player_tile_x_offset - player_half_width * world;
 
 	draw_rectangle( back_buffer
-	               , player_screen_pos_x - player_half_width * tile_map->tile_meters_to_pixels, player_screen_pos_y - player->height * tile_map->tile_meters_to_pixels
-	               , player_screen_pos_x + player_half_width * tile_map->tile_meters_to_pixels, player_screen_pos_y
+	               , player_screen_pos_x - player_half_width * world->tile_meters_to_pixels, player_screen_pos_y - player->height * world->tile_meters_to_pixels
+	               , player_screen_pos_x + player_half_width * world->tile_meters_to_pixels, player_screen_pos_y
 	               , player_red, player_green, player_blue );
 
 	// Auto-Snapshot percent bar

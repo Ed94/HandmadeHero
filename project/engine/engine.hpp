@@ -90,30 +90,66 @@ struct Memory
 		// Engine-wide recording & playback loop.
 		s32 engine_loop_active;
 		s32 game_loop_active;
-		
+
 		//ReplayData replay;
 	#endif
-		
+
 	// The game will have 1/4 of persistent's memory available ot it.
 	static constexpr
 	ssize game_memory_factor = 4;
-	
+
 	ssize engine_persistent_size()
 	{
 		return persistent_size - persistent_size / game_memory_factor;
 	}
-	
+
 	ssize total_size()
 	{
 		return persistent_size + transient_size;
 	}
 };
 
+// Allocator member-interface macros
+#define push_struct( type )     push__struct<type>()
+#define push_array( type, num ) push__array<type>( num )
+
 struct MemoryArena
 {
 	Byte* storage;
 	ssize size;
 	ssize used;
+
+	static
+	void init( MemoryArena* arena, ssize size, Byte* storage )
+	{
+		arena->storage = storage;
+		arena->size    = size;
+		arena->used    = 0;
+	}
+
+	template< typename Type >
+	Type* push__struct()
+	{
+		ssize type_size = sizeof( Type );
+		assert( used + type_size <= size );
+
+		Type* result = rcast(Type*, storage + used);
+		used += type_size;
+
+		return result;
+	}
+
+	template< typename Type >
+	Type* push__array( ssize num )
+	{
+		ssize mem_amount = sizeof( Type ) * num;
+		assert( used + mem_amount <= size );
+
+		Type* result = rcast(Type*, storage + used);
+		used += mem_amount;
+
+		return result;
+	}
 };
 
 struct OffscreenBuffer
@@ -136,9 +172,11 @@ struct AudioBuffer
 
 struct World
 {
-	// TODO(Ed) : Remove
 	f32 tile_lower_left_x;
 	f32 tile_lower_left_y;
+
+	f32 tile_meters_to_pixels;
+	s32 tile_size_in_pixels;
 
 	TileMap* tile_map;
 };
