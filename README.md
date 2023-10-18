@@ -33,7 +33,7 @@ Module build order:
 
 ## Milestone
 
-Day 33 : Virtualized Tile Maps
+Day 35 : Basic Sparse Tilemap Storage
 
 Features Done so far:
 
@@ -57,10 +57,12 @@ Features Done so far:
     * Allows for engine or game state to be restored even if a crash occurs to exact memory state it was before.
   * Basic input abstraction into hard-coded actions (``EngineActions` & `PlayerActions`)
   * Record & replay input.
-  * (WIP) : 2D Tile Map (Virtualized into chunks)
+  * WIP : 2.5D Tile Map
+    * Virtualized into chunks
 
 ## Gallery
 
+![img](docs/imgs/handmade_win32_2023-10-16_23-08-11.png)
 ![img](docs/imgs/handmade_win32_2023-10-11_23-39-57.gif)
 ![img](docs/imgs/handmade_win32_2023-10-11_00-47-19.gif)
 ![img](docs/imgs/handmade_win32_2023-10-10_13-13-14.gif)
