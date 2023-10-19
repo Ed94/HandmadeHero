@@ -35,8 +35,8 @@ using DebugSetPauseRenderingFn = void (b32 value);
 
 struct File
 {
-	void* opaque_handle;
 	Str   path;
+	void* opaque_handle;
 	void* data;
 	u32   size;
 };
@@ -87,6 +87,7 @@ struct ModuleAPI
 {
 	Str path_root;
 	Str path_binaries;
+	Str path_content;
 	Str path_scratch;
 
 #if Build_Development

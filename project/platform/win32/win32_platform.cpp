@@ -58,6 +58,7 @@ global PlatformContext Platform_Context;
 
 global StrPath Path_Root;
 global StrPath Path_Binaries;
+global StrPath Path_Content;
 global StrPath Path_Scratch;
 
 // TODO(Ed) : This is a global for now.
@@ -518,8 +519,12 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		Path_Scratch.concat( Path_Root, str_ascii("scratch") );
 		Path_Scratch.ptr[ Path_Scratch.len ] = '\\';
 		++ Path_Scratch.len;
-
+	
 		CreateDirectoryA( Path_Scratch, 0 );
+		
+		Path_Content.concat( Path_Root, str_ascii("content") );
+		Path_Content.ptr[ Path_Content.len ] = '\\';
+		++ Path_Content.len;
 	}
 
 	// Memory
@@ -647,7 +652,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 
 		// WinDimensions dimensions = get_window_dimensions( window_handle );
-		resize_dib_section( &Surface_Back_Buffer, 1280, 720 );
+		resize_dib_section( &Surface_Back_Buffer, 1280, 720	 );
 
 		// Setup monitor refresh and associated timers
 		HDC refresh_dc = GetDC( window_handle );
@@ -667,6 +672,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	{
 		platform_api.path_root     = Path_Root;
 		platform_api.path_binaries = Path_Binaries;
+		platform_api.path_content  = Path_Content;
 		platform_api.path_scratch  = Path_Scratch;
 
 	#if Build_Development

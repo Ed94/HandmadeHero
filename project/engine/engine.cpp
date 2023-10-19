@@ -236,6 +236,49 @@ void draw_rectangle( OffscreenBuffer* buffer
 	}
 }
 
+internal
+void draw_bitmap( OffscreenBuffer* buffer
+	, f32 min_x, f32 min_y
+	, f32 max_x, f32 max_y
+	, u32* pixels, u32 size )
+{
+	s32 min_x_32 = round( min_x );
+	s32 min_y_32 = round( min_y );
+	s32 max_x_32 = round( max_x );
+	s32 max_y_32 = round( max_y );
+
+	s32 buffer_width  = buffer->width;
+	s32 buffer_height = buffer->height;
+
+	if ( min_x_32 < 0 )
+		min_x_32 = 0;
+	if ( min_y_32 < 0 )
+		min_y_32 = 0;
+	if ( max_x_32 > buffer_width )
+		max_x_32 = buffer_width;
+	if ( max_y_32 > buffer_height )
+		max_y_32 = buffer_height;
+
+	// Start with the pixel on the top left corner of the rectangle
+	u8* row = rcast(u8*, buffer->memory )
+	          + min_x_32 * buffer->bytes_per_pixel
+	          + min_y_32 * buffer->pitch;
+
+	for ( s32 y = min_y_32; y < max_y_32; ++ y )
+	{
+		s32* pixel_32 = rcast(s32*, row);
+
+		for ( s32 x = min_x_32; x < max_x_32; ++ x )
+		{
+			u32 color = pixels[ y * max_x_32 + x ];
+
+			*pixel_32 = color;
+			pixel_32++;
+		}
+		row += buffer->pitch;
+	}
+}
+
 inline
 void draw_debug_point(OffscreenBuffer* back_buffer, World* world, TileMapPosition pos, f32 red, f32 green, f32 blue)
 {
@@ -249,6 +292,26 @@ void draw_debug_point(OffscreenBuffer* back_buffer, World* world, TileMapPositio
 		red, green, blue);
 }
 
+internal
+Bitmap load_bmp( platform::FileReadContentFn* file_read_content, Str file_path  )
+{
+	Bitmap result {};
+
+	platform::File file {
+		file_path
+	};
+	if ( ! file_read_content( & file ) )
+	{
+		return result;
+	}
+
+	BitmapHeaderPacked* header = pcast(BitmapHeaderPacked*, file.data);
+	result.pixels         = rcast(u32*, rcast(Byte*, file.data) + header->bitmap_offset);
+	result.width          = header->width;
+	result.height         = header->height;
+	result.bits_per_pixel = header->bits_per_pixel;
+	return result;
+}
 
 Engine_API
 void on_module_reload( Memory* memory, platform::ModuleAPI* platfom_api )
@@ -314,7 +377,7 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 		tile_map->tile_chunks_num_x = 128;
 		tile_map->tile_chunks_num_y = 128;
 		tile_map->tile_chunks_num_z = 2;
-		
+
 		ssize num_chunks = tile_map->tile_chunks_num_x * tile_map->tile_chunks_num_y * tile_map->tile_chunks_num_z;
 		tile_map->chunks = state->world_arena.push_array( TileChunk, num_chunks );
 
@@ -333,20 +396,20 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 
 		u32 tiles_per_screen_x = 17;
 		u32 tiles_per_screen_y = 9;
-		
+
 		u32 screen_x  = 0;
 		u32 screen_y  = 0;
 		u32 rng_index = 0;
-		
+
 		b32 door_left   = false;
 		b32 door_right  = false;
 		b32 door_top    = false;
 		b32 door_bottom = false;
 		b32 door_up     = false;
 		b32 door_down   = false;
-		
+
 		u32 abs_tile_z = 0;
-			
+
 		for ( u32 screen_index = 0; screen_index < 100; ++ screen_index )
 		{
 			// TODO(Ed) : We need a proper RNG.
@@ -361,9 +424,11 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 				random_choice = RNG_Table[ rng_index ] % 3;
 			}
 			++ rng_index;
-			
+
+			b32 created_z_door = false;
 			if ( random_choice == 2 )
 			{
+				created_z_door = true;
 				if ( abs_tile_z == 0 )
 				{
 					door_up = true;
@@ -390,16 +455,16 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 					u32 abs_tile_y = screen_y * tiles_per_screen_y + tile_y;
 
 					u32 tile_value = 1;
-					
+
 					bool in_middle_x = tile_x == (tiles_per_screen_x / 2);
 					bool in_middle_y = tile_y == (tiles_per_screen_y / 2);
-					
+
 					bool on_right = tile_x == (tiles_per_screen_x - 1);
 					bool on_left  = tile_x == 0;
-					
+
 					bool on_bottom = tile_y == 0;
 					bool on_top    = tile_y == (tiles_per_screen_y - 1);
-					
+
 					if ( on_left && (! in_middle_y || ! door_left ))
 					{
 						tile_value = 2;
@@ -408,7 +473,7 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 					{
 						tile_value = 2;
 					}
-					
+
 					if ( on_bottom && (! in_middle_x || ! door_bottom ))
 					{
 						tile_value = 2;
@@ -417,7 +482,7 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 					{
 						tile_value = 2;
 					}
-					
+
 					if ( tile_x == 6 && tile_y == 6 )
 					{
 						if ( door_up )
@@ -429,31 +494,26 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 							tile_value = 4;
 						}
 					}
-					
+
 					// u32 tile_value = tile_x == tile_y && tile_y % 2 ? 1 : 0;
 					TileMap_set_tile_value( & state->world_arena, world->tile_map, abs_tile_x, abs_tile_y, abs_tile_z, tile_value );
 				}
 			}
-			
+
 			door_left   = door_right;
 			door_bottom = door_top;
-			
-			if ( door_up )
+
+			if ( created_z_door )
 			{
-				door_down = true;
-				door_up   = false;
-			}
-			else if ( door_down )
-			{
-				door_up   = true;
-				door_down = false;
+				door_down = ! door_down;
+				door_up   = ! door_up;
 			}
 			else
 			{
-				door_up   = false; 
+				door_up   = false;
 				door_down = false;
 			}
-			
+
 			door_right  = false;
 			door_top    = false;
 
@@ -481,6 +541,14 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 
 	hh::GameState* game_state = rcast( hh::GameState*, state->game_memory.persistent );
 	assert( sizeof(hh::GameState) <= state->game_memory.persistent_size );
+
+	StrPath path_test_bg;
+	path_test_bg.concat( platform_api->path_content, str_ascii("test_background.bmp") );
+	game_state->test_bg = load_bmp( platform_api->file_read_content, path_test_bg );
+
+	StrPath path_mojito;
+	path_mojito.concat( platform_api->path_content, str_ascii("mojito.bmp") );
+	game_state->mojito = load_bmp( platform_api->file_read_content, path_mojito );
 
 	hh::PlayerState* player = & game_state->player_state;
 	player->position.tile_x     = 4;
@@ -680,7 +748,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		{
 			TileMapPosition test_pos = {
 				new_player_pos_x, new_player_pos_y,
-				player->position.tile_x, player->position.tile_y
+				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos = recannonicalize_position( tile_map, test_pos );
 
@@ -688,28 +756,28 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 			TileMapPosition test_pos_nw {
 				new_player_pos_x - player_half_width, new_player_pos_y + player_quarter_height,
-				player->position.tile_x, player->position.tile_y
+				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos_nw       = recannonicalize_position( tile_map, test_pos_nw );
 			valid_new_pos    &= TileMap_is_point_empty( tile_map, test_pos_nw );
 
 			TileMapPosition test_pos_ne {
 				new_player_pos_x + player_half_width, new_player_pos_y + player_quarter_height,
-				player->position.tile_x, player->position.tile_y
+				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos_ne    = recannonicalize_position( tile_map, test_pos_ne );
 			valid_new_pos &= TileMap_is_point_empty( tile_map, test_pos_ne );
 
 			TileMapPosition test_pos_sw {
 				new_player_pos_x - player_half_width, new_player_pos_y,
-				player->position.tile_x, player->position.tile_y
+				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos_sw    = recannonicalize_position( tile_map, test_pos_sw );
 			valid_new_pos &= TileMap_is_point_empty( tile_map, test_pos_sw );
 
 			TileMapPosition test_pos_se {
 				new_player_pos_x + player_half_width, new_player_pos_y,
-				player->position.tile_x, player->position.tile_y
+				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos_se    = recannonicalize_position( tile_map, test_pos_se );
 			valid_new_pos &= TileMap_is_point_empty( tile_map, test_pos_se );
@@ -717,11 +785,29 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 		if ( valid_new_pos )
 		{
+
 			TileMapPosition new_pos = {
 				new_player_pos_x, new_player_pos_y,
-				player->position.tile_x, player->position.tile_y
+				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
-			player->position = recannonicalize_position( tile_map, new_pos );
+			new_pos = recannonicalize_position( tile_map, new_pos );
+
+			bool on_new_tile = TileMap_are_on_same_tile( & new_pos, & player->position );
+			if ( ! on_new_tile )
+			{
+				u32 new_tile_value = TileMap_get_tile_value( tile_map, new_pos );
+
+				if ( new_tile_value == 3 )
+				{
+					++ new_pos.tile_z;
+				}
+				else if ( new_tile_value == 4 )
+				{
+					-- new_pos.tile_z;
+				}
+			}
+
+			player->position = new_pos;
 		}
 
 		if ( player->jump_time > 0.f )
@@ -757,10 +843,10 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		{
 			u32 col = player->position.tile_x + relative_col;
 			u32 row = player->position.tile_y + relative_row;
-			
+
 			u32 tile_id  = TileMap_get_tile_value( tile_map, col, row, player->position.tile_z );
 			f32 color[3] = { 0.15f, 0.15f, 0.15f };
-			
+
 			if ( tile_id > 0 )
 			{
 				if ( tile_id == 2 )
@@ -781,7 +867,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 					color[1] = 0.52f;
 					color[2] = 0.52f;
 				}
-				
+
 				if ( row == player->position.tile_y && col == player->position.tile_x )
 				{
 					color[0] = 0.44f;
@@ -801,6 +887,27 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 				               , min_x, min_y
 				               , max_x, max_y
 				               , color[0], color[1], color[2] );
+			}
+		}
+	}
+
+//	draw_bitmap( back_buffer
+//		, 0, 0
+//		, scast(f32, game_state->mojito.width), scast(f32, game_state->mojito.height)
+//		, game_state->mojito.pixels, game_state->mojito.size
+//	);
+
+	// Bad bitmap test
+	{
+		u32* src = game_state->mojito.pixels;
+		u32* dst = rcast(u32*, back_buffer->memory);
+		for ( s32 y = 0; y < game_state->mojito.height; ++ y )
+		{
+			for ( s32 x = 0; x < game_state->mojito.width; ++ x )
+			{
+				*dst = *src;
+				++ dst;
+				++ src;
 			}
 		}
 	}

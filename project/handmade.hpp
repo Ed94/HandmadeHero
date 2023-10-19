@@ -94,6 +94,9 @@ struct PlayerActions
 struct GameState
 {
 	PlayerState player_state;
+	
+	engine::Bitmap test_bg;
+	engine::Bitmap mojito;
 };
 
 NS_HANDMADE_END

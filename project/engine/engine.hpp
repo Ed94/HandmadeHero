@@ -94,9 +94,9 @@ struct Memory
 		//ReplayData replay;
 	#endif
 
-	// The game will have 1/4 of persistent's memory available ot it.
+	// The game will have 1/2 of persistent's memory available ot it.
 	static constexpr
-	ssize game_memory_factor = 4;
+	ssize game_memory_factor = 2;
 
 	ssize engine_persistent_size()
 	{
@@ -179,6 +179,31 @@ struct World
 	s32 tile_size_in_pixels;
 
 	TileMap* tile_map;
+};
+
+#pragma pack(push, 1)
+struct BitmapHeaderPacked
+{
+	u16 file_type;
+	u32 file_size;
+	u16 _reserved_1_;
+	u16 _reserved_2_;
+	u32 bitmap_offset;
+	u32 size;
+	s32 width;
+	s32 height;
+	u16 planes;
+	u16 bits_per_pixel;
+};
+#pragma pack(pop)
+
+struct Bitmap
+{
+	u32* pixels;
+	s32  width;
+	s32  height;
+	u32  bits_per_pixel;
+	u32  size;
 };
 
 NS_ENGINE_END

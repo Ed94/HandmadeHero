@@ -4,6 +4,7 @@
 
 NS_ENGINE_BEGIN
 
+// TODO(Ed) : Consider moving (Casey wants to)
 inline
 void cannonicalize_coord( TileMap* tile_map, u32* tile_coord, f32* pos_coord )
 {
@@ -24,6 +25,7 @@ void cannonicalize_coord( TileMap* tile_map, u32* tile_coord, f32* pos_coord )
 	(* pos_coord)  = new_pos_coord;
 }
 
+// TODO(Ed) : Consider moving (Casey wants to)
 inline
 TileMapPosition recannonicalize_position( TileMap* tile_map, TileMapPosition pos )
 {
@@ -91,6 +93,7 @@ TileChunkPosition get_tile_chunk_position_for( TileMap* tile_map, u32 abs_tile_x
 	return chunk_pos;
 }
 
+inline
 u32 TileMap_get_tile_value( TileMap* tile_map, u32 tile_x, u32 tile_y, u32 tile_z )
 {
 	assert( tile_map != nullptr );
@@ -105,13 +108,24 @@ u32 TileMap_get_tile_value( TileMap* tile_map, u32 tile_x, u32 tile_y, u32 tile_
 	return value;
 }
 
+inline
+u32 TileMap_get_tile_value( TileMap* tile_map, TileMapPosition position )
+{
+	u32 value = TileMap_get_tile_value( tile_map, position.tile_x, position.tile_y, position.tile_z );
+	return value;
+}
+
 internal
 b32 TileMap_is_point_empty( TileMap* tile_map, TileMapPosition position )
 {
 	assert( tile_map != nullptr );
 
 	u32 chunk_value = TileMap_get_tile_value( tile_map, position.tile_x, position.tile_y, position.tile_z );
-	b32 is_empty    = chunk_value == 1;
+	
+	b32 
+	is_empty  = chunk_value == 1;
+	is_empty |= chunk_value == 3;
+	is_empty |= chunk_value == 4;
 	return is_empty;
 }
 
@@ -135,6 +149,17 @@ void TileMap_set_tile_value( MemoryArena* arena, TileMap* tile_map, u32 abs_tile
 	}
 	
 	TileChunk_set_tile_value( chunk, tile_map, chunk_pos.tile_x, chunk_pos.tile_y, value );
+}
+
+
+internal
+b32 TileMap_are_on_same_tile( TileMapPosition* pos_a, TileMapPosition* pos_b )
+{
+	b32 result =
+		pos_a->tile_x == pos_b->tile_x
+	&&  pos_a->tile_y == pos_b->tile_y
+	&&  pos_a->tile_z == pos_b->tile_z;
+	return result;
 }
 
 NS_ENGINE_END

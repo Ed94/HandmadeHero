@@ -33,7 +33,7 @@ Module build order:
 
 ## Milestone
 
-Day 35 : Basic Sparse Tilemap Storage
+Day 36 : Loading BMPs
 
 Features Done so far:
 
@@ -62,6 +62,7 @@ Features Done so far:
 
 ## Gallery
 
+![img](docs/imgs/handmade_win32_2023-10-19_14-07-20.png)
 ![img](docs/imgs/handmade_win32_2023-10-16_23-08-11.png)
 ![img](docs/imgs/handmade_win32_2023-10-11_23-39-57.gif)
 ![img](docs/imgs/handmade_win32_2023-10-11_00-47-19.gif)

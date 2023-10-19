@@ -50,8 +50,7 @@ struct TileMap
 
 struct TileMapPosition
 {
-	// TODO(Ed) : Should this be from the center of the tile?
-
+	// Note(Ed) : Relative position from tile center.
 	f32 x;
 	f32 y;
 
