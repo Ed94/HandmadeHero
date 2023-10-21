@@ -33,7 +33,7 @@ Module build order:
 
 ## Milestone
 
-Day 37 : Basic Bitmap Rendering
+Day 38 : Basic Linear Bitmap Blending
 
 Features Done so far:
 
@@ -59,10 +59,13 @@ Features Done so far:
   * Record & replay input.
   * WIP : 2.5D Tile Map
     * Virtualized into chunks
-  * Bitmap file loading & basic rendering
+  * Bitmap file loading
+    * Compression mode 3
+    * Linear alpha blending
 
 ## Gallery
 
+![img](docs/imgs/handmade_win32_2023-10-21_02-16-43.png)
 ![img](docs/imgs/handmade_win32_2023-10-20_23-14-37.png)
 ![img](docs/imgs/Code_2023-10-20_21-57-06.png)
 ![img](docs/imgs/handmade_win32_2023-10-19_22-57-13.gif)

@@ -939,6 +939,11 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		, & game_state->test_bg_hh
 	);
 
+	draw_bitmap( back_buffer
+		, scast(f32, back_buffer->width) / 2.5f, scast(f32, back_buffer->height) / 2.5f
+		, & game_state->hero_front_head
+	);
+
 // Scrolling
 	f32 screen_center_x = 0.5f * scast(f32, back_buffer->width);
 	f32 screen_center_y = 0.5f * scast(f32, back_buffer->height);
@@ -1027,7 +1032,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 	draw_bitmap( back_buffer
 	            , player_screen_pos_x, player_screen_pos_y
-	            , & game_state->hero_front_head );
+	            , & game_state->mojito_head );
 
 #if 0
 	draw_rectangle( back_buffer
