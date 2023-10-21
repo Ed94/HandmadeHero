@@ -45,6 +45,8 @@
 			<Define>Build_Debug</Define>
 			<Define>Build_Development</Define>
 			<Define>INTELLISENSE_DIRECTIVES=1</Define>
+			<Define>_WIN64</Define>
+			<Define>_MSC_VER</Define>
 		</Defines>
 		<ConfigProperties>
 			<ConfigAndPlatform>

@@ -7,7 +7,7 @@
 #include "handmade.hpp"
 
 #include "tile_map.cpp"
-#include "random.cpp
+#include "random.cpp"
 #endif
 
 NS_ENGINE_BEGIN
@@ -265,31 +265,42 @@ void draw_bitmap( OffscreenBuffer* buffer
 		max_y = buffer_height;
 
 	// Start with the pixel on the top left corner of the rectangle
-	u8* row = rcast(u8*, buffer->memory )
+	u8*  dst_row = rcast(u8*, buffer->memory )
 	          + min_x * buffer->bytes_per_pixel
 	          + min_y * buffer->pitch;
+	u32* src_row = bitmap->pixels + bitmap->width * (bitmap->height - 1);
 
-	s32 bmp_y = bmp_start_y;
 	for ( s32 y = min_y; y < max_y; ++ y )
 	{
-		s32* pixel_32 = rcast(s32*, row);
+		u32* dst = rcast(u32*, dst_row);
+		u32* src = src_row;
 
-		s32 bmp_x = bmp_start_x;
 		for ( s32 x = min_x; x < max_x; ++ x )
 		{
-			u32 color = bitmap->pixels[ bmp_y * bitmap->width + bmp_x ];
+		#define extract( pixel, shift ) (( *pixel >> shift ) & 0xFF)
+			f32 alpha = scast(f32, extract(src, 24)) / 255.f;
 
-			// TODO(Ed): This is a bad alpha check, fix it.
-			// if ( (color >> 24) != 0 )
-			// {
-				*pixel_32 = color;
-			// }
-			++ pixel_32;
-			++ bmp_x;
+			f32 src_R = scast(f32, extract(src, 16));
+			f32 src_G = scast(f32, extract(src, 8));
+			f32 src_B = scast(f32, extract(src, 0));
+
+			f32 dst_R = scast(f32, extract(dst, 16));
+			f32 dst_G = scast(f32, extract(dst, 8));
+			f32 dst_B = scast(f32, extract(dst, 0));
+		#undef extract
+
+			f32 red   = (1 - alpha) * dst_R + alpha * src_R;
+			f32 green = (1 - alpha) * dst_G + alpha * src_G;
+			f32 blue  = (1 - alpha) * dst_B + alpha * src_B;
+
+			*dst = u32(red + 0.5f) << 16 | u32(green + 0.5f) << 8 | u32(blue + 0.5f) << 0;
+
+			++ dst;
+			++ src;
 		}
 
-		row += buffer->pitch;
-		-- bmp_y;
+		dst_row += buffer->pitch;
+		src_row -= bitmap->width;
 	}
 }
 
@@ -321,8 +332,7 @@ Bitmap load_bmp( platform::ModuleAPI* platform_api, Str file_path  )
 	}
 
 	BitmapHeaderPacked* header = pcast(BitmapHeaderPacked*, file.data);
-	// Note: Byte order is in little-endian AA BB GG RR (bottom up) (ABGR)
-	//
+	assert( header->compression == 3 );
 
 	// TODO(Ed) : Do not directly assign this, allocate the pixels to somewhere in game or engine persistent.
 	result.pixels         = rcast(u32*, rcast(Byte*, file.data) + header->bitmap_offset);
@@ -330,8 +340,22 @@ Bitmap load_bmp( platform::ModuleAPI* platform_api, Str file_path  )
 	result.height         = header->height;
 	result.bits_per_pixel = header->bits_per_pixel;
 
+	u32 red_shift   = 0;
+	u32 green_shift = 0;
+	u32 blue_shift  = 0;
+	u32 alpha_shift = 0;
+
+	b32 red_found    = bitscan_forward( & red_shift,   header->red_mask );
+	b32 green_found  = bitscan_forward( & green_shift, header->green_mask );
+	b32 blue_found   = bitscan_forward( & blue_shift,  header->blue_mask );
+	b32 alpha_found  = bitscan_forward( & alpha_shift, ~(header->red_mask | header->green_mask | header->blue_mask) );
+
+	assert( red_found );
+	assert( green_found );
+	assert( blue_found );
+	assert( alpha_found );
+
 	u32* src = result.pixels;
-	// Note: Do not use this generically, code is bad)
 	for ( s32 y = 0; y < header->width; ++ y )
 	{
 		for ( s32 x = 0; x < header->height; ++ x )
@@ -345,9 +369,13 @@ Bitmap load_bmp( platform::ModuleAPI* platform_api, Str file_path  )
 			};
 
 			Pixel* px = rcast(Pixel*, src);
-			Pixel cpy = *px;
-			// *src = (u32(px->Alpha) << 0) | (u32(px->Red) << 24) | (u32(px->Green) << 16) | (u32(px->Blue) << 8);
-			*src = (*src >> 8) | (*src << 24);
+
+			u32 alpha = (( *src >> alpha_shift ) & 0xFF) << 24;
+			u32 red   = (( *src >> red_shift   ) & 0xFF) << 16;
+			u32 green = (( *src >> green_shift ) & 0xFF) << 8;
+			u32 blue  = (( *src >> blue_shift  ) & 0xFF) << 0;
+
+			 *src = alpha | red | green | blue;
 			++ src;
 		}
 	}
