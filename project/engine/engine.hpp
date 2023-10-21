@@ -194,6 +194,16 @@ struct BitmapHeaderPacked
 	s32 height;
 	u16 planes;
 	u16 bits_per_pixel;
+	u32 compression;
+	u32 size_of_bitmap;
+	s32 horizontal_resolution;
+	s32 vertical_resolution;
+	u32 colors_used;
+	u32 colors_important;
+	
+	u32 red_mask;
+	u32 green_mask;
+	u32 blue_mask;
 };
 #pragma pack(pop)
 
@@ -203,7 +213,6 @@ struct Bitmap
 	s32  width;
 	s32  height;
 	u32  bits_per_pixel;
-	u32  size;
 };
 
 NS_ENGINE_END

@@ -95,8 +95,17 @@ struct GameState
 {
 	PlayerState player_state;
 	
-	engine::Bitmap test_bg;
-	engine::Bitmap mojito;
+	using Bitmap = engine::Bitmap;
+	
+	Bitmap debug_bitmap;
+	Bitmap test_bg;
+	Bitmap mojito;
+	Bitmap mojito_head;
+	
+	Bitmap test_bg_hh;
+	Bitmap hero_front_head;
+	Bitmap hero_front_cape;
+	Bitmap hero_front_torso;
 };
 
 NS_HANDMADE_END

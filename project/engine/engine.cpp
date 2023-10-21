@@ -238,44 +238,58 @@ void draw_rectangle( OffscreenBuffer* buffer
 
 internal
 void draw_bitmap( OffscreenBuffer* buffer
-	, f32 min_x, f32 min_y
-	, f32 max_x, f32 max_y
-	, u32* pixels, u32 size )
+	, f32 pos_x, f32 pos_y
+	, Bitmap* bitmap )
 {
-	s32 min_x_32 = round( min_x );
-	s32 min_y_32 = round( min_y );
-	s32 max_x_32 = round( max_x );
-	s32 max_y_32 = round( max_y );
+	s32 half_width  = bitmap->width / 2;
+	s32 half_height = bitmap->height / 2;
+
+	s32 min_x = round( pos_x ) - half_width;
+	s32 min_y = round( pos_y ) - half_height;
+	s32 max_x = round( pos_x ) + half_width;
+	s32 max_y = round( pos_y ) + half_height;
+
+	s32 bmp_start_x = min_x < 0 ? min_x * -1 : 0;
+	u32 bmp_start_y = min_y < 0 ? bitmap->height + min_y - 1 : bitmap->height - 1;
 
 	s32 buffer_width  = buffer->width;
 	s32 buffer_height = buffer->height;
 
-	if ( min_x_32 < 0 )
-		min_x_32 = 0;
-	if ( min_y_32 < 0 )
-		min_y_32 = 0;
-	if ( max_x_32 > buffer_width )
-		max_x_32 = buffer_width;
-	if ( max_y_32 > buffer_height )
-		max_y_32 = buffer_height;
+	if ( min_x < 0 )
+		min_x = 0;
+	if ( min_y < 0 )
+		min_y = 0;
+	if ( max_x > buffer_width )
+		max_x = buffer_width;
+	if ( max_y > buffer_height )
+		max_y = buffer_height;
 
 	// Start with the pixel on the top left corner of the rectangle
 	u8* row = rcast(u8*, buffer->memory )
-	          + min_x_32 * buffer->bytes_per_pixel
-	          + min_y_32 * buffer->pitch;
+	          + min_x * buffer->bytes_per_pixel
+	          + min_y * buffer->pitch;
 
-	for ( s32 y = min_y_32; y < max_y_32; ++ y )
+	s32 bmp_y = bmp_start_y;
+	for ( s32 y = min_y; y < max_y; ++ y )
 	{
 		s32* pixel_32 = rcast(s32*, row);
 
-		for ( s32 x = min_x_32; x < max_x_32; ++ x )
+		s32 bmp_x = bmp_start_x;
+		for ( s32 x = min_x; x < max_x; ++ x )
 		{
-			u32 color = pixels[ y * max_x_32 + x ];
+			u32 color = bitmap->pixels[ bmp_y * bitmap->width + bmp_x ];
 
-			*pixel_32 = color;
-			pixel_32++;
+			// TODO(Ed): This is a bad alpha check, fix it.
+			// if ( (color >> 24) != 0 )
+			// {
+				*pixel_32 = color;
+			// }
+			++ pixel_32;
+			++ bmp_x;
 		}
+
 		row += buffer->pitch;
+		-- bmp_y;
 	}
 }
 
@@ -293,23 +307,52 @@ void draw_debug_point(OffscreenBuffer* back_buffer, World* world, TileMapPositio
 }
 
 internal
-Bitmap load_bmp( platform::FileReadContentFn* file_read_content, Str file_path  )
+Bitmap load_bmp( platform::ModuleAPI* platform_api, Str file_path  )
 {
 	Bitmap result {};
 
 	platform::File file {
 		file_path
 	};
-	if ( ! file_read_content( & file ) )
+	if ( ! platform_api->file_read_content( & file ) )
 	{
+
 		return result;
 	}
 
 	BitmapHeaderPacked* header = pcast(BitmapHeaderPacked*, file.data);
+	// Note: Byte order is in little-endian AA BB GG RR (bottom up) (ABGR)
+	//
+
+	// TODO(Ed) : Do not directly assign this, allocate the pixels to somewhere in game or engine persistent.
 	result.pixels         = rcast(u32*, rcast(Byte*, file.data) + header->bitmap_offset);
 	result.width          = header->width;
 	result.height         = header->height;
 	result.bits_per_pixel = header->bits_per_pixel;
+
+	u32* src = result.pixels;
+	// Note: Do not use this generically, code is bad)
+	for ( s32 y = 0; y < header->width; ++ y )
+	{
+		for ( s32 x = 0; x < header->height; ++ x )
+		{
+			struct Pixel
+			{
+				u8 Alpha;
+				u8 Blue;
+				u8 Green;
+				u8 Red;
+			};
+
+			Pixel* px = rcast(Pixel*, src);
+			Pixel cpy = *px;
+			// *src = (u32(px->Alpha) << 0) | (u32(px->Red) << 24) | (u32(px->Green) << 16) | (u32(px->Blue) << 8);
+			*src = (*src >> 8) | (*src << 24);
+			++ src;
+		}
+	}
+
+	//platform_api->file_close( & file );
 	return result;
 }
 
@@ -542,13 +585,43 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 	hh::GameState* game_state = rcast( hh::GameState*, state->game_memory.persistent );
 	assert( sizeof(hh::GameState) <= state->game_memory.persistent_size );
 
-	StrPath path_test_bg;
-	path_test_bg.concat( platform_api->path_content, str_ascii("test_background.bmp") );
-	game_state->test_bg = load_bmp( platform_api->file_read_content, path_test_bg );
+	// Personally made assets
+	{
+		StrPath path_test_bg;
+		path_test_bg.concat( platform_api->path_content, str_ascii("test_background.bmp") );
+		game_state->test_bg = load_bmp( platform_api, path_test_bg );
 
-	StrPath path_mojito;
-	path_mojito.concat( platform_api->path_content, str_ascii("mojito.bmp") );
-	game_state->mojito = load_bmp( platform_api->file_read_content, path_mojito );
+		StrPath path_mojito;
+		path_mojito.concat( platform_api->path_content, str_ascii("mojito.bmp") );
+		game_state->mojito = load_bmp( platform_api, path_mojito );
+
+		StrPath path_mojito_head;
+		path_mojito_head.concat( platform_api->path_content, str_ascii("mojito_head.bmp") );
+		game_state->mojito_head = load_bmp( platform_api, path_mojito_head );
+
+		StrPath path_debug_bitmap;
+		path_debug_bitmap.concat( platform_api->path_content, str_ascii("debug_bitmap2.bmp") );
+		game_state->debug_bitmap = load_bmp( platform_api, path_debug_bitmap );
+	}
+
+	// Offical assets
+	{
+		StrPath path_test_bg_hh;
+		path_test_bg_hh.concat( platform_api->path_content, str_ascii("offical/test/test_background.bmp"));
+		game_state->test_bg_hh = load_bmp( platform_api, path_test_bg_hh );
+
+		StrPath path_hero_front_head;
+		path_hero_front_head.concat( platform_api->path_content, str_ascii("offical/test/test_hero_front_head.bmp"));
+		game_state->hero_front_head = load_bmp( platform_api, path_hero_front_head );
+
+		StrPath path_hero_front_cape;
+		path_hero_front_cape.concat( platform_api->path_content, str_ascii("offical/test/test_hero_front_cape.bmp"));
+		game_state->hero_front_cape = load_bmp( platform_api, path_hero_front_cape );
+
+		StrPath path_hero_front_torso;
+		path_hero_front_torso.concat( platform_api->path_content, str_ascii("offical/test/test_hero_front_torso.bmp"));
+		game_state->hero_front_torso = load_bmp( platform_api, path_hero_front_torso );
+	}
 
 	hh::PlayerState* player = & game_state->player_state;
 	player->position.tile_x     = 4;
@@ -833,6 +906,11 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		, 1.f, 0.24f, 0.24f );
 
 
+	draw_bitmap( back_buffer
+		, scast(f32, back_buffer->width) / 2.f, scast(f32, back_buffer->height) / 2.f
+		, & game_state->test_bg_hh
+	);
+
 // Scrolling
 	f32 screen_center_x = 0.5f * scast(f32, back_buffer->width);
 	f32 screen_center_y = 0.5f * scast(f32, back_buffer->height);
@@ -847,25 +925,25 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			u32 tile_id  = TileMap_get_tile_value( tile_map, col, row, player->position.tile_z );
 			f32 color[3] = { 0.15f, 0.15f, 0.15f };
 
-			if ( tile_id > 0 )
+			if ( tile_id > 1 || row == player->position.tile_y && col == player->position.tile_x )
 			{
 				if ( tile_id == 2 )
 				{
-					color[0] = 0.22f;
-					color[1] = 0.22f;
-					color[2] = 0.22f;
+					color[0] = 0.42f;
+					color[1] = 0.42f;
+					color[2] = 0.52f;
 				}
 				if ( tile_id == 3 )
 				{
-					color[0] = 0.12f;
-					color[1] = 0.12f;
-					color[2] = 0.12f;
+					color[0] = 0.02f;
+					color[1] = 0.02f;
+					color[2] = 0.02f;
 				}
 				if ( tile_id == 4 )
 				{
-					color[0] = 0.52f;
-					color[1] = 0.52f;
-					color[2] = 0.52f;
+					color[0] = 0.42f;
+					color[1] = 0.62f;
+					color[2] = 0.42f;
 				}
 
 				if ( row == player->position.tile_y && col == player->position.tile_x )
@@ -884,26 +962,21 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 				f32 max_y = center_y + tile_size_in_pixels * 0.5f;
 
 				draw_rectangle( back_buffer
-				               , min_x, min_y
-				               , max_x, max_y
-				               , color[0], color[1], color[2] );
+	               , min_x, min_y
+	               , max_x, max_y
+	               , color[0], color[1], color[2] );
 			}
 		}
 	}
 
-//	draw_bitmap( back_buffer
-//		, 0, 0
-//		, scast(f32, game_state->mojito.width), scast(f32, game_state->mojito.height)
-//		, game_state->mojito.pixels, game_state->mojito.size
-//	);
-
 	// Bad bitmap test
+	#if 0
 	{
-		u32* src = game_state->mojito.pixels;
+		u32* src = game_state->mojito_head.pixels;
 		u32* dst = rcast(u32*, back_buffer->memory);
-		for ( s32 y = 0; y < game_state->mojito.height; ++ y )
+		for ( s32 y = 0; y < game_state->mojito_head.height; ++ y )
 		{
-			for ( s32 x = 0; x < game_state->mojito.width; ++ x )
+			for ( s32 x = 0; x < game_state->mojito_head.width; ++ x )
 			{
 				*dst = *src;
 				++ dst;
@@ -911,6 +984,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			}
 		}
 	}
+	#endif
 
 	// Player
 	f32 player_red   = 0.7f;
@@ -923,12 +997,16 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	f32 player_screen_pos_x = screen_center_x;
 	f32 player_screen_pos_y = screen_center_y;
 
-//	player_min_x = player_tile_x_offset - player_half_width * world;
+	draw_bitmap( back_buffer
+	            , player_screen_pos_x, player_screen_pos_y
+	            , & game_state->hero_front_head );
 
+#if 0
 	draw_rectangle( back_buffer
-	               , player_screen_pos_x - player_half_width * world->tile_meters_to_pixels, player_screen_pos_y - player->height * world->tile_meters_to_pixels
-	               , player_screen_pos_x + player_half_width * world->tile_meters_to_pixels, player_screen_pos_y
-	               , player_red, player_green, player_blue );
+		, player_screen_pos_x - player_half_width * world->tile_meters_to_pixels, player_screen_pos_y - player->height * world->tile_meters_to_pixels
+		, player_screen_pos_x + player_half_width * world->tile_meters_to_pixels, player_screen_pos_y
+		, player_red, player_green, player_blue );
+#endif
 
 	// Auto-Snapshot percent bar
 	if (1)

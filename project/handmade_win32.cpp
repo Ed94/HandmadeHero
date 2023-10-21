@@ -24,7 +24,7 @@ Handmade Win32 Platform Translation Unit
 #include "engine/tile_map.hpp"
 #include "engine/engine.hpp"
 #include "engine/engine_to_platform_api.hpp"
-#include "gen/engine_symbol_table.hpp"
+#include "engine/gen/engine_symbols.gen.hpp"
 
 #include "jsl.hpp" // Using this to get dualsense controllers
 #include "win32/win32.hpp"

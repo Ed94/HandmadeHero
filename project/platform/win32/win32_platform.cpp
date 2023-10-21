@@ -2,7 +2,7 @@
 #include "platform/platform.hpp"
 #include "engine/engine.hpp"
 #include "engine/engine_to_platform_api.hpp"
-#include "gen/engine_symbol_table.hpp"
+#include "engine/gen/engine_symbols.gen.hpp"
 #include "win32.hpp"
 #include "jsl.hpp"
 #endif

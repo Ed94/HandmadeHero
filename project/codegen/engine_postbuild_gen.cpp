@@ -71,7 +71,7 @@ int gen_main()
 
 #pragma push_macro("str_ascii")
 #undef str_ascii
-	Builder builder = Builder::open( "engine_symbol_table.hpp" );
+	Builder builder = Builder::open( "engine_symbols.gen.hpp" );
 	builder.print( pragma_once );
 	builder.print( def_include( txt("engine/engine.hpp") ) );
 	builder.print( fmt_newline );

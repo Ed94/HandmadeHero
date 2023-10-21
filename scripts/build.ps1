@@ -52,10 +52,45 @@ if ( -not $module_specified )
 # Load up toolchain configuraion
 . $config_toolchain
 
+function check-FileForChanges
+{
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$path_file
+    )
+
+    if (-not (Test-Path $path_file -PathType Leaf)) {
+        Write-Error "The provided path is not a valid file: $path_file"
+        return $false
+    }
+    $file_name = Split-Path $path_file -Leaf
+    $path_csv = Join-Path $path_build ($file_name + "_file_hash.csv")
+
+    $csv_file_hash = $null
+    if (Test-Path $path_csv) {
+        $csv_file_hash = Import-Csv $path_csv | Select-Object -ExpandProperty value
+    }
+
+    $current_hash_info = Get-FileHash -Path $path_file -Algorithm MD5
+    $current_file_hash = $current_hash_info.Hash
+
+    # Save the current hash to the CSV
+    [PSCustomObject]@{
+        name  = $path_file
+        value = $current_file_hash
+    } | Export-Csv $path_csv -NoTypeInformation
+
+    if ($csv_file_hash -and $csv_file_hash -eq $current_file_hash) {
+        return $false
+    } else {
+        return $true
+    }
+}
+
 # Check to see if the module has changed files since the last build
 function check-ModuleForChanges
 {
-	param( [string]$path_module )
+	param( [string]$path_module, [array]$excludes )
 
 	$module_name = split-path $path_module -leaf
 	$path_csv    = Join-Path $path_build ($module_name + "_module_hashes.csv")
@@ -69,7 +104,7 @@ function check-ModuleForChanges
 	}
 
 	$file_hashes = @{}
-	get-childitem -path $path_module -recurse -file | foreach-object {
+	get-childitem -path $path_module -recurse -file -Exclude $excludes | foreach-object {
 		$id                 = $_.fullname
 		$hash_info          = get-filehash -path $id -Algorithm MD5
 		$file_hashes[ $id ] = $hash_info.Hash
@@ -92,15 +127,16 @@ function check-ModuleForChanges
 #region Building
 write-host "Building HandmadeHero with $vendor"
 
-$path_project  = Join-Path $path_root    'project'
-$path_scripts  = Join-Path $path_root    'scripts'
-$path_data     = Join-Path $path_root	 'data'
-$path_binaries = Join-Path $path_data    'binaries'
-$path_deps     = Join-Path $path_project 'dependencies'
-$path_codegen  = Join-Path $path_project 'codegen'
-$path_gen      = Join-Path $path_project 'gen'
-$path_platform = Join-Path $path_project 'platform'
-$path_engine   = Join-Path $path_project 'engine'
+$path_project    = Join-Path $path_root    'project'
+$path_scripts    = Join-Path $path_root    'scripts'
+$path_data       = Join-Path $path_root	   'data'
+$path_binaries   = Join-Path $path_data    'binaries'
+$path_deps       = Join-Path $path_project 'dependencies'
+$path_codegen    = Join-Path $path_project 'codegen'
+$path_platform   = Join-Path $path_project 'platform'
+$path_engine     = Join-Path $path_project 'engine'
+$path_engine_gen = Join-Path $path_engine  'gen'
+
 
 $update_deps = Join-Path $PSScriptRoot 'update_deps.ps1'
 
@@ -150,9 +186,6 @@ else {
 	$compiler_args += ( $flag_define + 'Build_Development=0' )
 }
 
-$should_format_gen = $false
-
-# TODO(Ed) : Support detecting codegen changes separate from the module's runtime builds (so that it can be rebuild only when necessary as well)
 function build-engine
 {
 	$should_build = check-ModuleForChanges $path_engine
@@ -160,6 +193,7 @@ function build-engine
 		write-host "No changes detected in engine module, skipping build" -ForegroundColor Yellow
 		return $true
 	}
+	write-host "`nBuilding Engine Module" -ForegroundColor Green
 
 	$path_pdb_lock = Join-Path $path_binaries 'handmade_engine.pdb.lock'
 	New-Item $path_pdb_lock -ItemType File -Force > $null
@@ -171,36 +205,38 @@ function build-engine
 		if ( $verbose ) { Write-Host "Deleted $file" -ForegroundColor Green }
 	}
 
-	$local:includes = $script:includes
-	$includes      += $path_engine
+	#region Building Engine Module Runtime
+		$local:includes = $script:includes
+		$includes      += $path_engine
 
-	$local:compiler_args = $script:compiler_args
-	$compiler_args      += ($flag_define + 'Build_DLL=1' )
+		$local:compiler_args = $script:compiler_args
+		$compiler_args      += ($flag_define + 'Build_DLL=1' )
 
-	if ( $vendor -eq 'msvc' ) {
-		$compiler_args += ($flag_define + 'Engine_API=__declspec(dllexport)')
-	}
-	if ( $vendor -eq 'clang' ) {
-		$compiler_args += ($flag_define + 'Engine_API=__attribute__((visibility("default")))')
-	}
+		if ( $vendor -eq 'msvc' ) {
+			$compiler_args += ($flag_define + 'Engine_API=__declspec(dllexport)')
+		}
+		if ( $vendor -eq 'clang' ) {
+			$compiler_args += ($flag_define + 'Engine_API=__attribute__((visibility("default")))')
+		}
 
-	$local:linker_args = @(
-		$flag_link_dll
-		# $flag_link_optimize_references
-	)
+		$local:linker_args = @(
+			$flag_link_dll
+			# $flag_link_optimize_references
+		)
 
-	$unit            = Join-Path $path_project  'handmade_engine.cpp'
-	$dynamic_library = Join-Path $path_binaries 'handmade_engine.dll'
+		$unit            = Join-Path $path_project  'handmade_engine.cpp'
+		$dynamic_library = Join-Path $path_binaries 'handmade_engine.dll'
 
-	$build_result = build-simple $path_build $includes $compiler_args $linker_args $unit $dynamic_library
+		$build_result = build-simple $path_build $includes $compiler_args $linker_args $unit $dynamic_library
 
-	Remove-Item $path_pdb_lock -Force
+		Remove-Item $path_pdb_lock -Force
 
-	if ( $build_result -eq $false ) {
-		return $false
-	}
+		if ( $build_result -eq $false ) {
+			return $false
+		}
+	#endregion
 
-	#region CodeGen Post-Build
+	#CodeGen Post-Build
 	if ( -not $handmade_process_active -and $build_result )
 	{
 		$path_engine_symbols = Join-Path $path_build 'handmade_engine.symbols'
@@ -273,42 +309,58 @@ function build-engine
 			# Write the symbol table to a file
 			$engine_symbols.Values | Out-File -Path $path_engine_symbols
 		}
-
-		# Delete old PDBs
-		$pdb_files = Get-ChildItem -Path $path_build -Filter "engine_postbuild_gen_*.pdb"
-		foreach ($file in $pdb_files) {
-			Remove-Item -Path $file.FullName -Force
-			if ($verbose) { Write-Host "Deleted $file" -ForegroundColor Green }
+		else {
+			return $false
 		}
 
-		$compiler_args = @()
-		$compiler_args += ( $flag_define + 'GEN_TIME' )
-
-		$linker_args = @(
-			$flag_link_win_subsystem_console
-		)
-
-		$unit       = Join-Path $path_codegen 'engine_postbuild_gen.cpp'
-		$executable = Join-Path $path_build   'engine_postbuild_gen.exe'
-
-		if ( build-simple $path_build $local:includes $compiler_args $linker_args $unit $executable ) 
+		$unit         = Join-Path $path_codegen 'engine_postbuild_gen.cpp'
+		$executable   = Join-Path $path_build 'engine_postbuild_gen.exe'
+		$should_build = (check-FileForChanges $unit) -eq $true
+		if ( $should_build )
 		{
-			Push-Location $path_build
-			$time_taken = Measure-Command {
-				& $executable 2>&1 | ForEach-Object {
-					write-host `t $_ -ForegroundColor Green
-				}
+			# Delete old PDBs
+			$pdb_files = Get-ChildItem -Path $path_build -Filter "engine_postbuild_gen_*.pdb"
+			foreach ($file in $pdb_files) {
+				Remove-Item -Path $file.FullName -Force
+				if ($verbose) { Write-Host "Deleted $file" -ForegroundColor Green }
 			}
-			Pop-Location
 
-			$path_generated_file = Join-Path $path_build 'engine_symbol_table.hpp'
-			move-item $path_generated_file (join-path $path_gen (split-path $path_generated_file -leaf)) -Force
-			$script:should_format_gen = $true
+			$compiler_args = @()
+			$compiler_args += ( $flag_define + 'GEN_TIME' )
 
-			return $true
+			$linker_args = @(
+				$flag_link_win_subsystem_console
+			)
+
+			$build_result = build-simple $path_build $local:includes $compiler_args $linker_args $unit $executable
+			if ( $build_result -eq $false ) {
+				return $false
+			}
+		}
+		else {
+			write-host "No changes detected in engine post-build gen, skipping build" -ForegroundColor Yellow
 		}
 
-		return $false
+		Push-Location $path_build
+		$time_taken = Measure-Command {
+			& $executable 2>&1 | ForEach-Object {
+				write-host `t $_ -ForegroundColor Green
+			}
+		}
+		Pop-Location
+
+		$path_generated_file = Join-Path $path_build  'engine_symbols.gen.hpp'
+		move-item $path_generated_file (join-path $path_engine_gen (split-path $path_generated_file -leaf)) -Force
+
+		push-location $path_scripts
+			$include = @(
+				'*.cpp'
+				'*.hpp'
+			)
+			format-cpp $path_engine_gen $include
+		pop-location
+
+		return $true
 	}
 }
 if ( $engine ) {
@@ -331,9 +383,13 @@ function build-platform
 		write-host "No changes detected in platform module, skipping build" -ForegroundColor Yellow
 		return $true
 	}
+	write-host "Building Platform Module" -ForegroundColor Green
 
 	# CodeGen Pre-Build
-	if ( $true )
+	$path_engine_symbols = Join-Path $path_engine_gen 'engine_symbols.gen.hpp'
+	$unit                = Join-Path $path_codegen    'platform_gen.cpp'
+	$should_build        = (check-FileForChanges $unit) -eq $true -or (check-FileForChanges $path_engine_symbols) -eq $true
+	if ( $should_build )
 	{
 		# Delete old PDBs
 		$pdb_files = Get-ChildItem -Path $path_build -Filter "platform_gen_*.pdb"
@@ -374,7 +430,16 @@ function build-platform
 		}
 		Pop-Location
 
-		$script:should_format_gen = $true
+		push-location $path_scripts
+			$include = @(
+				'*.cpp'
+				'*.hpp'
+			)
+			format-cpp (Join-Path $path_platform 'gen' ) $include
+		pop-location
+	}
+	else {
+		write-host "No changes detected in platform gen, skipping build" -ForegroundColor Yellow
 	}
 
 	# Delete old PDBs
@@ -403,7 +468,6 @@ function build-platform
 	$executable = Join-Path $path_binaries 'handmade_win32.exe'
 
 	return build-simple $path_build $includes $compiler_args $linker_args $unit $executable
-
 }
 if ( $platform ) {
 	$build_result = build-platform
@@ -420,19 +484,6 @@ if ( (Test-Path $path_jsl_dll) -eq $false )
 	Copy-Item $path_jsl_dep_dll $path_jsl_dll
 }
 #endregion Handmade Runtime
-
-if ( $should_format_gen )
-{
-	write-host 'Formatting...'
-	push-location $path_scripts
-	$include = @(
-		'*.cpp'
-		'*.hpp'
-	)
-	format-cpp $path_gen $include
-	format-cpp (Join-Path $path_platform 'gen' ) $include
-	pop-location
-}
 
 Pop-Location
 #endregion Building
