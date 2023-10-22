@@ -33,7 +33,7 @@ Module build order:
 
 ## Milestone
 
-Day 39 : Basic Bitmap Rendering Cleanup
+Day 40 : Cursor Hiding and Fullscreen Support
 
 Features Done so far:
 
@@ -44,14 +44,17 @@ Features Done so far:
     * Will automatically not run if app process is found (for engine module).
   * Can emit exported mangled symbols for the engine module for hot-reload with the platform module without needing to use C linkage symbols or a complex hot-reload library (Live++, etc).
 * Platform Layer:
+  * Block Memory allocation via VirtualAlloc for engine module
+  * Memory mapped files for engine & game snapshots.
+  * Instantaneous hot reload of engine module
+  * Software rendering via Win32 GDI
   * Direct Sound audio
   * Keyboard & Mouse Input via GetAsyncKeyState & Win32 window messagng
   * XInput controller support
   * Dualsense controller support via joyshock library
-  * Software rendering via Win32 GDI
-  * Instantaneous hot reload of engine module
-  * Block Memory allocation via VirtualAlloc for engine module
-  * Memory mapped files for engine & game snapshots.
+  * Fullscreen toggle
+    * Can't change refresh rate
+  * Auto-hide cursor in client region (painted surface), not using editor tools
 * Engine Layer:
   * Take & load snapshots of either the engine's or game's memory state.
     * Allows for engine or game state to be restored even if a crash occurs to exact memory state it was before.
@@ -68,6 +71,7 @@ Features Done so far:
 
 ## Gallery
 
+![img](docs/imgs/10x_2023-10-22_01-44-21.gif)
 ![img](docs/imgs/handmade_win32_2023-10-21_22-18-47.gif)
 ![img](docs/imgs/handmade_win32_2023-10-21_02-16-43.png)
 ![img](docs/imgs/handmade_win32_2023-10-20_23-14-37.png)

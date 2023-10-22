@@ -64,7 +64,7 @@ function check-FileForChanges
         return $false
     }
     $file_name = Split-Path $path_file -Leaf
-    $path_csv = Join-Path $path_build ($file_name + "_file_hash.csv")
+    $path_csv  = Join-Path $path_build ($file_name + "_file_hash.csv")
 
     $csv_file_hash = $null
     if (Test-Path $path_csv) {
@@ -385,6 +385,9 @@ function build-platform
 	}
 	write-host "Building Platform Module" -ForegroundColor Green
 
+	$local:includes = $script:includes
+	$includes      += $path_platform
+
 	# CodeGen Pre-Build
 	$path_engine_symbols = Join-Path $path_engine_gen 'engine_symbols.gen.hpp'
 	$unit                = Join-Path $path_codegen    'platform_gen.cpp'
@@ -403,9 +406,6 @@ function build-platform
 		if ( -not (Test-Path $path_platform_gen) ) {
 			New-Item $path_platform_gen -ItemType Directory > $null
 		}
-
-		$local:includes = $script:includes
-		$includes      += $path_platform
 
 		$local:compiler_args  = @()
 		$compiler_args       += ( $flag_define + 'GEN_TIME' )

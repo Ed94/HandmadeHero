@@ -14,10 +14,7 @@
 	- Asset loading path
 	- Threading (launch a thread)
 	- Raw Input (support for multiple keyboards)
-	- Sleep / timeBeginPeriod
 	- ClipCursor() (for multimonitor support)
-	- Fullscreen support
-	- WM_SETCURSOR (control cursor visibility)
 	- QueryCancelAutoplay
 	- WM_ACTIVATEAPP (for when not active)
 	- Blit speed improvemnts (BitBlt)
@@ -63,6 +60,10 @@ global StrPath Path_Scratch;
 
 // TODO(Ed) : This is a global for now.
 global b32 Running = false;
+
+global b32             Show_Windows_Cursor;
+global HCURSOR         Windows_Cursor;
+global WINDOWPLACEMENT Window_Position;
 
 global WinDimensions   Window_Dimensions;
 global OffscreenBuffer Surface_Back_Buffer;
@@ -145,6 +146,37 @@ NS_PLATFORM_END
 NS_PLATFORM_BEGIN
 #pragma region Windows Sandbox Interface
 
+internal
+void toggle_fullscreen( HWND window_handle )
+{
+	// Note(Ed) : Follows: https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353
+	DWORD style = GetWindowLongA( window_handle, GWL_STYLE );
+	if ( style & WS_OVERLAPPEDWINDOW )
+	{
+		MONITORINFO info           = { sizeof(MONITORINFO) };
+		HMONITOR    monitor_handle = MonitorFromWindow( window_handle, MONITOR_DEFAULTTOPRIMARY );
+		
+		if ( GetWindowPlacement( window_handle, & Window_Position )
+		    && GetMonitorInfoA( monitor_handle, & info ) )
+		{
+			SetWindowLongA( window_handle, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW );
+			SetWindowPos( window_handle, HWND_TOP
+			             , info.rcMonitor.left,                     info.rcMonitor.top
+			             , info.rcWork.right - info.rcMonitor.left, info.rcMonitor.bottom - info.rcMonitor.top
+			             , SWP_NOOWNERZORDER | SWP_FRAMECHANGED
+			);
+		}
+	}
+	else
+	{
+		SetWindowLongA( window_handle, GWL_STYLE , style | WS_OVERLAPPEDWINDOW );
+		SetWindowPlacement( window_handle, & Window_Position );
+		SetWindowPos( window_handle, NULL
+		             , 0, 0, 0, 0
+		             , SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED );
+	}
+}
+
 internal WinDimensions
 get_window_dimensions( HWND window_handle )
 {
@@ -161,6 +193,19 @@ display_buffer_in_window( HDC device_context, s32 window_width, s32 window_heigh
 	, s32 x, s32 y
 	, s32 width, s32 height )
 {
+	if ( 	(window_width  % buffer->width ) == 0 
+	    &&	(window_height % buffer->height) == 0 )
+	{
+		// TODO(Ed) : Aspect ratio correction
+		StretchDIBits( device_context
+			, 0, 0, window_width, window_height
+			, 0, 0, buffer->width, buffer->height
+			, buffer->memory, & buffer->info
+			, DIB_ColorTable_RGB, RO_Source_To_Dest );
+		
+		return;
+	}
+	
 	s32 offset_x = 0;
 	s32 offset_y = 0;
 
@@ -259,7 +304,7 @@ main_window_callback( HWND handle
 			}
 			else
 			{
-				// SetLayeredWindowAttributes( handle, RGB(0, 0, 0), 120, LWA_Alpha );
+//				 SetLayeredWindowAttributes( handle, RGB(0, 0, 0), 120, LWA_Alpha );
 			}
 		}
 		break;
@@ -296,21 +341,31 @@ main_window_callback( HWND handle
 		}
 		break;
 
+		// TODO(Ed) : Expose cursor toggling to engine via platform api (lets game control it for its ux purposes)
 		case WM_MOUSEMOVE:
 		{
-			RECT rect;
-			POINT pt = { LOWORD(l_param), HIWORD(l_param) };
 
-			GetClientRect(handle, &rect);
-			if (PtInRect(&rect, pt))
+			while (ShowCursor(FALSE) >= 0);
+		}
+		break;
+		
+		case WM_NCMOUSEMOVE:
+		{
+			// Show the cursor when it's outside the window's client area (i.e., on the frame or elsewhere)
+			while (ShowCursor(TRUE) < 0);
+		}
+		break;
+		
+		case WM_SETCURSOR:
+		{
+			if ( Show_Windows_Cursor )
 			{
-				// Hide the cursor when it's inside the window
-				// while (ShowCursor(FALSE) >= 0);
+//				SetCursor( Windows_Cursor );
+				result = DefWindowProc( handle, system_messages, w_param, l_param );
 			}
 			else
 			{
-				// Show the cursor when it's outside the window
-				// while (ShowCursor(TRUE) < 0);
+				SetCursor(NULL);
 			}
 		}
 		break;
@@ -330,7 +385,7 @@ main_window_callback( HWND handle
 }
 
 internal void
-process_pending_window_messages( engine::KeyboardState* keyboard, engine::MousesState* mouse )
+process_pending_window_messages( HWND window_handle, engine::KeyboardState* keyboard, engine::MousesState* mouse )
 {
 	MSG window_msg_info;
 	while ( PeekMessageA( & window_msg_info, 0, 0, 0, PM_Remove_Messages_From_Queue ) )
@@ -342,7 +397,7 @@ process_pending_window_messages( engine::KeyboardState* keyboard, engine::Mouses
 		}
 
 		// Keyboard input handling
-	switch (window_msg_info.message)
+		switch (window_msg_info.message)
 		{
 			// I rather do this with GetAsyncKeyState...
 			case WM_SYSKEYDOWN:
@@ -359,6 +414,13 @@ process_pending_window_messages( engine::KeyboardState* keyboard, engine::Mouses
 					{
 						if ( alt_down )
 							Running = false;
+					}
+					break;
+					case VK_F10:
+					{
+						// TODO(Ed) : Expose this feature via platform_api to engine. Let the game toggle via the its action binds.
+						if ( is_down )
+							toggle_fullscreen( window_handle );
 					}
 					break;
 				}
@@ -622,10 +684,14 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		// window_class.cbWndExtra  = ;
 		window_class.hInstance   = instance;
 		// window_class.hIcon = ;
-		// window_class.hCursor = ;
+		 window_class.hCursor = LoadCursorW( 0, IDC_ARROW );
 		// window_class.hbrBackground = ;
 		window_class.lpszMenuName  = L"Handmade Hero!";
 		window_class.lpszClassName = L"HandmadeHeroWindowClass";
+		
+		Show_Windows_Cursor = true;
+		Windows_Cursor      = LoadCursorW( 0, IDC_CROSS );
+		Window_Position     = {sizeof(WINDOWPLACEMENT)};
 
 		if ( ! RegisterClassW( & window_class ) )
 		{
@@ -895,7 +961,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			}
 		}
 
-		process_pending_window_messages( new_keyboard, new_mouse );
+		process_pending_window_messages( window_handle, new_keyboard, new_mouse );
 
 		// f32 delta_time = timing_get_seconds_elapsed( last_frame_clock, timing_get_wall_clock() );
 

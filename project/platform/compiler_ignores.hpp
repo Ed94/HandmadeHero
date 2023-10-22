@@ -1,3 +1,5 @@
+#pragma once
+
 #ifdef _MSC_VER
 #pragma warning( disable: 4201 ) // Support for non-standard nameless struct or union extesnion
 #pragma warning( disable: 4100 ) // Support for unreferenced formal parameters
