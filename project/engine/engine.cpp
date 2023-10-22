@@ -249,8 +249,8 @@ void draw_bitmap( OffscreenBuffer* buffer
 	s32 max_x = round( pos_x ) + half_width;
 	s32 max_y = round( pos_y ) + half_height;
 
-	s32 bmp_start_x = min_x < 0 ? min_x * -1 : 0;
-	u32 bmp_start_y = min_y < 0 ? bitmap->height + min_y - 1 : bitmap->height - 1;
+	s32 bmp_offset_x = min_x < 0 ? min_x * -1 : 0;
+	u32 bmp_offset_y = min_y < 0 ? bitmap->height + min_y - 1 : bitmap->height - 1;
 
 	s32 buffer_width  = buffer->width;
 	s32 buffer_height = buffer->height;
@@ -268,12 +268,12 @@ void draw_bitmap( OffscreenBuffer* buffer
 	u8*  dst_row = rcast(u8*, buffer->memory )
 	          + min_x * buffer->bytes_per_pixel
 	          + min_y * buffer->pitch;
-	u32* src_row = bitmap->pixels + bitmap->width * (bitmap->height - 1);
+	u32* src_row = bitmap->pixels + bitmap->width * bmp_offset_y;
 
 	for ( s32 y = min_y; y < max_y; ++ y )
 	{
 		u32* dst = rcast(u32*, dst_row);
-		u32* src = src_row;
+		u32* src = src_row + bmp_offset_x;
 
 		for ( s32 x = min_x; x < max_x; ++ x )
 		{
@@ -418,8 +418,8 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 	state->x_offset = 0;
 	state->y_offset = 0;
 
-	state->sample_wave_switch = false;
-	state->wave_tone_hz = 60;
+	state->sample_wave_switch    = false;
+	state->wave_tone_hz          = 60;
 	state->sample_wave_sine_time = 0.f;
 
 	state->renderer_paused = false;
@@ -457,7 +457,7 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 		//tile_map->chunks = & temp_chunk;
 
 		tile_map->tile_size_in_meters = 1.4f;
-		world->tile_size_in_pixels    = 85;
+		world->tile_size_in_pixels    = 80;
 		world->tile_meters_to_pixels  = scast(f32, world->tile_size_in_pixels) / tile_map->tile_size_in_meters;
 
 		f32 tile_size_in_pixels = scast(f32, world->tile_size_in_pixels);
@@ -465,8 +465,8 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 		world->tile_lower_left_x = -( tile_size_in_pixels * 0.5f);
 		world->tile_lower_left_y = +( tile_size_in_pixels * 0.25f) + scast(f32, back_buffer->height);
 
-		u32 tiles_per_screen_x = 17;
-		u32 tiles_per_screen_y = 9;
+		world->tiles_per_screen_x = 17;
+		world->tiles_per_screen_y = 9;
 
 		u32 screen_x  = 0;
 		u32 screen_y  = 0;
@@ -518,23 +518,23 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 				door_top = true;
 			}
 
-			for (u32 tile_y = 0; tile_y < tiles_per_screen_y; ++ tile_y )
+			for (s32 tile_y = 0; tile_y < world->tiles_per_screen_y; ++ tile_y )
 			{
-				for ( u32 tile_x = 0; tile_x < tiles_per_screen_x; ++ tile_x )
+				for ( s32 tile_x = 0; tile_x < world->tiles_per_screen_x; ++ tile_x )
 				{
-					u32 abs_tile_x = screen_x * tiles_per_screen_x + tile_x;
-					u32 abs_tile_y = screen_y * tiles_per_screen_y + tile_y;
+					s32 abs_tile_x = screen_x * world->tiles_per_screen_x + tile_x;
+					s32 abs_tile_y = screen_y * world->tiles_per_screen_y + tile_y;
 
-					u32 tile_value = 1;
+					s32 tile_value = 1;
 
-					bool in_middle_x = tile_x == (tiles_per_screen_x / 2);
-					bool in_middle_y = tile_y == (tiles_per_screen_y / 2);
+					bool in_middle_x = tile_x == (world->tiles_per_screen_x / 2);
+					bool in_middle_y = tile_y == (world->tiles_per_screen_y / 2);
 
-					bool on_right = tile_x == (tiles_per_screen_x - 1);
+					bool on_right = tile_x == (world->tiles_per_screen_x - 1);
 					bool on_left  = tile_x == 0;
 
 					bool on_bottom = tile_y == 0;
-					bool on_top    = tile_y == (tiles_per_screen_y - 1);
+					bool on_top    = tile_y == (world->tiles_per_screen_y - 1);
 
 					if ( on_left && (! in_middle_y || ! door_left ))
 					{
@@ -615,19 +615,19 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 
 	// Personally made assets
 	{
-		StrPath path_test_bg;
+		StrPath path_test_bg {};
 		path_test_bg.concat( platform_api->path_content, str_ascii("test_background.bmp") );
 		game_state->test_bg = load_bmp( platform_api, path_test_bg );
 
-		StrPath path_mojito;
+		StrPath path_mojito {};
 		path_mojito.concat( platform_api->path_content, str_ascii("mojito.bmp") );
 		game_state->mojito = load_bmp( platform_api, path_mojito );
 
-		StrPath path_mojito_head;
+		StrPath path_mojito_head {};
 		path_mojito_head.concat( platform_api->path_content, str_ascii("mojito_head.bmp") );
 		game_state->mojito_head = load_bmp( platform_api, path_mojito_head );
 
-		StrPath path_debug_bitmap;
+		StrPath path_debug_bitmap {};
 		path_debug_bitmap.concat( platform_api->path_content, str_ascii("debug_bitmap2.bmp") );
 		game_state->debug_bitmap = load_bmp( platform_api, path_debug_bitmap );
 	}
@@ -638,18 +638,68 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 		path_test_bg_hh.concat( platform_api->path_content, str_ascii("offical/test/test_background.bmp"));
 		game_state->test_bg_hh = load_bmp( platform_api, path_test_bg_hh );
 
-		StrPath path_hero_front_head;
-		path_hero_front_head.concat( platform_api->path_content, str_ascii("offical/test/test_hero_front_head.bmp"));
-		game_state->hero_front_head = load_bmp( platform_api, path_hero_front_head );
+	#define path_test "offical\\test\\"
+		constexpr char const subpath_hero_front_head[] = path_test "test_hero_front_head.bmp";
+		constexpr char const subpath_hero_back_head [] = path_test "test_hero_back_head.bmp";
+		constexpr char const subpath_hero_right_head[] = path_test "test_hero_right_head.bmp";
+		constexpr char const subpath_hero_left_head [] = path_test "test_hero_left_head.bmp";
 
-		StrPath path_hero_front_cape;
-		path_hero_front_cape.concat( platform_api->path_content, str_ascii("offical/test/test_hero_front_cape.bmp"));
-		game_state->hero_front_cape = load_bmp( platform_api, path_hero_front_cape );
+		constexpr char const subpath_hero_front_cape[] = path_test "test_hero_front_cape.bmp";
+		constexpr char const subpath_hero_back_cape [] = path_test "test_hero_back_cape.bmp";
+		constexpr char const subpath_hero_left_cape [] = path_test "test_hero_left_cape.bmp";
+		constexpr char const subpath_hero_right_cape[] = path_test "test_hero_right_cape.bmp";
 
-		StrPath path_hero_front_torso;
-		path_hero_front_torso.concat( platform_api->path_content, str_ascii("offical/test/test_hero_front_torso.bmp"));
-		game_state->hero_front_torso = load_bmp( platform_api, path_hero_front_torso );
+		constexpr char const subpath_hero_front_torso[] = path_test "test_hero_front_torso.bmp";
+		constexpr char const subpath_hero_back_torso [] = path_test "test_hero_back_torso.bmp";
+		constexpr char const subpath_hero_left_torso [] = path_test "test_hero_left_torso.bmp";
+		constexpr char const subpath_hero_right_torso[] = path_test "test_hero_right_torso.bmp";
+	#undef path_test
+
+	#define load_bmp_asset( sub_path, container )                             \
+		{                                                                     \
+			StrPath path {};                                                  \
+			path.concat( platform_api->path_content, str_ascii( sub_path ) ); \
+			container = load_bmp( platform_api, path );                       \
+		}
+
+		using hh::HeroBitmaps_Front;
+		using hh::HeroBitmaps_Back;
+		using hh::HeroBitmaps_Left;
+		using hh::HeroBitmaps_Right;
+
+		load_bmp_asset( subpath_hero_front_head, game_state->hero_bitmaps[HeroBitmaps_Front].head );
+		load_bmp_asset( subpath_hero_back_head,  game_state->hero_bitmaps[HeroBitmaps_Back ].head );
+		load_bmp_asset( subpath_hero_left_head,  game_state->hero_bitmaps[HeroBitmaps_Left ].head );
+		load_bmp_asset( subpath_hero_right_head, game_state->hero_bitmaps[HeroBitmaps_Right].head );
+
+		load_bmp_asset( subpath_hero_front_cape, game_state->hero_bitmaps[HeroBitmaps_Front].cape );
+		load_bmp_asset( subpath_hero_back_cape,  game_state->hero_bitmaps[HeroBitmaps_Back ].cape );
+		load_bmp_asset( subpath_hero_left_cape,  game_state->hero_bitmaps[HeroBitmaps_Left ].cape );
+		load_bmp_asset( subpath_hero_right_cape, game_state->hero_bitmaps[HeroBitmaps_Right].cape );
+
+		load_bmp_asset( subpath_hero_front_torso, game_state->hero_bitmaps[HeroBitmaps_Front].torso );
+		load_bmp_asset( subpath_hero_back_torso,  game_state->hero_bitmaps[HeroBitmaps_Back ].torso );
+		load_bmp_asset( subpath_hero_left_torso,  game_state->hero_bitmaps[HeroBitmaps_Left ].torso );
+		load_bmp_asset( subpath_hero_right_torso, game_state->hero_bitmaps[HeroBitmaps_Right].torso );
+
+		s32 align_x = 0;
+		s32 align_y = 76;
+		game_state->hero_bitmaps[HeroBitmaps_Front].align_x = align_x;
+		game_state->hero_bitmaps[HeroBitmaps_Back ].align_x = align_x;
+		game_state->hero_bitmaps[HeroBitmaps_Left ].align_x = align_x;
+		game_state->hero_bitmaps[HeroBitmaps_Right].align_x = align_x;
+		game_state->hero_bitmaps[HeroBitmaps_Front].align_y = align_y;
+		game_state->hero_bitmaps[HeroBitmaps_Back ].align_y = align_y;
+		game_state->hero_bitmaps[HeroBitmaps_Left ].align_y = align_y;
+		game_state->hero_bitmaps[HeroBitmaps_Right].align_y = align_y;
+
+	#undef load_bmp_asset
+
+		game_state->hero_direction = HeroBitmaps_Front;
 	}
+
+	game_state->camera_pos.tile_x = state->world->tiles_per_screen_x / 2;
+	game_state->camera_pos.tile_y = state->world->tiles_per_screen_y / 2;
 
 	hh::PlayerState* player = & game_state->player_state;
 	player->position.tile_x     = 4;
@@ -822,6 +872,12 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	f32 player_half_width     = player->width  / 2.f;
 	f32 player_quarter_height = player->height / 4.f;
 
+	using hh::EHeroBitmapsDirection;
+	using hh::HeroBitmaps_Front;
+	using hh::HeroBitmaps_Back;
+	using hh::HeroBitmaps_Left;
+	using hh::HeroBitmaps_Right;
+
 	input_poll_player_actions( input, & player_actions );
 	{
 		f32 move_speed = 6.f;
@@ -848,8 +904,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		b32 valid_new_pos = true;
 		{
 			TileMapPosition test_pos = {
-				new_player_pos_x, new_player_pos_y,
-				player->position.tile_x, player->position.tile_y, player->position.tile_z
+			                           new_player_pos_x, new_player_pos_y,
+									   player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos = recannonicalize_position( tile_map, test_pos );
 
@@ -886,10 +942,9 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 		if ( valid_new_pos )
 		{
-
 			TileMapPosition new_pos = {
-				new_player_pos_x, new_player_pos_y,
-				player->position.tile_x, player->position.tile_y, player->position.tile_z
+			                          new_player_pos_x, new_player_pos_y,
+									  player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			new_pos = recannonicalize_position( tile_map, new_pos );
 
@@ -909,6 +964,23 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			}
 
 			player->position = new_pos;
+
+			if ( player_actions.player_y_move_digital > 0 || player_actions.player_y_move_analog > 0 )
+			{
+				game_state->hero_direction = HeroBitmaps_Back;
+			}
+			if ( player_actions.player_y_move_digital < 0 || player_actions.player_y_move_analog < 0 )
+			{
+				game_state->hero_direction = HeroBitmaps_Front;
+			}
+			if ( player_actions.player_x_move_digital > 0 || player_actions.player_x_move_analog > 0 )
+			{
+				game_state->hero_direction = HeroBitmaps_Right;
+			}
+			if ( player_actions.player_x_move_digital < 0 || player_actions.player_x_move_analog < 0 )
+			{
+				game_state->hero_direction = HeroBitmaps_Left;
+			}
 		}
 
 		if ( player->jump_time > 0.f )
@@ -926,25 +998,46 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			player->jump_time = 1.f;
 			player->mid_jump  = true;
 		}
+
+		TileMapPosition player_to_camera = subtract( player->position, game_state->camera_pos );
+
+		game_state->camera_pos.tile_z = player->position.tile_z;
+
+		if ( player_to_camera.tile_x > world->tiles_per_screen_x / 2 )
+		{
+			game_state->camera_pos.tile_x += world->tiles_per_screen_x;
+		}
+		if ( player_to_camera.tile_y > world->tiles_per_screen_y / 2 )
+		{
+			game_state->camera_pos.tile_y += world->tiles_per_screen_y;
+		}
+		if ( player_to_camera.tile_x < -world->tiles_per_screen_x / 2 )
+		{
+			game_state->camera_pos.tile_x -= world->tiles_per_screen_x;
+		}
+		if ( player_to_camera.tile_y < -world->tiles_per_screen_y / 2 )
+		{
+			game_state->camera_pos.tile_y -= world->tiles_per_screen_y;
+		}
 	}
+
 
 	draw_rectangle( back_buffer
 		, 0.f, 0.f
 		, scast(f32, back_buffer->width), scast(f32, back_buffer->height)
 		, 1.f, 0.24f, 0.24f );
 
+	draw_bitmap( back_buffer
+		, scast(f32, back_buffer->width) / 2.f, scast(f32, back_buffer->height) / 2.f
+		, & game_state->test_bg
+	);
 
 	draw_bitmap( back_buffer
 		, scast(f32, back_buffer->width) / 2.f, scast(f32, back_buffer->height) / 2.f
 		, & game_state->test_bg_hh
 	);
 
-	draw_bitmap( back_buffer
-		, scast(f32, back_buffer->width) / 2.5f, scast(f32, back_buffer->height) / 2.5f
-		, & game_state->hero_front_head
-	);
-
-// Scrolling
+// Screen Camera
 	f32 screen_center_x = 0.5f * scast(f32, back_buffer->width);
 	f32 screen_center_y = 0.5f * scast(f32, back_buffer->height);
 
@@ -952,13 +1045,14 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	{
 		for ( s32 relative_col = -20; relative_col < +20; ++ relative_col )
 		{
-			u32 col = player->position.tile_x + relative_col;
-			u32 row = player->position.tile_y + relative_row;
+			s32 col = game_state->camera_pos.tile_x + relative_col;
+			s32 row = game_state->camera_pos.tile_y + relative_row;
 
-			u32 tile_id  = TileMap_get_tile_value( tile_map, col, row, player->position.tile_z );
+			s32 tile_id  = TileMap_get_tile_value( tile_map, col, row, game_state->camera_pos.tile_z );
 			f32 color[3] = { 0.15f, 0.15f, 0.15f };
 
 			if ( tile_id > 1 || row == player->position.tile_y && col == player->position.tile_x )
+//			if ( tile_id > 1 )
 			{
 				if ( tile_id == 2 )
 				{
@@ -986,8 +1080,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 					color[2] = 0.3f;
 				}
 
-				f32 center_x = screen_center_x + scast(f32, relative_col) * tile_size_in_pixels - player->position.x * world->tile_meters_to_pixels;
-				f32 center_y = screen_center_y - scast(f32, relative_row) * tile_size_in_pixels + player->position.y * world->tile_meters_to_pixels;
+				f32 center_x = screen_center_x + scast(f32, relative_col) * tile_size_in_pixels - game_state->camera_pos.x * world->tile_meters_to_pixels;
+				f32 center_y = screen_center_y - scast(f32, relative_row) * tile_size_in_pixels + game_state->camera_pos.y * world->tile_meters_to_pixels;
 
 				f32 min_x = center_x - tile_size_in_pixels * 0.5f;
 				f32 min_y = center_y - tile_size_in_pixels * 0.5f;
@@ -1024,21 +1118,39 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	f32 player_green = 0.7f;
 	f32 player_blue  = 0.3f;
 
-	f32 player_tile_x_offset = screen_center_x + scast(f32, player->position.tile_x) * world->tile_meters_to_pixels + player->position.x * world->tile_meters_to_pixels;
-	f32 player_tile_y_offset = screen_center_y - scast(f32, player->position.tile_y) * world->tile_meters_to_pixels + player->position.y * world->tile_meters_to_pixels;
+	TileMapPosition player_to_camera = subtract( player->position, game_state->camera_pos );
 
-	f32 player_screen_pos_x = screen_center_x;
-	f32 player_screen_pos_y = screen_center_y;
+	f32 offcenter_amount_x  = player_to_camera.x + scast(f32, player_to_camera.tile_x) * world->tile_map->tile_size_in_meters;
+	f32 offcenter_amount_y  = player_to_camera.y + scast(f32, player_to_camera.tile_y) * world->tile_map->tile_size_in_meters;
+	    offcenter_amount_x *= world->tile_meters_to_pixels;
+	    offcenter_amount_y *= world->tile_meters_to_pixels * -1;
+
+	f32 player_ground_pos_x = screen_center_x + offcenter_amount_x;
+	f32 player_ground_pos_y = screen_center_y + offcenter_amount_y;
+
+	hh::HeroBitmaps* hero_bitmaps = & game_state->hero_bitmaps[game_state->hero_direction];
+
+#if 1
+	draw_rectangle( back_buffer
+		, player_ground_pos_x - player_half_width * world->tile_meters_to_pixels, player_ground_pos_y - player->height * world->tile_meters_to_pixels
+		, player_ground_pos_x + player_half_width * world->tile_meters_to_pixels, player_ground_pos_y
+		, player_red, player_green, player_blue );
+#endif
 
 	draw_bitmap( back_buffer
-	            , player_screen_pos_x, player_screen_pos_y
-	            , & game_state->mojito_head );
-
+	            , player_ground_pos_x, player_ground_pos_y - scast(f32, hero_bitmaps->align_y)
+	            , & hero_bitmaps->torso );
+	draw_bitmap( back_buffer
+	            , player_ground_pos_x, player_ground_pos_y - scast(f32, hero_bitmaps->align_y)
+	            , & hero_bitmaps->cape );
 #if 0
-	draw_rectangle( back_buffer
-		, player_screen_pos_x - player_half_width * world->tile_meters_to_pixels, player_screen_pos_y - player->height * world->tile_meters_to_pixels
-		, player_screen_pos_x + player_half_width * world->tile_meters_to_pixels, player_screen_pos_y
-		, player_red, player_green, player_blue );
+	draw_bitmap( back_buffer
+	            , player_ground_pos_x, player_ground_pos_y - 45.f
+	            , & game_state->mojito_head );
+#else
+	draw_bitmap( back_buffer
+	            , player_ground_pos_x, player_ground_pos_y - scast(f32, hero_bitmaps->align_y)
+	            , & hero_bitmaps->head );
 #endif
 
 	// Auto-Snapshot percent bar

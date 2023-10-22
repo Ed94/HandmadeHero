@@ -11,9 +11,11 @@
 
 NS_ENGINE_BEGIN
 
+// TODO(Ed) : I switch the tile coordinates to signed values, I'm clamping rn to force positive
+
 struct TileChunk
 {
-	u32* tiles;
+	s32* tiles;
 };
 
 /*
@@ -21,14 +23,14 @@ struct TileChunk
 */
 struct TileChunkPosition
 {
-	u32 tile_chunk_x;
-	u32 tile_chunk_y;
-	u32 tile_chunk_z;
+	s32 tile_chunk_x;
+	s32 tile_chunk_y;
+	s32 tile_chunk_z;
 
 	// "Chunk-relative (x, y)
 
-	u32 tile_x;
-	u32 tile_y;
+	s32 tile_x;
+	s32 tile_y;
 };
 
 struct TileMap
@@ -41,9 +43,9 @@ struct TileMap
 	f32 tile_size_in_meters;
 
 	// TODO(Ed) : Real sparseness ? (not use the giant pointer array)
-	u32 chunk_shift;
-	u32 chunk_mask;
-	u32 chunk_dimension;
+	s32 chunk_shift;
+	s32 chunk_mask;
+	s32 chunk_dimension;
 
 	TileChunk* chunks;
 };
@@ -58,9 +60,9 @@ struct TileMapPosition
 	// Fixed point tile locations.
 	// High bits are the tile-chunk index, and the low bits are the tile index in the chunk.
 
-	u32 tile_x;
-	u32 tile_y;
-	u32 tile_z;
+	s32 tile_x;
+	s32 tile_y;
+	s32 tile_z;
 };
 
 NS_ENGINE_END

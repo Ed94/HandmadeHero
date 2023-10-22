@@ -91,21 +91,43 @@ struct PlayerActions
 	b32 jump;
 };
 
+enum EHeroBitmapsDirection : u32
+{
+	HeroBitmaps_Front,
+	HeroBitmaps_Back,
+	HeroBitmaps_Left,
+	HeroBitmaps_Right
+};
+
+struct HeroBitmaps
+{
+	using Bitmap = engine::Bitmap;
+
+	s32 align_x;
+	s32 align_y;
+
+	Bitmap head;
+	Bitmap cape;
+	Bitmap torso;
+};
+
 struct GameState
 {
 	PlayerState player_state;
-	
+
 	using Bitmap = engine::Bitmap;
-	
+
 	Bitmap debug_bitmap;
 	Bitmap test_bg;
 	Bitmap mojito;
 	Bitmap mojito_head;
-	
+
 	Bitmap test_bg_hh;
-	Bitmap hero_front_head;
-	Bitmap hero_front_cape;
-	Bitmap hero_front_torso;
+	
+	engine::TileMapPosition camera_pos;
+
+	EHeroBitmapsDirection hero_direction;
+	HeroBitmaps hero_bitmaps[4];
 };
 
 NS_HANDMADE_END

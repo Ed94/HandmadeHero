@@ -177,6 +177,9 @@ struct World
 
 	f32 tile_meters_to_pixels;
 	s32 tile_size_in_pixels;
+	
+	s32 tiles_per_screen_x;
+	s32 tiles_per_screen_y;
 
 	TileMap* tile_map;
 };

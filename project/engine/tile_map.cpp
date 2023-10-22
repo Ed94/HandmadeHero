@@ -4,9 +4,24 @@
 
 NS_ENGINE_BEGIN
 
+inline
+TileMapPosition subtract( TileMapPosition pos_a, TileMapPosition pos_b )
+{
+	TileMapPosition result {
+		pos_a.x - pos_b.x,
+		pos_a.y - pos_b.y,
+		pos_a.tile_x - pos_b.tile_x,
+		pos_a.tile_y - pos_b.tile_y,
+		
+		// TODO(Ed) : Think about how to handle z...
+		pos_a.tile_z - pos_b.tile_z
+	};
+	return result;
+}
+
 // TODO(Ed) : Consider moving (Casey wants to)
 inline
-void cannonicalize_coord( TileMap* tile_map, u32* tile_coord, f32* pos_coord )
+void cannonicalize_coord( TileMap* tile_map, s32* tile_coord, f32* pos_coord )
 {
 	assert( tile_map != nullptr );
 	assert( tile_coord != nullptr );
@@ -15,7 +30,7 @@ void cannonicalize_coord( TileMap* tile_map, u32* tile_coord, f32* pos_coord )
 
 	// Note(Ed) : World is assumed to be a "torodial topology"
 	s32 offset         = round( (* pos_coord) / tile_size );
-	u32 new_tile_coord = (* tile_coord) + offset;
+	s32 new_tile_coord = (* tile_coord) + offset;
 	f32 new_pos_coord  = (* pos_coord)  - scast(f32, offset) * tile_size;
 
 	assert( new_pos_coord >= -tile_size * 0.5f );
@@ -38,9 +53,9 @@ TileMapPosition recannonicalize_position( TileMap* tile_map, TileMapPosition pos
 }
                                                                     
 inline
-u32 TileChunk_get_tile_value( TileChunk* tile_chunk, TileMap* tile_map, u32 x, u32 y )
+u32 TileChunk_get_tile_value( TileChunk* tile_chunk, TileMap* tile_map, s32 x, s32 y )
 {
-	assert( tile_map      != nullptr );
+	assert( tile_map   != nullptr );
 	assert( tile_chunk != nullptr );
 	assert( x < tile_map->chunk_dimension );
 	assert( y < tile_map->chunk_dimension );
@@ -50,7 +65,7 @@ u32 TileChunk_get_tile_value( TileChunk* tile_chunk, TileMap* tile_map, u32 x, u
 }
 
 inline
-void TileChunk_set_tile_value( TileChunk* tile_chunk, TileMap* tile_map, u32 x, u32 y, u32 value)
+void TileChunk_set_tile_value( TileChunk* tile_chunk, TileMap* tile_map, s32 x, s32 y, s32 value)
 {
 	assert( tile_map   != nullptr );
 	assert( tile_chunk != nullptr );
@@ -130,7 +145,7 @@ b32 TileMap_is_point_empty( TileMap* tile_map, TileMapPosition position )
 }
 
 internal
-void TileMap_set_tile_value( MemoryArena* arena, TileMap* tile_map, u32 abs_tile_x, u32 abs_tile_y, u32 abs_tile_z, u32 value )
+void TileMap_set_tile_value( MemoryArena* arena, TileMap* tile_map, s32 abs_tile_x, s32 abs_tile_y, s32 abs_tile_z, s32 value )
 {
 	TileChunkPosition chunk_pos = get_tile_chunk_position_for( tile_map, abs_tile_x, abs_tile_y, abs_tile_z );
 	TileChunk*        chunk     = TileMap_get_chunk( tile_map, chunk_pos.tile_chunk_x, chunk_pos.tile_chunk_y, chunk_pos.tile_chunk_z );
@@ -140,7 +155,7 @@ void TileMap_set_tile_value( MemoryArena* arena, TileMap* tile_map, u32 abs_tile
 	if ( chunk->tiles == nullptr )
 	{
 		ssize num_tiles = tile_map->chunk_dimension * tile_map->chunk_dimension;
-		chunk->tiles = arena->push_array( u32, num_tiles );
+		chunk->tiles = arena->push_array( s32, num_tiles );
 				
 		for ( ssize tile_index = 0; tile_index < num_tiles; ++ tile_index )
 		{
