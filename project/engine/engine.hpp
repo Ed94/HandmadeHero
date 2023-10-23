@@ -6,6 +6,8 @@
 
 #if INTELLISENSE_DIRECTIVES
 #include "platform/platform.hpp"
+#include "gen/vectors.hpp"
+#include "gen/physics.hpp"
 #include "engine_module.hpp"
 #include "tile_map.hpp"
 #endif
@@ -177,7 +179,7 @@ struct World
 
 	f32 tile_meters_to_pixels;
 	s32 tile_size_in_pixels;
-	
+
 	s32 tiles_per_screen_x;
 	s32 tiles_per_screen_y;
 
@@ -203,7 +205,7 @@ struct BitmapHeaderPacked
 	s32 vertical_resolution;
 	u32 colors_used;
 	u32 colors_important;
-	
+
 	u32 red_mask;
 	u32 green_mask;
 	u32 blue_mask;

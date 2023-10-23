@@ -7,11 +7,43 @@
 
 // TODO(Ed) : Convert all of these to platform-efficient versions
 
-//inline
-//s32 abs( s32 value )
-//{
-//	return ;
-//}
+inline
+f32 abs( f32 value )
+{
+	return fabsf(value);
+}
+
+inline
+f32 sqrt( f32 value )
+{
+	return sqrtf(value);
+}
+
+inline
+s32 sqrt(s32 value) {
+    if (value < 0) {
+        return -1;
+    }
+
+    if (value == 0 || value == 1) {
+        return value;
+    }
+
+    // Initial guess for the square root
+    s32 current_estimate    = value;
+    s32 reciprocal_estimate = 1;
+    // Second estimate based on the reciprocal of our current guess
+
+    // Tolerance level for convergence
+    const s32 tolerance = 1;
+
+    while (current_estimate - reciprocal_estimate > tolerance) {
+        current_estimate    = (current_estimate + reciprocal_estimate) / 2;
+        reciprocal_estimate = value / current_estimate;
+    }
+
+    return current_estimate;
+}
 
 inline
 s32 floor( f32 value )

@@ -16,7 +16,16 @@
 		{
 			"type":"cppvsdbg",
 			"request": "launch",
-			"name" : "Debug handmade engine (post_build) gen msvc",
+			"name" : "Debug handmade engine gen msvc",
+			"program": "${workspaceFolder}/build/engine_gen.exe",
+			"args": [],
+			"cwd": "${workspaceFolder}/project/engine/gen",
+			"visualizerFile": "${workspaceFolder}/scripts/gencpp.natvis"
+		},
+		{
+			"type":"cppvsdbg",
+			"request": "launch",
+			"name" : "Debug handmade engine (post-build) gen msvc",
 			"program": "${workspaceFolder}/build/engine_postbuild_gen.exe",
 			"args": [],
 			"cwd": "${workspaceFolder}/build",

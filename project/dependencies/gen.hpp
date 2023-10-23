@@ -56,7 +56,7 @@
 /* Platform architecture */
 
 #if defined( _WIN64 ) || defined( __x86_64__ ) || defined( _M_X64 ) || defined( __64BIT__ ) || defined( __powerpc64__ ) || defined( __ppc64__ ) \
-|| defined( __aarch64__ )
+    || defined( __aarch64__ )
 #ifndef GEN_ARCH_64_BIT
 #define GEN_ARCH_64_BIT 1
 #endif
@@ -226,218 +226,218 @@ GEN_NS_BEGIN
 // #if defined(__GNUC__) || defined(__clang__)
 // Supports 0-50 arguments
 #define num_args_impl( \
-_0,                    \
-_1,                    \
-_2,                    \
-_3,                    \
-_4,                    \
-_5,                    \
-_6,                    \
-_7,                    \
-_8,                    \
-_9,                    \
-_10,                   \
-_11,                   \
-_12,                   \
-_13,                   \
-_14,                   \
-_15,                   \
-_16,                   \
-_17,                   \
-_18,                   \
-_19,                   \
-_20,                   \
-_21,                   \
-_22,                   \
-_23,                   \
-_24,                   \
-_25,                   \
-_26,                   \
-_27,                   \
-_28,                   \
-_29,                   \
-_30,                   \
-_31,                   \
-_32,                   \
-_33,                   \
-_34,                   \
-_35,                   \
-_36,                   \
-_37,                   \
-_38,                   \
-_39,                   \
-_40,                   \
-_41,                   \
-_42,                   \
-_43,                   \
-_44,                   \
-_45,                   \
-_46,                   \
-_47,                   \
-_48,                   \
-_49,                   \
-_50,                   \
-_51,                   \
-_52,                   \
-_53,                   \
-_54,                   \
-_55,                   \
-_56,                   \
-_57,                   \
-_58,                   \
-_59,                   \
-_60,                   \
-_61,                   \
-_62,                   \
-_63,                   \
-_64,                   \
-_65,                   \
-_66,                   \
-_67,                   \
-_68,                   \
-_69,                   \
-_70,                   \
-_71,                   \
-_72,                   \
-_73,                   \
-_74,                   \
-_75,                   \
-_76,                   \
-_77,                   \
-_78,                   \
-_79,                   \
-_80,                   \
-_81,                   \
-_82,                   \
-_83,                   \
-_84,                   \
-_85,                   \
-_86,                   \
-_87,                   \
-_88,                   \
-_89,                   \
-_90,                   \
-_91,                   \
-_92,                   \
-_93,                   \
-_94,                   \
-_95,                   \
-_96,                   \
-_97,                   \
-_98,                   \
-_99,                   \
-_100,                  \
-N,                     \
-...                    \
+    _0,                \
+    _1,                \
+    _2,                \
+    _3,                \
+    _4,                \
+    _5,                \
+    _6,                \
+    _7,                \
+    _8,                \
+    _9,                \
+    _10,               \
+    _11,               \
+    _12,               \
+    _13,               \
+    _14,               \
+    _15,               \
+    _16,               \
+    _17,               \
+    _18,               \
+    _19,               \
+    _20,               \
+    _21,               \
+    _22,               \
+    _23,               \
+    _24,               \
+    _25,               \
+    _26,               \
+    _27,               \
+    _28,               \
+    _29,               \
+    _30,               \
+    _31,               \
+    _32,               \
+    _33,               \
+    _34,               \
+    _35,               \
+    _36,               \
+    _37,               \
+    _38,               \
+    _39,               \
+    _40,               \
+    _41,               \
+    _42,               \
+    _43,               \
+    _44,               \
+    _45,               \
+    _46,               \
+    _47,               \
+    _48,               \
+    _49,               \
+    _50,               \
+    _51,               \
+    _52,               \
+    _53,               \
+    _54,               \
+    _55,               \
+    _56,               \
+    _57,               \
+    _58,               \
+    _59,               \
+    _60,               \
+    _61,               \
+    _62,               \
+    _63,               \
+    _64,               \
+    _65,               \
+    _66,               \
+    _67,               \
+    _68,               \
+    _69,               \
+    _70,               \
+    _71,               \
+    _72,               \
+    _73,               \
+    _74,               \
+    _75,               \
+    _76,               \
+    _77,               \
+    _78,               \
+    _79,               \
+    _80,               \
+    _81,               \
+    _82,               \
+    _83,               \
+    _84,               \
+    _85,               \
+    _86,               \
+    _87,               \
+    _88,               \
+    _89,               \
+    _90,               \
+    _91,               \
+    _92,               \
+    _93,               \
+    _94,               \
+    _95,               \
+    _96,               \
+    _97,               \
+    _98,               \
+    _99,               \
+    _100,              \
+    N,                 \
+    ...                \
 )                      \
 	N
 
 // ## deletes preceding comma if _VA_ARGS__ is empty (GCC, Clang)
 #define num_args( ... ) \
 	num_args_impl(      \
-	_,                  \
-	##__VA_ARGS__,      \
-	100,                \
-	99,                 \
-	98,                 \
-	97,                 \
-	96,                 \
-	95,                 \
-	94,                 \
-	93,                 \
-	92,                 \
-	91,                 \
-	90,                 \
-	89,                 \
-	88,                 \
-	87,                 \
-	86,                 \
-	85,                 \
-	84,                 \
-	83,                 \
-	82,                 \
-	81,                 \
-	80,                 \
-	79,                 \
-	78,                 \
-	77,                 \
-	76,                 \
-	75,                 \
-	74,                 \
-	73,                 \
-	72,                 \
-	71,                 \
-	70,                 \
-	69,                 \
-	68,                 \
-	67,                 \
-	66,                 \
-	65,                 \
-	64,                 \
-	63,                 \
-	62,                 \
-	61,                 \
-	60,                 \
-	59,                 \
-	58,                 \
-	57,                 \
-	56,                 \
-	55,                 \
-	54,                 \
-	53,                 \
-	52,                 \
-	51,                 \
-	50,                 \
-	49,                 \
-	48,                 \
-	47,                 \
-	46,                 \
-	45,                 \
-	44,                 \
-	43,                 \
-	42,                 \
-	41,                 \
-	40,                 \
-	39,                 \
-	38,                 \
-	37,                 \
-	36,                 \
-	35,                 \
-	34,                 \
-	33,                 \
-	32,                 \
-	31,                 \
-	30,                 \
-	29,                 \
-	28,                 \
-	27,                 \
-	26,                 \
-	25,                 \
-	24,                 \
-	23,                 \
-	22,                 \
-	21,                 \
-	20,                 \
-	19,                 \
-	18,                 \
-	17,                 \
-	16,                 \
-	15,                 \
-	14,                 \
-	13,                 \
-	12,                 \
-	11,                 \
-	10,                 \
-	9,                  \
-	8,                  \
-	7,                  \
-	6,                  \
-	5,                  \
-	4,                  \
-	3,                  \
-	2,                  \
-	1,                  \
-	0                   \
+	    _,              \
+	    ##__VA_ARGS__,  \
+	    100,            \
+	    99,             \
+	    98,             \
+	    97,             \
+	    96,             \
+	    95,             \
+	    94,             \
+	    93,             \
+	    92,             \
+	    91,             \
+	    90,             \
+	    89,             \
+	    88,             \
+	    87,             \
+	    86,             \
+	    85,             \
+	    84,             \
+	    83,             \
+	    82,             \
+	    81,             \
+	    80,             \
+	    79,             \
+	    78,             \
+	    77,             \
+	    76,             \
+	    75,             \
+	    74,             \
+	    73,             \
+	    72,             \
+	    71,             \
+	    70,             \
+	    69,             \
+	    68,             \
+	    67,             \
+	    66,             \
+	    65,             \
+	    64,             \
+	    63,             \
+	    62,             \
+	    61,             \
+	    60,             \
+	    59,             \
+	    58,             \
+	    57,             \
+	    56,             \
+	    55,             \
+	    54,             \
+	    53,             \
+	    52,             \
+	    51,             \
+	    50,             \
+	    49,             \
+	    48,             \
+	    47,             \
+	    46,             \
+	    45,             \
+	    44,             \
+	    43,             \
+	    42,             \
+	    41,             \
+	    40,             \
+	    39,             \
+	    38,             \
+	    37,             \
+	    36,             \
+	    35,             \
+	    34,             \
+	    33,             \
+	    32,             \
+	    31,             \
+	    30,             \
+	    29,             \
+	    28,             \
+	    27,             \
+	    26,             \
+	    25,             \
+	    24,             \
+	    23,             \
+	    22,             \
+	    21,             \
+	    20,             \
+	    19,             \
+	    18,             \
+	    17,             \
+	    16,             \
+	    15,             \
+	    14,             \
+	    13,             \
+	    12,             \
+	    11,             \
+	    10,             \
+	    9,              \
+	    8,              \
+	    7,              \
+	    6,              \
+	    5,              \
+	    4,              \
+	    3,              \
+	    2,              \
+	    1,              \
+	    0               \
 	)
 
 // #else
@@ -716,7 +716,7 @@ void process_exit( u32 code );
 
 #define GEN__ONES          ( zpl_cast( uw ) - 1 / GEN_U8_MAX )
 #define GEN__HIGHS         ( GEN__ONES * ( GEN_U8_MAX / 2 + 1 ) )
-#define GEN__HAS_ZERO( x ) ( ( ( x )-GEN__ONES ) & ~( x )&GEN__HIGHS )
+#define GEN__HAS_ZERO( x ) ( ( ( x )-GEN__ONES ) & ~( x ) & GEN__HIGHS )
 
 //! Checks if value is power of 2.
 GEN_DEF_INLINE b32 is_power_of_two( sw x );
@@ -3931,10 +3931,10 @@ struct AST
 	operator CodeVar();
 #pragma endregion Member Functions
 
-	constexpr static int ArrSpecs_Cap =
-	( AST_POD_Size - sizeof( AST* ) * 3 - sizeof( Parser::Token* ) - sizeof( AST* ) - sizeof( StringCached ) - sizeof( CodeT ) - sizeof( ModuleFlag ) - sizeof( int ) )
-	/ sizeof( int )
-	- 1;    // -1 for 4 extra bytes
+	constexpr static int ArrSpecs_Cap = ( AST_POD_Size - sizeof( AST* ) * 3 - sizeof( Parser::Token* ) - sizeof( AST* ) - sizeof( StringCached )
+	                                      - sizeof( CodeT ) - sizeof( ModuleFlag ) - sizeof( int ) )
+	        / sizeof( int )
+	    - 1;    // -1 for 4 extra bytes
 
 	union
 	{
@@ -5141,14 +5141,14 @@ CodeAttributes def_attributes( StrC content );
 CodeComment    def_comment( StrC content );
 
 CodeClass def_class(
-StrC           name,
-Code           body           = NoCode,
-CodeType       parent         = NoCode,
-AccessSpec     access         = AccessSpec::Default,
-CodeAttributes attributes     = NoCode,
-ModuleFlag     mflags         = ModuleFlag::None,
-CodeType*      interfaces     = nullptr,
-s32            num_interfaces = 0
+    StrC           name,
+    Code           body           = NoCode,
+    CodeType       parent         = NoCode,
+    AccessSpec     access         = AccessSpec::Default,
+    CodeAttributes attributes     = NoCode,
+    ModuleFlag     mflags         = ModuleFlag::None,
+    CodeType*      interfaces     = nullptr,
+    s32            num_interfaces = 0
 );
 
 CodeConstructor def_constructor( CodeParam params = NoCode, Code initializer_list = NoCode, Code body = NoCode );
@@ -5158,12 +5158,12 @@ CodeDefine def_define( StrC name, StrC content );
 CodeDestructor def_destructor( Code body = NoCode, CodeSpecifiers specifiers = NoCode );
 
 CodeEnum def_enum(
-StrC           name,
-Code           body       = NoCode,
-CodeType       type       = NoCode,
-EnumT          specifier  = EnumRegular,
-CodeAttributes attributes = NoCode,
-ModuleFlag     mflags     = ModuleFlag::None
+    StrC           name,
+    Code           body       = NoCode,
+    CodeType       type       = NoCode,
+    EnumT          specifier  = EnumRegular,
+    CodeAttributes attributes = NoCode,
+    ModuleFlag     mflags     = ModuleFlag::None
 );
 
 CodeExec   def_execution( StrC content );
@@ -5171,13 +5171,13 @@ CodeExtern def_extern_link( StrC name, Code body );
 CodeFriend def_friend( Code symbol );
 
 CodeFn def_function(
-StrC           name,
-CodeParam      params     = NoCode,
-CodeType       ret_type   = NoCode,
-Code           body       = NoCode,
-CodeSpecifiers specifiers = NoCode,
-CodeAttributes attributes = NoCode,
-ModuleFlag     mflags     = ModuleFlag::None
+    StrC           name,
+    CodeParam      params     = NoCode,
+    CodeType       ret_type   = NoCode,
+    Code           body       = NoCode,
+    CodeSpecifiers specifiers = NoCode,
+    CodeAttributes attributes = NoCode,
+    ModuleFlag     mflags     = ModuleFlag::None
 );
 
 CodeInclude def_include( StrC content, bool foreign = false );
@@ -5185,14 +5185,14 @@ CodeModule  def_module( StrC name, ModuleFlag mflags = ModuleFlag::None );
 CodeNS      def_namespace( StrC name, Code body, ModuleFlag mflags = ModuleFlag::None );
 
 CodeOperator def_operator(
-OperatorT      op,
-StrC           nspace,
-CodeParam      params     = NoCode,
-CodeType       ret_type   = NoCode,
-Code           body       = NoCode,
-CodeSpecifiers specifiers = NoCode,
-CodeAttributes attributes = NoCode,
-ModuleFlag     mflags     = ModuleFlag::None
+    OperatorT      op,
+    StrC           nspace,
+    CodeParam      params     = NoCode,
+    CodeType       ret_type   = NoCode,
+    Code           body       = NoCode,
+    CodeSpecifiers specifiers = NoCode,
+    CodeAttributes attributes = NoCode,
+    ModuleFlag     mflags     = ModuleFlag::None
 );
 
 CodeOpCast def_operator_cast( CodeType type, Code body = NoCode, CodeSpecifiers specs = NoCode );
@@ -5205,14 +5205,14 @@ CodePreprocessCond def_preprocess_cond( EPreprocessCond type, StrC content );
 CodeSpecifiers def_specifier( SpecifierT specifier );
 
 CodeStruct def_struct(
-StrC           name,
-Code           body           = NoCode,
-CodeType       parent         = NoCode,
-AccessSpec     access         = AccessSpec::Default,
-CodeAttributes attributes     = NoCode,
-ModuleFlag     mflags         = ModuleFlag::None,
-CodeType*      interfaces     = nullptr,
-s32            num_interfaces = 0
+    StrC           name,
+    Code           body           = NoCode,
+    CodeType       parent         = NoCode,
+    AccessSpec     access         = AccessSpec::Default,
+    CodeAttributes attributes     = NoCode,
+    ModuleFlag     mflags         = ModuleFlag::None,
+    CodeType*      interfaces     = nullptr,
+    s32            num_interfaces = 0
 );
 
 CodeTemplate def_template( CodeParam params, Code definition, ModuleFlag mflags = ModuleFlag::None );
@@ -5227,12 +5227,12 @@ CodeUsing def_using( StrC name, CodeType type = NoCode, CodeAttributes attribute
 CodeUsing def_using_namespace( StrC name );
 
 CodeVar def_variable(
-CodeType       type,
-StrC           name,
-Code           value      = NoCode,
-CodeSpecifiers specifiers = NoCode,
-CodeAttributes attributes = NoCode,
-ModuleFlag     mflags     = ModuleFlag::None
+    CodeType       type,
+    StrC           name,
+    Code           value      = NoCode,
+    CodeSpecifiers specifiers = NoCode,
+    CodeAttributes attributes = NoCode,
+    ModuleFlag     mflags     = ModuleFlag::None
 );
 
 // Constructs an empty body. Use AST::validate_body() to check if the body is was has valid entries.
@@ -8882,10 +8882,10 @@ internal sw _scan_zpl_i64( const char* text, s32 base, s64* value )
 
 // TODO : Are these good enough for characters?
 global const char _num_to_char_table[] =
-"0123456789"
-"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-"abcdefghijklmnopqrstuvwxyz"
-"@$";
+    "0123456789"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "@$";
 
 s64 str_to_i64( const char* str, char** end_ptr, s32 base )
 {
@@ -9752,7 +9752,7 @@ void* heap_allocator_proc( void* allocator_data, AllocType type, sw size, sw ali
 	switch ( type )
 	{
 #if defined( GEN_COMPILER_MSVC ) || ( defined( GEN_COMPILER_GCC ) && defined( GEN_SYSTEM_WINDOWS ) ) \
-|| ( defined( GEN_COMPILER_TINYC ) && defined( GEN_SYSTEM_WINDOWS ) )
+    || ( defined( GEN_COMPILER_TINYC ) && defined( GEN_SYSTEM_WINDOWS ) )
 		case EAllocation_ALLOC :
 			ptr = _aligned_malloc( size, alignment );
 			if ( flags & ALLOCATOR_FLAG_CLEAR_TO_ZERO )
@@ -11022,13 +11022,13 @@ u64 read_cpu_time_stamp_counter( void )
 	u64 result = 0;
 	u32 upper, lower, tmp;
 	__asm__ volatile(
-	"0:                   \n"
-	"\tmftbu   %0         \n"
-	"\tmftb    %1         \n"
-	"\tmftbu   %2         \n"
-	"\tcmpw    %2,%0      \n"
-	"\tbne     0b         \n"
-	: "=r"( upper ), "=r"( lower ), "=r"( tmp )
+	    "0:                   \n"
+	    "\tmftbu   %0         \n"
+	    "\tmftb    %1         \n"
+	    "\tmftbu   %2         \n"
+	    "\tcmpw    %2,%0      \n"
+	    "\tbne     0b         \n"
+	    : "=r"( upper ), "=r"( lower ), "=r"( tmp )
 	);
 	result = upper;
 	result = result << 32;
@@ -13569,7 +13569,10 @@ String AST::to_string()
 			if ( bitfield_is_equal( u32, ModuleFlags, ModuleFlag::Export ) )
 				result.append( "export " );
 
-			result.append_fmt( "template< %S >\n%S", Params->to_string(), Declaration->to_string() );
+			if ( Params )
+				result.append_fmt( "template< %S >\n%S", Params->to_string(), Declaration->to_string() );
+			else
+				result.append_fmt( "template<>\n%S", Declaration->to_string() );
 		}
 		break;
 
@@ -13879,94 +13882,94 @@ bool AST::is_equal( AST* other )
 	{
 		using namespace ECode;
 
-#define check_member_val( val )           \
-	if ( val != other->val )              \
-	{                                     \
-		log_fmt(                          \
-		"\nAST::is_equal: Member - " #val \
-		" failed\n"                       \
-		"AST  : %S\n"                     \
-		"Other: %S\n",                    \
-		debug_str(),                      \
-		other->debug_str()                \
-		);                                \
-                                          \
-		return false;                     \
+#define check_member_val( val )               \
+	if ( val != other->val )                  \
+	{                                         \
+		log_fmt(                              \
+		    "\nAST::is_equal: Member - " #val \
+		    " failed\n"                       \
+		    "AST  : %S\n"                     \
+		    "Other: %S\n",                    \
+		    debug_str(),                      \
+		    other->debug_str()                \
+		);                                    \
+                                              \
+		return false;                         \
 	}
 
-#define check_member_str( str )                  \
-	if ( str != other->str )                     \
-	{                                            \
-		log_fmt(                                 \
-		"\nAST::is_equal: Member string - " #str \
-		" failed\n"                              \
-		"AST  : %S\n"                            \
-		"Other: %S\n",                           \
-		debug_str(),                             \
-		other->debug_str()                       \
-		);                                       \
-                                                 \
-		return false;                            \
+#define check_member_str( str )                      \
+	if ( str != other->str )                         \
+	{                                                \
+		log_fmt(                                     \
+		    "\nAST::is_equal: Member string - " #str \
+		    " failed\n"                              \
+		    "AST  : %S\n"                            \
+		    "Other: %S\n",                           \
+		    debug_str(),                             \
+		    other->debug_str()                       \
+		);                                           \
+                                                     \
+		return false;                                \
 	}
 
-#define check_member_content( content )                           \
-	if ( content != other->content )                              \
-	{                                                             \
-		log_fmt(                                                  \
-		"\nAST::is_equal: Member content - " #content             \
-		" failed\n"                                               \
-		"AST  : %S\n"                                             \
-		"Other: %S\n",                                            \
-		debug_str(),                                              \
-		other->debug_str()                                        \
-		);                                                        \
-                                                                  \
-		log_fmt(                                                  \
-		"Content cannot be trusted to be unique with this check " \
-		"so it must be verified by eye for now\n"                 \
-		"AST   Content:\n%S\n"                                    \
-		"Other Content:\n%S\n",                                   \
-		content.visualize_whitespace(),                           \
-		other->content.visualize_whitespace()                     \
-		);                                                        \
+#define check_member_content( content )                               \
+	if ( content != other->content )                                  \
+	{                                                                 \
+		log_fmt(                                                      \
+		    "\nAST::is_equal: Member content - " #content             \
+		    " failed\n"                                               \
+		    "AST  : %S\n"                                             \
+		    "Other: %S\n",                                            \
+		    debug_str(),                                              \
+		    other->debug_str()                                        \
+		);                                                            \
+                                                                      \
+		log_fmt(                                                      \
+		    "Content cannot be trusted to be unique with this check " \
+		    "so it must be verified by eye for now\n"                 \
+		    "AST   Content:\n%S\n"                                    \
+		    "Other Content:\n%S\n",                                   \
+		    content.visualize_whitespace(),                           \
+		    other->content.visualize_whitespace()                     \
+		);                                                            \
 	}
 
-#define check_member_ast( ast )                        \
-	if ( ast )                                         \
-	{                                                  \
-		if ( other->ast == nullptr )                   \
-		{                                              \
-			log_fmt(                                   \
-			"\nAST::is_equal: Failed for member " #ast \
-			" other equivalent param is null\n"        \
-			"AST  : %s\n"                              \
-			"Other: %s\n"                              \
-			"For ast member: %s\n",                    \
-			debug_str(),                               \
-			other->debug_str(),                        \
-			ast->debug_str()                           \
-			);                                         \
-                                                       \
-			return false;                              \
-		}                                              \
-                                                       \
-		if ( ! ast->is_equal( other->ast ) )           \
-		{                                              \
-			log_fmt(                                   \
-			"\nAST::is_equal: Failed for " #ast        \
-			"\n"                                       \
-			"AST  : %S\n"                              \
-			"Other: %S\n"                              \
-			"For     ast member: %S\n"                 \
-			"other's ast member: %S\n",                \
-			debug_str(),                               \
-			other->debug_str(),                        \
-			ast->debug_str(),                          \
-			other->ast->debug_str()                    \
-			);                                         \
-                                                       \
-			return false;                              \
-		}                                              \
+#define check_member_ast( ast )                            \
+	if ( ast )                                             \
+	{                                                      \
+		if ( other->ast == nullptr )                       \
+		{                                                  \
+			log_fmt(                                       \
+			    "\nAST::is_equal: Failed for member " #ast \
+			    " other equivalent param is null\n"        \
+			    "AST  : %s\n"                              \
+			    "Other: %s\n"                              \
+			    "For ast member: %s\n",                    \
+			    debug_str(),                               \
+			    other->debug_str(),                        \
+			    ast->debug_str()                           \
+			);                                             \
+                                                           \
+			return false;                                  \
+		}                                                  \
+                                                           \
+		if ( ! ast->is_equal( other->ast ) )               \
+		{                                                  \
+			log_fmt(                                       \
+			    "\nAST::is_equal: Failed for " #ast        \
+			    "\n"                                       \
+			    "AST  : %S\n"                              \
+			    "Other: %S\n"                              \
+			    "For     ast member: %S\n"                 \
+			    "other's ast member: %S\n",                \
+			    debug_str(),                               \
+			    other->debug_str(),                        \
+			    ast->debug_str(),                          \
+			    other->ast->debug_str()                    \
+			);                                             \
+                                                           \
+			return false;                                  \
+		}                                                  \
 	}
 
 		case NewLine :
@@ -14187,11 +14190,11 @@ bool AST::is_equal( AST* other )
 						if ( curr_other == nullptr )
 						{
 							log_fmt(
-							"\nAST::is_equal: Failed for parameter, other equivalent param is null\n"
-							"AST  : %S\n"
-							"Other: %S\n"
-							"For ast member: %S\n",
-							curr->debug_str()
+							    "\nAST::is_equal: Failed for parameter, other equivalent param is null\n"
+							    "AST  : %S\n"
+							    "Other: %S\n"
+							    "For ast member: %S\n",
+							    curr->debug_str()
 							);
 
 							return false;
@@ -14200,15 +14203,15 @@ bool AST::is_equal( AST* other )
 						if ( curr->Name != curr_other->Name )
 						{
 							log_fmt(
-							"\nAST::is_equal: Failed for parameter name check\n"
-							"AST  : %S\n"
-							"Other: %S\n"
-							"For     ast member: %S\n"
-							"other's ast member: %S\n",
-							debug_str(),
-							other->debug_str(),
-							curr->debug_str(),
-							curr_other->debug_str()
+							    "\nAST::is_equal: Failed for parameter name check\n"
+							    "AST  : %S\n"
+							    "Other: %S\n"
+							    "For     ast member: %S\n"
+							    "other's ast member: %S\n",
+							    debug_str(),
+							    other->debug_str(),
+							    curr->debug_str(),
+							    curr_other->debug_str()
 							);
 							return false;
 						}
@@ -14216,15 +14219,15 @@ bool AST::is_equal( AST* other )
 						if ( curr->ValueType && ! curr->ValueType->is_equal( curr_other->ValueType ) )
 						{
 							log_fmt(
-							"\nAST::is_equal: Failed for parameter value type check\n"
-							"AST  : %S\n"
-							"Other: %S\n"
-							"For     ast member: %S\n"
-							"other's ast member: %S\n",
-							debug_str(),
-							other->debug_str(),
-							curr->debug_str(),
-							curr_other->debug_str()
+							    "\nAST::is_equal: Failed for parameter value type check\n"
+							    "AST  : %S\n"
+							    "Other: %S\n"
+							    "For     ast member: %S\n"
+							    "other's ast member: %S\n",
+							    debug_str(),
+							    other->debug_str(),
+							    curr->debug_str(),
+							    curr_other->debug_str()
 							);
 							return false;
 						}
@@ -14232,15 +14235,15 @@ bool AST::is_equal( AST* other )
 						if ( curr->Value && ! curr->Value->is_equal( curr_other->Value ) )
 						{
 							log_fmt(
-							"\nAST::is_equal: Failed for parameter value check\n"
-							"AST  : %S\n"
-							"Other: %S\n"
-							"For     ast member: %S\n"
-							"other's ast member: %S\n",
-							debug_str(),
-							other->debug_str(),
-							curr->debug_str(),
-							curr_other->debug_str()
+							    "\nAST::is_equal: Failed for parameter value check\n"
+							    "AST  : %S\n"
+							    "Other: %S\n"
+							    "For     ast member: %S\n"
+							    "other's ast member: %S\n",
+							    debug_str(),
+							    other->debug_str(),
+							    curr->debug_str(),
+							    curr_other->debug_str()
 							);
 							return false;
 						}
@@ -14383,11 +14386,11 @@ bool AST::is_equal( AST* other )
 				if ( curr_other == nullptr )
 				{
 					log_fmt(
-					"\nAST::is_equal: Failed for body, other equivalent param is null\n"
-					"AST  : %S\n"
-					"Other: %S\n"
-					"For ast member: %S\n",
-					curr->debug_str()
+					    "\nAST::is_equal: Failed for body, other equivalent param is null\n"
+					    "AST  : %S\n"
+					    "Other: %S\n"
+					    "For ast member: %S\n",
+					    curr->debug_str()
 					);
 
 					return false;
@@ -14396,15 +14399,15 @@ bool AST::is_equal( AST* other )
 				if ( ! curr->is_equal( curr_other ) )
 				{
 					log_fmt(
-					"\nAST::is_equal: Failed for body\n"
-					"AST  : %S\n"
-					"Other: %S\n"
-					"For     ast member: %S\n"
-					"other's ast member: %S\n",
-					debug_str(),
-					other->debug_str(),
-					curr->debug_str(),
-					curr_other->debug_str()
+					    "\nAST::is_equal: Failed for body\n"
+					    "AST  : %S\n"
+					    "Other: %S\n"
+					    "For     ast member: %S\n"
+					    "other's ast member: %S\n",
+					    debug_str(),
+					    other->debug_str(),
+					    curr->debug_str(),
+					    curr_other->debug_str()
 					);
 
 					return false;
@@ -14696,6 +14699,11 @@ internal void define_constants()
 #endif
 #undef def_constant_code_type
 
+
+#define def_constant_spec( Type_, ... )                                    \
+	spec_##Type_ = def_specifiers( num_args( __VA_ARGS__ ), __VA_ARGS__ ); \
+	spec_##Type_.set_global();
+
 #pragma push_macro( "forceinline" )
 #pragma push_macro( "global" )
 #pragma push_macro( "internal" )
@@ -14706,11 +14714,6 @@ internal void define_constants()
 #undef internal
 #undef local_persist
 #undef neverinline
-
-#define def_constant_spec( Type_, ... )                                    \
-	spec_##Type_ = def_specifiers( num_args( __VA_ARGS__ ), __VA_ARGS__ ); \
-	spec_##Type_.set_global();
-
 	def_constant_spec( const, ESpecifier::Const );
 	def_constant_spec( consteval, ESpecifier::Consteval );
 	def_constant_spec( constexpr, ESpecifier::Constexpr );
@@ -14735,7 +14738,7 @@ internal void define_constants()
 	def_constant_spec( virtual, ESpecifier::Virtual );
 	def_constant_spec( volatile, ESpecifier::Volatile )
 
-	spec_local_persist = def_specifiers( 1, ESpecifier::Local_Persist );
+	    spec_local_persist = def_specifiers( 1, ESpecifier::Local_Persist );
 	spec_local_persist.set_global();
 
 #pragma pop_macro( "forceinline" )
@@ -15004,18 +15007,18 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 		return OpValidateResult::Fail;                                                                      \
 	}
 
-#define check_param_eq_ret()                                                           \
-	if ( ! is_member_symbol && params_code->ValueType != ret_type )                    \
-	{                                                                                  \
-		log_failure(                                                                   \
-		"gen_def_operator: operator%s requires first parameter to equal return type\n" \
-		"param types: %s\n"                                                            \
-		"return type: %s",                                                             \
-		to_str( op ),                                                                  \
-		params_code.debug_str(),                                                       \
-		ret_type.debug_str()                                                           \
-		);                                                                             \
-		return OpValidateResult::Fail;                                                 \
+#define check_param_eq_ret()                                                                \
+	if ( ! is_member_symbol && ! params_code->ValueType.is_equal( ret_type ) )              \
+	{                                                                                       \
+		log_failure(                                                                        \
+		    "gen::def_operator: operator%s requires first parameter to equal return type\n" \
+		    "param types: %s\n"                                                             \
+		    "return type: %s",                                                              \
+		    to_str( op ).Ptr,                                                               \
+		    params_code.debug_str(),                                                        \
+		    ret_type.debug_str()                                                            \
+		);                                                                                  \
+		return OpValidateResult::Fail;                                                      \
 	}
 #pragma endregion Helper Macros
 
@@ -15041,10 +15044,10 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 			if ( params_code->NumEntries > 1 )
 			{
 				log_failure(
-				"gen::def_operator: "
-				"operator%s does not support non-member definition (more than one parameter provided) - %s",
-				to_str( op ),
-				params_code.debug_str()
+				    "gen::def_operator: "
+				    "operator%s does not support non-member definition (more than one parameter provided) - %s",
+				    to_str( op ),
+				    params_code.debug_str()
 				);
 				return OpValidateResult::Fail;
 			}
@@ -15073,10 +15076,10 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 			if ( params_code->NumEntries > 2 )
 			{
 				log_failure(
-				"gen::def_operator: operator%s may not be defined with more than two parametes - param count; %d\n%s",
-				to_str( op ),
-				params_code->NumEntries,
-				params_code.debug_str()
+				    "gen::def_operator: operator%s may not be defined with more than two parametes - param count; %d\n%s",
+				    to_str( op ),
+				    params_code->NumEntries,
+				    params_code.debug_str()
 				);
 				return OpValidateResult::Fail;
 			}
@@ -15109,9 +15112,9 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 						if ( ! params_code.get( 1 ).is_equal( t_int ) )
 						{
 							log_failure(
-							"gen::def_operator: "
-							"operator%s requires second parameter of non-member definition to be int for post-decrement",
-							to_str( op )
+							    "gen::def_operator: "
+							    "operator%s requires second parameter of non-member definition to be int for post-decrement",
+							    to_str( op )
 							);
 							return OpValidateResult::Fail;
 						}
@@ -15119,9 +15122,9 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 
 					default :
 						log_failure(
-						"gen::def_operator: operator%s recieved unexpected number of parameters recived %d instead of 0-2",
-						to_str( op ),
-						params_code->NumEntries
+						    "gen::def_operator: operator%s recieved unexpected number of parameters recived %d instead of 0-2",
+						    to_str( op ),
+						    params_code->NumEntries
 						);
 						return OpValidateResult::Fail;
 				}
@@ -15145,12 +15148,12 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 				if ( params_code->ValueType.is_equal( ret_type ) )
 				{
 					log_failure(
-					"gen::def_operator: "
-					"operator%s is non-member symbol yet first paramter does not equal return type\n"
-					"param type: %s\n"
-					"return type: %s\n",
-					params_code.debug_str(),
-					ret_type.debug_str()
+					    "gen::def_operator: "
+					    "operator%s is non-member symbol yet first paramter does not equal return type\n"
+					    "param type: %s\n"
+					    "return type: %s\n",
+					    params_code.debug_str(),
+					    ret_type.debug_str()
 					);
 					return OpValidateResult::Fail;
 				}
@@ -15158,9 +15161,9 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 				if ( params_code->NumEntries > 1 )
 				{
 					log_failure(
-					"gen::def_operator: operator%s may not have more than one parameter - param count: %d",
-					to_str( op ),
-					params_code->NumEntries
+					    "gen::def_operator: operator%s may not have more than one parameter - param count: %d",
+					    to_str( op ),
+					    params_code->NumEntries
 					);
 					return OpValidateResult::Fail;
 				}
@@ -15189,12 +15192,12 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 					if ( ! params_code->ValueType.is_equal( ret_type ) )
 					{
 						log_failure(
-						"gen::def_operator: "
-						"operator%s is non-member symbol yet first paramter does not equal return type\n"
-						"param type: %s\n"
-						"return type: %s\n",
-						params_code.debug_str(),
-						ret_type.debug_str()
+						    "gen::def_operator: "
+						    "operator%s is non-member symbol yet first paramter does not equal return type\n"
+						    "param type: %s\n"
+						    "return type: %s\n",
+						    params_code.debug_str(),
+						    ret_type.debug_str()
 						);
 						return OpValidateResult::Fail;
 					}
@@ -15202,9 +15205,9 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 
 				default :
 					log_failure(
-					"gen::def_operator: operator%s recieved unexpected number of paramters recived %d instead of 0-2",
-					to_str( op ),
-					params_code->NumEntries
+					    "gen::def_operator: operator%s recieved unexpected number of paramters recived %d instead of 0-2",
+					    to_str( op ),
+					    params_code->NumEntries
 					);
 					return OpValidateResult::Fail;
 			}
@@ -15225,9 +15228,9 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 				if ( params_code->NumEntries != 1 )
 				{
 					log_failure(
-					"gen::def_operator: operator%s recieved unexpected number of paramters recived %d instead of 0-1",
-					to_str( op ),
-					params_code->NumEntries
+					    "gen::def_operator: operator%s recieved unexpected number of paramters recived %d instead of 0-1",
+					    to_str( op ),
+					    params_code->NumEntries
 					);
 					return OpValidateResult::Fail;
 				}
@@ -15261,9 +15264,9 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 
 				default :
 					log_failure(
-					"gen::def_operator: operator%s recieved unexpected number of paramters recived %d instead of 1-2",
-					to_str( op ),
-					params_code->NumEntries
+					    "gen::def_operator: operator%s recieved unexpected number of paramters recived %d instead of 1-2",
+					    to_str( op ),
+					    params_code->NumEntries
 					);
 					return OpValidateResult::Fail;
 			}
@@ -15275,9 +15278,9 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 			if ( params_code && params_code->NumEntries > 1 )
 			{
 				log_failure(
-				"gen::def_operator: operator%s recieved unexpected number of paramters recived %d instead of 0-1",
-				to_str( op ),
-				params_code->NumEntries
+				    "gen::def_operator: operator%s recieved unexpected number of paramters recived %d instead of 0-1",
+				    to_str( op ),
+				    params_code->NumEntries
 				);
 				return OpValidateResult::Fail;
 			}
@@ -15473,14 +15476,14 @@ CodeConstructor def_constructor( CodeParam params, Code initializer_list, Code b
 }
 
 CodeClass def_class(
-StrC           name,
-Code           body,
-CodeType       parent,
-AccessSpec     parent_access,
-CodeAttributes attributes,
-ModuleFlag     mflags,
-CodeType*      interfaces,
-s32            num_interfaces
+    StrC           name,
+    Code           body,
+    CodeType       parent,
+    AccessSpec     parent_access,
+    CodeAttributes attributes,
+    ModuleFlag     mflags,
+    CodeType*      interfaces,
+    s32            num_interfaces
 )
 {
 	using namespace ECode;
@@ -15864,14 +15867,14 @@ CodeNS def_namespace( StrC name, Code body, ModuleFlag mflags )
 }
 
 CodeOperator def_operator(
-OperatorT      op,
-StrC           nspace,
-CodeParam      params_code,
-CodeType       ret_type,
-Code           body,
-CodeSpecifiers specifiers,
-CodeAttributes attributes,
-ModuleFlag     mflags
+    OperatorT      op,
+    StrC           nspace,
+    CodeParam      params_code,
+    CodeType       ret_type,
+    Code           body,
+    CodeSpecifiers specifiers,
+    CodeAttributes attributes,
+    ModuleFlag     mflags
 )
 {
 	using namespace ECode;
@@ -15905,6 +15908,7 @@ ModuleFlag     mflags
 	CodeOperator result = ( CodeOperator )make_code();
 	result->Name        = get_cached_string( { str_len( name ), name } );
 	result->ModuleFlags = mflags;
+	result->Op          = op;
 
 	if ( body )
 	{
@@ -16076,14 +16080,14 @@ CodeSpecifiers def_specifier( SpecifierT spec )
 }
 
 CodeStruct def_struct(
-StrC           name,
-Code           body,
-CodeType       parent,
-AccessSpec     parent_access,
-CodeAttributes attributes,
-ModuleFlag     mflags,
-CodeType*      interfaces,
-s32            num_interfaces
+    StrC           name,
+    Code           body,
+    CodeType       parent,
+    AccessSpec     parent_access,
+    CodeAttributes attributes,
+    ModuleFlag     mflags,
+    CodeType*      interfaces,
+    s32            num_interfaces
 )
 {
 	using namespace ECode;
@@ -16445,9 +16449,9 @@ CodeBody def_class_body( s32 num, ... )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_class_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_class_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -16456,10 +16460,10 @@ CodeBody def_class_body( s32 num, ... )
 		{
 			GEN_AST_BODY_CLASS_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_class_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_class_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -16489,9 +16493,9 @@ CodeBody def_class_body( s32 num, Code* codes )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_class_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_class_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -16500,10 +16504,10 @@ CodeBody def_class_body( s32 num, Code* codes )
 		{
 			GEN_AST_BODY_CLASS_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_class_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_class_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -16596,9 +16600,9 @@ CodeBody def_export_body( s32 num, ... )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_export_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_export_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -16607,10 +16611,10 @@ CodeBody def_export_body( s32 num, ... )
 		{
 			GEN_AST_BODY_EXPORT_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_export_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_export_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -16640,9 +16644,9 @@ CodeBody def_export_body( s32 num, Code* codes )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_export_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_export_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -16651,10 +16655,10 @@ CodeBody def_export_body( s32 num, Code* codes )
 		{
 			GEN_AST_BODY_EXPORT_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_export_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_export_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -16685,9 +16689,9 @@ CodeBody def_extern_link_body( s32 num, ... )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_extern_linkage_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_extern_linkage_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -16696,10 +16700,10 @@ CodeBody def_extern_link_body( s32 num, ... )
 		{
 			GEN_AST_BODY_EXTERN_LINKAGE_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_extern_linkage_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_extern_linkage_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -16729,9 +16733,9 @@ CodeBody def_extern_link_body( s32 num, Code* codes )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_extern_linkage_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_extern_linkage_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -16740,10 +16744,10 @@ CodeBody def_extern_link_body( s32 num, Code* codes )
 		{
 			GEN_AST_BODY_EXTERN_LINKAGE_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_extern_linkage_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_extern_linkage_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -16811,9 +16815,9 @@ CodeBody def_function_body( s32 num, Code* codes )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_function_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_function_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -16822,10 +16826,10 @@ CodeBody def_function_body( s32 num, Code* codes )
 		{
 			GEN_AST_BODY_FUNCTION_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_function_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_function_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -16855,9 +16859,9 @@ CodeBody def_global_body( s32 num, ... )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_global_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_global_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -16870,10 +16874,10 @@ CodeBody def_global_body( s32 num, ... )
 
 				GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES
 				log_failure(
-				"gen::"
-				"def_global_body"
-				": Entry type is not allowed: %s",
-				entry.debug_str()
+				    "gen::"
+				    "def_global_body"
+				    ": Entry type is not allowed: %s",
+				    entry.debug_str()
 				);
 				return ( *Code::Invalid.ast );
 
@@ -16903,9 +16907,9 @@ CodeBody def_global_body( s32 num, Code* codes )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_global_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_global_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -16918,10 +16922,10 @@ CodeBody def_global_body( s32 num, Code* codes )
 
 				GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES
 				log_failure(
-				"gen::"
-				"def_global_body"
-				": Entry type is not allowed: %s",
-				entry.debug_str()
+				    "gen::"
+				    "def_global_body"
+				    ": Entry type is not allowed: %s",
+				    entry.debug_str()
 				);
 				return CodeInvalid;
 
@@ -16952,9 +16956,9 @@ CodeBody def_namespace_body( s32 num, ... )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_namespace_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_namespace_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -16963,10 +16967,10 @@ CodeBody def_namespace_body( s32 num, ... )
 		{
 			GEN_AST_BODY_NAMESPACE_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_namespace_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_namespace_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -16996,9 +17000,9 @@ CodeBody def_namespace_body( s32 num, Code* codes )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_namespace_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_namespace_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -17007,10 +17011,10 @@ CodeBody def_namespace_body( s32 num, Code* codes )
 		{
 			GEN_AST_BODY_NAMESPACE_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_namespace_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_namespace_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -17171,9 +17175,9 @@ CodeBody def_struct_body( s32 num, ... )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_struct_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_struct_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -17182,10 +17186,10 @@ CodeBody def_struct_body( s32 num, ... )
 		{
 			GEN_AST_BODY_STRUCT_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_struct_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_struct_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -17215,9 +17219,9 @@ CodeBody def_struct_body( s32 num, Code* codes )
 		if ( ! entry )
 		{
 			log_failure(
-			"gen::"
-			"def_struct_body"
-			": Provided an null entry"
+			    "gen::"
+			    "def_struct_body"
+			    ": Provided an null entry"
 			);
 			return CodeInvalid;
 		}
@@ -17226,10 +17230,10 @@ CodeBody def_struct_body( s32 num, Code* codes )
 		{
 			GEN_AST_BODY_STRUCT_UNALLOWED_TYPES
 			log_failure(
-			"gen::"
-			"def_struct_body"
-			": Entry type is not allowed: %s",
-			entry.debug_str()
+			    "gen::"
+			    "def_struct_body"
+			    ": Entry type is not allowed: %s",
+			    entry.debug_str()
 			);
 			return CodeInvalid;
 
@@ -17779,13 +17783,13 @@ namespace Parser
 		if ( Arr[ Idx ].Type != type )
 		{
 			log_failure(
-			"Parse Error, TokArray::eat, Expected: ' %s ' not ' %.*s ' (%d, %d)`\n%s",
-			ETokType::to_str( type ).Ptr,
-			Arr[ Idx ].Length,
-			Arr[ Idx ].Text,
-			current().Line,
-			current().Column,
-			Context.to_string()
+			    "Parse Error, TokArray::eat, Expected: ' %s ' not ' %.*s ' (%d, %d)`\n%s",
+			    ETokType::to_str( type ).Ptr,
+			    Arr[ Idx ].Length,
+			    Arr[ Idx ].Text,
+			    current().Line,
+			    current().Column,
+			    Context.to_string()
 			);
 
 			return false;
@@ -17958,14 +17962,14 @@ namespace Parser
 								else
 								{
 									log_failure(
-									"gen::Parser::lex: Invalid escape sequence '\\%c' (%d, %d)"
-									" in preprocessor directive (%d, %d)\n%.100s",
-									current,
-									line,
-									column,
-									token.Line,
-									token.Column,
-									token.Text
+									    "gen::Parser::lex: Invalid escape sequence '\\%c' (%d, %d)"
+									    " in preprocessor directive (%d, %d)\n%.100s",
+									    current,
+									    line,
+									    column,
+									    token.Line,
+									    token.Column,
+									    token.Text
 									);
 									break;
 								}
@@ -18042,11 +18046,11 @@ namespace Parser
 							String directive_str = String::fmt_buf( GlobalAllocator, "%.*s", min( 80, left + content.Length ), token.Text );
 
 							log_failure(
-							"gen::Parser::lex: Expected '\"' or '<' after #include, not '%c' (%d, %d)\n%s",
-							current,
-							content.Line,
-							content.Column,
-							directive_str.Data
+							    "gen::Parser::lex: Expected '\"' or '<' after #include, not '%c' (%d, %d)\n%s",
+							    current,
+							    content.Line,
+							    content.Column,
+							    directive_str.Data
 							);
 							return { { nullptr }, 0 };
 						}
@@ -18101,15 +18105,15 @@ namespace Parser
 								String content_str   = String::fmt_buf( GlobalAllocator, "%.*s", min( 400, left + content.Length ), content.Text );
 
 								log_failure(
-								"gen::Parser::lex: Invalid escape sequence '\\%c' (%d, %d)"
-								" in preprocessor directive '%s' (%d, %d)\n%s",
-								current,
-								line,
-								column,
-								directive_str,
-								content.Line,
-								content.Column,
-								content_str
+								    "gen::Parser::lex: Invalid escape sequence '\\%c' (%d, %d)"
+								    " in preprocessor directive '%s' (%d, %d)\n%s",
+								    current,
+								    line,
+								    column,
+								    directive_str,
+								    content.Line,
+								    content.Column,
+								    content_str
 								);
 								break;
 							}
@@ -18323,6 +18327,18 @@ namespace Parser
 
 					if ( left )
 						move_forward();
+
+					if ( current == '=' )
+					{
+						token.Length++;
+						token.IsAssign = true;
+						// token.Flags |= TokFlags::Assignment;
+						// token.Type = TokType::Assign_Multiply;
+
+						if ( left )
+							move_forward();
+					}
+
 					goto FoundToken;
 				}
 				case ';' :
@@ -18518,7 +18534,14 @@ namespace Parser
 
 					if ( left )
 					{
-						if ( current == '/' )
+						if ( current == '=' )
+						{
+							// token.Type = TokeType::Assign_Divide;
+							move_forward();
+							token.Length++;
+							token.IsAssign = true;
+						}
+						else if ( current == '/' )
 						{
 							token.Type   = TokType::Comment;
 							token.Length = 2;
@@ -19794,9 +19817,9 @@ internal inline Code parse_foward_or_definition( Parser::TokType which, bool is_
 
 		default :
 			log_failure(
-			"Error, wrong token type given to parse_complicated_definition "
-			"(only supports class, enum, struct, union) \n%s",
-			Context.to_string()
+			    "Error, wrong token type given to parse_complicated_definition "
+			    "(only supports class, enum, struct, union) \n%s",
+			    Context.to_string()
 			);
 
 			Context.pop();
@@ -19808,7 +19831,7 @@ internal inline Code parse_foward_or_definition( Parser::TokType which, bool is_
 
 // Function parsing is handled in multiple places because its initial signature is shared with variable parsing
 internal inline CodeFn
-parse_function_after_name( ModuleFlag mflags, CodeAttributes attributes, CodeSpecifiers specifiers, CodeType ret_type, Parser::Token name )
+    parse_function_after_name( ModuleFlag mflags, CodeAttributes attributes, CodeSpecifiers specifiers, CodeType ret_type, Parser::Token name )
 {
 	using namespace Parser;
 	push_scope();
@@ -20302,7 +20325,8 @@ internal CodeOperator parse_operator_after_ret_type( ModuleFlag mflags, CodeAttr
 
 	eat( TokType::Decl_Operator );
 
-	if ( ! left && currtok.Type != TokType::Operator && currtok.Type != TokType::Star && currtok.Type != TokType::Ampersand && currtok.Type != TokType::Ampersand_DBL )
+	if ( ! left && currtok.Type != TokType::Operator && currtok.Type != TokType::Star && currtok.Type != TokType::Ampersand
+	     && currtok.Type != TokType::Ampersand_DBL )
 	{
 		log_failure( "Expected operator after 'operator' keyword\n%s", Context.to_string() );
 		Context.pop();
@@ -20319,7 +20343,7 @@ internal CodeOperator parse_operator_after_ret_type( ModuleFlag mflags, CodeAttr
 			if ( currtok.Text[ 1 ] == '=' )
 				op = Assign_Add;
 
-			if ( currtok.Text[ 1 ] == '+' )
+			else if ( currtok.Text[ 1 ] == '+' )
 				op = Increment;
 
 			else
@@ -20339,7 +20363,7 @@ internal CodeOperator parse_operator_after_ret_type( ModuleFlag mflags, CodeAttr
 				break;
 			}
 
-			if ( currtok.Text[ 1 ] == '=' )
+			else if ( currtok.Text[ 1 ] == '=' )
 				op = Assign_Subtract;
 
 			else
@@ -20688,6 +20712,12 @@ internal inline CodeParam parse_params( bool use_template_capture )
 	if ( ! use_template_capture && check( TokType::Capture_End ) )
 	{
 		eat( TokType::Capture_End );
+		Context.pop();
+		return { nullptr };
+	}
+	else if ( check( TokType::Operator ) && currtok.Text[ 0 ] == '>' )
+	{
+		eat( TokType::Operator );
 		Context.pop();
 		return { nullptr };
 	}
@@ -21860,11 +21890,11 @@ internal CodeOperator parse_operator()
 
 			default :
 				log_failure(
-				"Invalid specifier "
-				"%s"
-				" for operator\n%s",
-				ESpecifier::to_str( spec ),
-				Context.to_string()
+				    "Invalid specifier "
+				    "%s"
+				    " for operator\n%s",
+				    ESpecifier::to_str( spec ),
+				    Context.to_string()
 				);
 				Context.pop();
 				return CodeInvalid;
@@ -22227,7 +22257,8 @@ internal CodeType parse_type( bool* typedef_is_function )
 	}
 
 	// All kinds of nonsense can makeup a type signature, first we check for a in-place definition of a class, enum, or struct
-	if ( currtok.Type == TokType::Decl_Class || currtok.Type == TokType::Decl_Enum || currtok.Type == TokType::Decl_Struct || currtok.Type == TokType::Decl_Union )
+	if ( currtok.Type == TokType::Decl_Class || currtok.Type == TokType::Decl_Enum || currtok.Type == TokType::Decl_Struct
+	     || currtok.Type == TokType::Decl_Union )
 	{
 		name = currtok;
 		eat( currtok.Type );
@@ -22479,10 +22510,10 @@ internal CodeType parse_type( bool* typedef_is_function )
 		{
 			SpecifierT spec = ESpecifier::to_type( currtok );
 
-			if (   spec != ESpecifier::Const
-				// TODO : Add support for NoExcept
-				// && spec != ESpecifier::NoExcept
-				&& spec != ESpecifier::RValue )
+			if ( spec != ESpecifier::Const
+			     // TODO : Add support for NoExcept
+			     // && spec != ESpecifier::NoExcept
+			     && spec != ESpecifier::RValue )
 			{
 				log_failure( "Error, invalid specifier used in type definition: %s\n%s", currtok.Text, Context.to_string() );
 				Context.pop();
@@ -22619,7 +22650,7 @@ internal CodeTypedef parse_typedef()
 	else
 	{
 		bool is_complicated = currtok.Type == TokType::Decl_Enum || currtok.Type == TokType::Decl_Class || currtok.Type == TokType::Decl_Struct
-		|| currtok.Type == TokType::Decl_Union;
+		    || currtok.Type == TokType::Decl_Union;
 
 		if ( is_complicated )
 		{

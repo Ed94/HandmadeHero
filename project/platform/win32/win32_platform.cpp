@@ -155,7 +155,7 @@ void toggle_fullscreen( HWND window_handle )
 	{
 		MONITORINFO info           = { sizeof(MONITORINFO) };
 		HMONITOR    monitor_handle = MonitorFromWindow( window_handle, MONITOR_DEFAULTTOPRIMARY );
-		
+
 		if ( GetWindowPlacement( window_handle, & Window_Position )
 		    && GetMonitorInfoA( monitor_handle, & info ) )
 		{
@@ -193,7 +193,7 @@ display_buffer_in_window( HDC device_context, s32 window_width, s32 window_heigh
 	, s32 x, s32 y
 	, s32 width, s32 height )
 {
-	if ( 	(window_width  % buffer->width ) == 0 
+	if ( 	(window_width  % buffer->width ) == 0
 	    &&	(window_height % buffer->height) == 0 )
 	{
 		// TODO(Ed) : Aspect ratio correction
@@ -202,10 +202,10 @@ display_buffer_in_window( HDC device_context, s32 window_width, s32 window_heigh
 			, 0, 0, buffer->width, buffer->height
 			, buffer->memory, & buffer->info
 			, DIB_ColorTable_RGB, RO_Source_To_Dest );
-		
+
 		return;
 	}
-	
+
 	s32 offset_x = 0;
 	s32 offset_y = 0;
 
@@ -348,14 +348,14 @@ main_window_callback( HWND handle
 			while (ShowCursor(FALSE) >= 0);
 		}
 		break;
-		
+
 		case WM_NCMOUSEMOVE:
 		{
 			// Show the cursor when it's outside the window's client area (i.e., on the frame or elsewhere)
 			while (ShowCursor(TRUE) < 0);
 		}
 		break;
-		
+
 		case WM_SETCURSOR:
 		{
 			if ( Show_Windows_Cursor )
@@ -581,9 +581,9 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		Path_Scratch.concat( Path_Root, str_ascii("scratch") );
 		Path_Scratch.ptr[ Path_Scratch.len ] = '\\';
 		++ Path_Scratch.len;
-	
+
 		CreateDirectoryA( Path_Scratch, 0 );
-		
+
 		Path_Content.concat( Path_Root, str_ascii("content") );
 		Path_Content.ptr[ Path_Content.len ] = '\\';
 		++ Path_Content.len;
@@ -593,7 +593,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 	engine::Memory engine_memory {};
 	{
 		engine_memory.persistent_size = megabytes( 128 );
-		// engine_memory.FrameSize	     = megabytes( 64 );
+		// engine_memory.FrameSize	  = megabytes( 64 );
 		engine_memory.transient_size  = gigabytes( 2 );
 
 		u64 total_size = engine_memory.persistent_size
@@ -688,7 +688,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		// window_class.hbrBackground = ;
 		window_class.lpszMenuName  = L"Handmade Hero!";
 		window_class.lpszClassName = L"HandmadeHeroWindowClass";
-		
+
 		Show_Windows_Cursor = true;
 		Windows_Cursor      = LoadCursorW( 0, IDC_CROSS );
 		Window_Position     = {sizeof(WINDOWPLACEMENT)};

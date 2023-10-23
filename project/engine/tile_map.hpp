@@ -50,11 +50,10 @@ struct TileMap
 	TileChunk* chunks;
 };
 
-struct TileMapPosition
+struct TileMapPos
 {
 	// Note(Ed) : Relative position from tile center.
-	f32 x;
-	f32 y;
+	Vec2 rel_pos;
 
 	// "World-relative (x, y), AKA: Absolute Position
 	// Fixed point tile locations.

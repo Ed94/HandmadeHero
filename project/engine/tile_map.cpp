@@ -5,14 +5,14 @@
 NS_ENGINE_BEGIN
 
 inline
-TileMapPosition subtract( TileMapPosition pos_a, TileMapPosition pos_b )
+TileMapPos subtract( TileMapPos pos_a, TileMapPos pos_b )
 {
-	TileMapPosition result {
-		pos_a.x - pos_b.x,
-		pos_a.y - pos_b.y,
+	TileMapPos result {
+		pos_a.rel_pos - pos_b.rel_pos,
+
 		pos_a.tile_x - pos_b.tile_x,
 		pos_a.tile_y - pos_b.tile_y,
-		
+
 		// TODO(Ed) : Think about how to handle z...
 		pos_a.tile_z - pos_b.tile_z
 	};
@@ -23,7 +23,7 @@ TileMapPosition subtract( TileMapPosition pos_a, TileMapPosition pos_b )
 inline
 void cannonicalize_coord( TileMap* tile_map, s32* tile_coord, f32* pos_coord )
 {
-	assert( tile_map != nullptr );
+	assert( tile_map   != nullptr );
 	assert( tile_coord != nullptr );
 
 	f32 tile_size = scast(f32, tile_map->tile_size_in_meters);
@@ -42,13 +42,13 @@ void cannonicalize_coord( TileMap* tile_map, s32* tile_coord, f32* pos_coord )
 
 // TODO(Ed) : Consider moving (Casey wants to)
 inline
-TileMapPosition recannonicalize_position( TileMap* tile_map, TileMapPosition pos )
+TileMapPos recannonicalize_position( TileMap* tile_map, TileMapPos pos )
 {
 	assert( tile_map != nullptr );
 
-	TileMapPosition result = pos;
-	cannonicalize_coord( tile_map, & result.tile_x, & result.x );
-	cannonicalize_coord( tile_map, & result.tile_y, & result.y );
+	TileMapPos result = pos;
+	cannonicalize_coord( tile_map, & result.tile_x, & result.rel_pos.x );
+	cannonicalize_coord( tile_map, & result.tile_y, & result.rel_pos.y );
 	return result;
 }
                                                                     
@@ -109,11 +109,11 @@ TileChunkPosition get_tile_chunk_position_for( TileMap* tile_map, u32 abs_tile_x
 }
 
 inline
-u32 TileMap_get_tile_value( TileMap* tile_map, u32 tile_x, u32 tile_y, u32 tile_z )
+u32 TileMap_get_tile_value( TileMap* tile_map, s32 tile_x, s32 tile_y, s32 tile_z )
 {
 	assert( tile_map != nullptr );
 
-	u32 value = 0;
+	s32 value = 0;
 
 	TileChunkPosition chunk_pos = get_tile_chunk_position_for( tile_map, tile_x, tile_y, tile_z );
 	TileChunk*        chunk     = TileMap_get_chunk( tile_map, chunk_pos.tile_chunk_x, chunk_pos.tile_chunk_y, chunk_pos.tile_chunk_z );
@@ -124,14 +124,14 @@ u32 TileMap_get_tile_value( TileMap* tile_map, u32 tile_x, u32 tile_y, u32 tile_
 }
 
 inline
-u32 TileMap_get_tile_value( TileMap* tile_map, TileMapPosition position )
+u32 TileMap_get_tile_value( TileMap* tile_map, TileMapPos position )
 {
 	u32 value = TileMap_get_tile_value( tile_map, position.tile_x, position.tile_y, position.tile_z );
 	return value;
 }
 
 internal
-b32 TileMap_is_point_empty( TileMap* tile_map, TileMapPosition position )
+b32 TileMap_is_point_empty( TileMap* tile_map, TileMapPos position )
 {
 	assert( tile_map != nullptr );
 
@@ -168,7 +168,7 @@ void TileMap_set_tile_value( MemoryArena* arena, TileMap* tile_map, s32 abs_tile
 
 
 internal
-b32 TileMap_are_on_same_tile( TileMapPosition* pos_a, TileMapPosition* pos_b )
+b32 TileMap_are_on_same_tile( TileMapPos* pos_a, TileMapPos* pos_b )
 {
 	b32 result =
 		pos_a->tile_x == pos_b->tile_x

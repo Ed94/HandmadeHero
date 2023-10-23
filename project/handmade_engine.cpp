@@ -19,6 +19,8 @@ Handmade Engine Translation Unit
 #include "platform/platform.hpp"
 
 #include "engine_module.hpp"
+#include "gen/vectors.hpp"
+#include "gen/physics.hpp"
 #include "input.hpp"
 #include "tile_map.hpp"
 #include "engine.hpp"

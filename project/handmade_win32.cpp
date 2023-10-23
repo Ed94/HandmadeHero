@@ -20,6 +20,8 @@ Handmade Win32 Platform Translation Unit
 
 // Engine layer headers
 #include "engine/engine_module.hpp"
+#include "engine/gen/vectors.hpp"
+#include "engine/gen/physics.hpp"
 #include "engine/input.hpp"
 #include "engine/tile_map.hpp"
 #include "engine/engine.hpp"

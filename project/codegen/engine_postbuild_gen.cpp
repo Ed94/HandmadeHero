@@ -15,14 +15,20 @@
 #undef do_once_end
 using namespace gen;
 
+#include <math.h>
+
 #include "platform/platform_module.hpp"
 #include "platform/grime.hpp"
 #include "platform/macros.hpp"
+#include "platform/generics.hpp"
 #include "platform/types.hpp"
+#include "platform/intrinsics.hpp"
 #include "platform/strings.hpp"
 #include "platform/platform.hpp"
 
 #include "engine/engine_module.hpp"
+#include "engine/gen/vectors.hpp"
+#include "engine/gen/physics.hpp"
 #include "engine/input.hpp"
 #include "engine/tile_map.hpp"
 #include "engine/engine.hpp"
@@ -65,7 +71,7 @@ void get_symbols_from_module_table( FileContents symbol_table, Array<String> sym
 int gen_main()
 {
 	gen::init();
-	log_fmt("Generating code for Handmade Hero: Engine Module\n");
+	log_fmt("Generating code for Handmade Hero: Engine Module (Post-Build)\n");
 
 	FileContents symbol_table = file_read_contents( GlobalAllocator, true, fname_handmade_engine_symbols );
 
@@ -103,7 +109,7 @@ int gen_main()
 	builder.write();
 #pragma pop_macro("str_ascii")
 
-	log_fmt("Generaton finished for Handmade Hero: Engine Module\n\n");
+	log_fmt("Generaton finished for Handmade Hero: Engine Module (Post-Build)\n\n");
 	// gen::deinit();
 	return 0;
 }

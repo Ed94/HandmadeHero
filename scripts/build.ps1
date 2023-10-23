@@ -188,6 +188,44 @@ else {
 
 function build-engine
 {
+	$unit         = Join-Path $path_codegen 'engine_gen.cpp'
+	$should_build = (check-FileForChanges $unit) -eq $true
+	if ( $should_build )
+	{
+		$executable = Join-Path $path_build   'engine_gen.exe'
+
+		$compiler_args = @()
+		$compiler_args += ( $flag_define + 'GEN_TIME' )
+
+		$linker_args = @(
+			$flag_link_win_subsystem_console
+		)
+
+		$build_result = build-simple $path_build $includes $compiler_args $linker_args $unit $executable
+		if ( $build_result -eq $false ) {
+			return $false
+		}
+
+		Push-Location $path_engine_gen
+		$time_taken = Measure-Command {
+			& $executable 2>&1 | ForEach-Object {
+				write-host `t $_ -ForegroundColor Green
+			}
+		}
+		Pop-Location
+
+		push-location $path_scripts
+			$include = @(
+				'*.cpp'
+				'*.hpp'
+			)
+			format-cpp $path_engine_gen $include
+		pop-location
+	}
+	else {
+		write-host "No changes detected in engine gen, skipping build" -ForegroundColor Yellow
+	}
+
 	$should_build = check-ModuleForChanges $path_engine
 	if ( $should_build -eq $false ) {
 		write-host "No changes detected in engine module, skipping build" -ForegroundColor Yellow
@@ -318,13 +356,6 @@ function build-engine
 		$should_build = (check-FileForChanges $unit) -eq $true
 		if ( $should_build )
 		{
-			# Delete old PDBs
-			$pdb_files = Get-ChildItem -Path $path_build -Filter "engine_postbuild_gen_*.pdb"
-			foreach ($file in $pdb_files) {
-				Remove-Item -Path $file.FullName -Force
-				if ($verbose) { Write-Host "Deleted $file" -ForegroundColor Green }
-			}
-
 			$compiler_args = @()
 			$compiler_args += ( $flag_define + 'GEN_TIME' )
 

@@ -188,26 +188,23 @@ void output_sound( EngineState* state, AudioBuffer* sound_buffer, GetSoundSample
 
 internal
 void draw_rectangle( OffscreenBuffer* buffer
-	, f32 min_x, f32 min_y
-	, f32 max_x, f32 max_y
+	, Vec2 min, Vec2 max
 	, f32 red, f32 green, f32 blue  )
 {
-	s32 min_x_32 = round( min_x );
-	s32 min_y_32 = round( min_y );
-	s32 max_x_32 = round( max_x );
-	s32 max_y_32 = round( max_y );
+	Vec2i min_rounded { round(min.x), round(min.y) };
+	Vec2i max_rounded { round(max.x), round(max.y) };
 
-	s32 buffer_width  = buffer->width;
-	s32 buffer_height = buffer->height;
+	s32 width  = buffer->width;
+	s32 height = buffer->height;
 
-	if ( min_x_32 < 0 )
-		min_x_32 = 0;
-	if ( min_y_32 < 0 )
-		min_y_32 = 0;
-	if ( max_x_32 > buffer_width )
-		max_x_32 = buffer_width;
-	if ( max_y_32 > buffer_height )
-		max_y_32 = buffer_height;
+	if ( min_rounded.x < 0 )
+		min_rounded.x = 0;
+	if ( min_rounded.y < 0 )
+		min_rounded.y = 0;
+	if ( max_rounded.x > width )
+		max_rounded.x = width;
+	if ( max_rounded.y > height )
+		max_rounded.y = height;
 
 	s32 red_32   = round( 255.f * red );
 	s32 green_32 = round( 255.f * green );
@@ -220,14 +217,14 @@ void draw_rectangle( OffscreenBuffer* buffer
 
 	// Start with the pixel on the top left corner of the rectangle
 	u8* row = rcast(u8*, buffer->memory )
-		+ min_x_32 * buffer->bytes_per_pixel
-		+ min_y_32 * buffer->pitch;
+		+ min_rounded.x * buffer->bytes_per_pixel
+		+ min_rounded.y * buffer->pitch;
 
-	for ( s32 y = min_y_32; y < max_y_32; ++ y )
+	for ( s32 y = min_rounded.y; y < max_rounded.y; ++ y )
 	{
 		s32* pixel_32 = rcast(s32*, row);
 
-		for ( s32 x = min_x_32; x < max_x_32; ++ x )
+		for ( s32 x = min_rounded.x; x < max_rounded.x; ++ x )
 		{
 			*pixel_32 = color;
 			pixel_32++;
@@ -237,45 +234,46 @@ void draw_rectangle( OffscreenBuffer* buffer
 }
 
 internal
-void draw_bitmap( OffscreenBuffer* buffer
-	, f32 pos_x, f32 pos_y
-	, Bitmap* bitmap )
+void draw_bitmap( OffscreenBuffer* buffer, Vec2 pos, Bitmap* bitmap )
 {
 	s32 half_width  = bitmap->width / 2;
 	s32 half_height = bitmap->height / 2;
+	
+	Vec2i pos_rounded   { round(pos.x), round(pos.y) };
+	Vec2i bmp_half_size { bitmap->width / 2, bitmap->height / 2 };
+	Vec2i min = pos_rounded - bmp_half_size;
+	Vec2i max = pos_rounded + bmp_half_size;
+	
+	s32 max_x = round( pos.x ) + half_width;
+	s32 max_y = round( pos.y ) + half_height;
 
-	s32 min_x = round( pos_x ) - half_width;
-	s32 min_y = round( pos_y ) - half_height;
-	s32 max_x = round( pos_x ) + half_width;
-	s32 max_y = round( pos_y ) + half_height;
+	s32 bmp_offset_x = min.x < 0 ? min.x * -1 : 0;
+	u32 bmp_offset_y = min.y < 0 ? bitmap->height + min.y - 1 : bitmap->height - 1;
 
-	s32 bmp_offset_x = min_x < 0 ? min_x * -1 : 0;
-	u32 bmp_offset_y = min_y < 0 ? bitmap->height + min_y - 1 : bitmap->height - 1;
+	s32 width  = buffer->width;
+	s32 height = buffer->height;
 
-	s32 buffer_width  = buffer->width;
-	s32 buffer_height = buffer->height;
-
-	if ( min_x < 0 )
-		min_x = 0;
-	if ( min_y < 0 )
-		min_y = 0;
-	if ( max_x > buffer_width )
-		max_x = buffer_width;
-	if ( max_y > buffer_height )
-		max_y = buffer_height;
+	if ( min.x < 0 )
+		min.x = 0;
+	if ( min.y < 0 )
+		min.y = 0;
+	if ( max.x > width )
+		max.x = width;
+	if ( max.y > height )
+		max.y = height;
 
 	// Start with the pixel on the top left corner of the rectangle
 	u8*  dst_row = rcast(u8*, buffer->memory )
-	          + min_x * buffer->bytes_per_pixel
-	          + min_y * buffer->pitch;
+	          + min.x * buffer->bytes_per_pixel
+	          + min.y * buffer->pitch;
 	u32* src_row = bitmap->pixels + bitmap->width * bmp_offset_y;
 
-	for ( s32 y = min_y; y < max_y; ++ y )
+	for ( s32 y = min.y; y < max.y; ++ y )
 	{
 		u32* dst = rcast(u32*, dst_row);
 		u32* src = src_row + bmp_offset_x;
 
-		for ( s32 x = min_x; x < max_x; ++ x )
+		for ( s32 x = min.x; x < max.x; ++ x )
 		{
 		#define extract( pixel, shift ) (( *pixel >> shift ) & 0xFF)
 			f32 alpha = scast(f32, extract(src, 24)) / 255.f;
@@ -305,16 +303,22 @@ void draw_bitmap( OffscreenBuffer* buffer
 }
 
 inline
-void draw_debug_point(OffscreenBuffer* back_buffer, World* world, TileMapPosition pos, f32 red, f32 green, f32 blue)
+void draw_debug_point(OffscreenBuffer* back_buffer, World* world, TileMapPos pos, f32 red, f32 green, f32 blue)
 {
 	TileMap* tile_map = world->tile_map;
+	
+	Vec2 min {
+		pos.rel_pos.x * world->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * world->tile_size_in_pixels),
+		pos.rel_pos.y * world->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * world->tile_size_in_pixels)
+	};
+	Vec2 max {
+		(pos.rel_pos.x + 0.1f) * world->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * world->tile_size_in_pixels),
+		(pos.rel_pos.y + 0.1f) * world->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * world->tile_size_in_pixels)
+	};
 
-	draw_rectangle(back_buffer,
-		pos.x          * world->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * world->tile_size_in_pixels),
-		pos.y          * world->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * world->tile_size_in_pixels),
-		(pos.x + 0.1f) * world->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * world->tile_size_in_pixels),
-		(pos.y + 0.1f) * world->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * world->tile_size_in_pixels),
-		red, green, blue);
+	draw_rectangle(back_buffer
+		, min, max
+		, red, green, blue);
 }
 
 internal
@@ -702,10 +706,10 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 	game_state->camera_pos.tile_y = state->world->tiles_per_screen_y / 2;
 
 	hh::PlayerState* player = & game_state->player_state;
-	player->position.tile_x     = 4;
-	player->position.tile_y     = 4;
-	player->position.x          = 0.f;
-	player->position.y          = 0.f;
+	player->position.tile_x    = 4;
+	player->position.tile_y    = 4;
+	player->position.rel_pos.x = 0.f;
+	player->position.rel_pos.y = 0.f;
 
 	player->mid_jump   = false;
 	player->jump_time  = 0.f;
@@ -862,9 +866,6 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	hh::GameState*   game_state = rcast( hh::GameState*, state->game_memory.persistent );
 	hh::PlayerState* player     = & game_state->player_state;
 
-	f32 x_offset_f = scast(f32, state->x_offset);
-	f32 y_offset_f = scast(f32, state->y_offset);
-
 	World*   world    = state->world;
 	TileMap* tile_map = world->tile_map;
 
@@ -887,53 +888,64 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			move_speed = 24.f;
 		}
 
-		f32 new_player_pos_x = player->position.x;
-		f32 new_player_pos_y = player->position.y;
+		Pos2_f32 new_player_pos = { player->position.rel_pos.x, player->position.rel_pos.y };
+
+		b32 moved_x = player_actions.player_x_move_analog != 0 || player_actions.player_x_move_digital != 0;
+		b32 moved_y = player_actions.player_y_move_analog != 0 || player_actions.player_y_move_digital != 0;
+
+		Vel2_f32 player_move_vel = {};
 		if ( player_actions.player_x_move_analog || player_actions.player_y_move_analog )
 		{
-			new_player_pos_x += scast(f32, player_actions.player_x_move_analog * delta_time * move_speed);
-			new_player_pos_y += scast(f32, player_actions.player_y_move_analog * delta_time * move_speed);
+			player_move_vel.x = scast(f32, player_actions.player_x_move_analog * delta_time * move_speed);
+			player_move_vel.y = scast(f32, player_actions.player_y_move_analog * delta_time * move_speed);
 		}
 		else
 		{
-			new_player_pos_x += scast(f32, player_actions.player_x_move_digital) * delta_time * move_speed;
-			new_player_pos_y += scast(f32, player_actions.player_y_move_digital) * delta_time * move_speed;
+			player_move_vel.x = scast(f32, player_actions.player_x_move_digital) * delta_time * move_speed;
+			player_move_vel.y = scast(f32, player_actions.player_y_move_digital) * delta_time * move_speed;
 		}
-		new_player_pos_y += sinf( player->jump_time * TAU ) * 10.f * delta_time;
+
+		if ( moved_x && moved_y )
+		{
+			player_move_vel *= (f32)0.707106781187f;
+		}
+
+		new_player_pos   += player_move_vel;
+		new_player_pos.y -= sinf( player->jump_time * TAU ) * 10.f * delta_time;
 
 		b32 valid_new_pos = true;
 		{
-			TileMapPosition test_pos = {
-			                           new_player_pos_x, new_player_pos_y,
-									   player->position.tile_x, player->position.tile_y, player->position.tile_z
+			TileMapPos test_pos = {
+				new_player_pos.x, new_player_pos.y,
+				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos = recannonicalize_position( tile_map, test_pos );
 
 			// TODO(Ed) : Need a delta-function that auto-reconnonicalizes.
 
-			TileMapPosition test_pos_nw {
-				new_player_pos_x - player_half_width, new_player_pos_y + player_quarter_height,
+			TileMapPos test_pos_nw {
+				new_player_pos.x - player_half_width, new_player_pos.y + player_quarter_height,
 				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos_nw       = recannonicalize_position( tile_map, test_pos_nw );
 			valid_new_pos    &= TileMap_is_point_empty( tile_map, test_pos_nw );
 
-			TileMapPosition test_pos_ne {
-				new_player_pos_x + player_half_width, new_player_pos_y + player_quarter_height,
+			TileMapPos test_pos_ne {
+				new_player_pos.x + player_half_width, new_player_pos.y + player_quarter_height,
 				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos_ne    = recannonicalize_position( tile_map, test_pos_ne );
 			valid_new_pos &= TileMap_is_point_empty( tile_map, test_pos_ne );
 
-			TileMapPosition test_pos_sw {
-				new_player_pos_x - player_half_width, new_player_pos_y,
+			TileMapPos test_pos_sw {
+				new_player_pos.x - player_half_width, new_player_pos.y,
 				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos_sw    = recannonicalize_position( tile_map, test_pos_sw );
 			valid_new_pos &= TileMap_is_point_empty( tile_map, test_pos_sw );
 
-			TileMapPosition test_pos_se {
-				new_player_pos_x + player_half_width, new_player_pos_y,
+			TileMapPos test_pos_se {
+				new_player_pos.x + player_half_width, new_player_pos.y,
 				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			test_pos_se    = recannonicalize_position( tile_map, test_pos_se );
@@ -942,9 +954,9 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 		if ( valid_new_pos )
 		{
-			TileMapPosition new_pos = {
-			                          new_player_pos_x, new_player_pos_y,
-									  player->position.tile_x, player->position.tile_y, player->position.tile_z
+			TileMapPos new_pos = {
+				new_player_pos.x, new_player_pos.y,
+				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
 			new_pos = recannonicalize_position( tile_map, new_pos );
 
@@ -999,7 +1011,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			player->mid_jump  = true;
 		}
 
-		TileMapPosition player_to_camera = subtract( player->position, game_state->camera_pos );
+		TileMapPos player_to_camera = subtract( player->position, game_state->camera_pos );
 
 		game_state->camera_pos.tile_z = player->position.tile_z;
 
@@ -1022,25 +1034,20 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	}
 
 
+	Vec2 screen_center {
+		scast(f32, back_buffer->width)  * 0.5f, 
+		scast(f32, back_buffer->height) * 0.5f
+	};
+
 	draw_rectangle( back_buffer
-		, 0.f, 0.f
-		, scast(f32, back_buffer->width), scast(f32, back_buffer->height)
+		, Zero(Vec2)
+		, { scast(f32, back_buffer->width), scast(f32, back_buffer->height) }
 		, 1.f, 0.24f, 0.24f );
 
-	draw_bitmap( back_buffer
-		, scast(f32, back_buffer->width) / 2.f, scast(f32, back_buffer->height) / 2.f
-		, & game_state->test_bg
-	);
-
-	draw_bitmap( back_buffer
-		, scast(f32, back_buffer->width) / 2.f, scast(f32, back_buffer->height) / 2.f
-		, & game_state->test_bg_hh
-	);
+	draw_bitmap( back_buffer, screen_center, & game_state->test_bg );
+	draw_bitmap( back_buffer, screen_center, & game_state->test_bg_hh );
 
 // Screen Camera
-	f32 screen_center_x = 0.5f * scast(f32, back_buffer->width);
-	f32 screen_center_y = 0.5f * scast(f32, back_buffer->height);
-
 	for ( s32 relative_row = -10; relative_row < +10; ++ relative_row )
 	{
 		for ( s32 relative_col = -20; relative_col < +20; ++ relative_col )
@@ -1080,17 +1087,16 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 					color[2] = 0.3f;
 				}
 
-				f32 center_x = screen_center_x + scast(f32, relative_col) * tile_size_in_pixels - game_state->camera_pos.x * world->tile_meters_to_pixels;
-				f32 center_y = screen_center_y - scast(f32, relative_row) * tile_size_in_pixels + game_state->camera_pos.y * world->tile_meters_to_pixels;
-
-				f32 min_x = center_x - tile_size_in_pixels * 0.5f;
-				f32 min_y = center_y - tile_size_in_pixels * 0.5f;
-				f32 max_x = center_x + tile_size_in_pixels * 0.5f;
-				f32 max_y = center_y + tile_size_in_pixels * 0.5f;
+				Vec2 tile_pixel_size = { tile_size_in_pixels * 0.5f, tile_size_in_pixels * 0.5f };
+				Vec2 center {
+					screen_center.x + scast(f32, relative_col) * tile_size_in_pixels - game_state->camera_pos.rel_pos.x * world->tile_meters_to_pixels,
+					screen_center.y - scast(f32, relative_row) * tile_size_in_pixels + game_state->camera_pos.rel_pos.y * world->tile_meters_to_pixels
+				};
+				Vec2 min = center - tile_pixel_size;
+				Vec2 max = center + tile_pixel_size;
 
 				draw_rectangle( back_buffer
-	               , min_x, min_y
-	               , max_x, max_y
+	               , min, max
 	               , color[0], color[1], color[2] );
 			}
 		}
@@ -1118,38 +1124,44 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	f32 player_green = 0.7f;
 	f32 player_blue  = 0.3f;
 
-	TileMapPosition player_to_camera = subtract( player->position, game_state->camera_pos );
-
-	f32 offcenter_amount_x  = player_to_camera.x + scast(f32, player_to_camera.tile_x) * world->tile_map->tile_size_in_meters;
-	f32 offcenter_amount_y  = player_to_camera.y + scast(f32, player_to_camera.tile_y) * world->tile_map->tile_size_in_meters;
-	    offcenter_amount_x *= world->tile_meters_to_pixels;
-	    offcenter_amount_y *= world->tile_meters_to_pixels * -1;
-
-	f32 player_ground_pos_x = screen_center_x + offcenter_amount_x;
-	f32 player_ground_pos_y = screen_center_y + offcenter_amount_y;
+	TileMapPos player_to_camera = subtract( player->position, game_state->camera_pos );
+	
+	Vec2 player_to_screenspace {
+		      player_to_camera.rel_pos.x + scast(f32, player_to_camera.tile_x) * world->tile_map->tile_size_in_meters,
+		-1 * (player_to_camera.rel_pos.y + scast(f32, player_to_camera.tile_y) * world->tile_map->tile_size_in_meters)
+	};
+	Vec2 player_ground_pos = screen_center + player_to_screenspace * world->tile_meters_to_pixels;
 
 	hh::HeroBitmaps* hero_bitmaps = & game_state->hero_bitmaps[game_state->hero_direction];
 
 #if 1
+	Vec2 player_collision_min {
+		player_ground_pos.x - player_half_width * world->tile_meters_to_pixels,
+		player_ground_pos.y - player->height    * world->tile_meters_to_pixels,
+	};
+	Vec2 player_collision_max {
+		player_ground_pos.x + player_half_width * world->tile_meters_to_pixels, 
+		player_ground_pos.y
+	};
+
 	draw_rectangle( back_buffer
-		, player_ground_pos_x - player_half_width * world->tile_meters_to_pixels, player_ground_pos_y - player->height * world->tile_meters_to_pixels
-		, player_ground_pos_x + player_half_width * world->tile_meters_to_pixels, player_ground_pos_y
+		, player_collision_min, player_collision_max
 		, player_red, player_green, player_blue );
 #endif
 
 	draw_bitmap( back_buffer
-	            , player_ground_pos_x, player_ground_pos_y - scast(f32, hero_bitmaps->align_y)
+	            , { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
 	            , & hero_bitmaps->torso );
 	draw_bitmap( back_buffer
-	            , player_ground_pos_x, player_ground_pos_y - scast(f32, hero_bitmaps->align_y)
+	            , { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
 	            , & hero_bitmaps->cape );
-#if 0
+#if 1
 	draw_bitmap( back_buffer
-	            , player_ground_pos_x, player_ground_pos_y - 45.f
+	            , { player_ground_pos.x, player_ground_pos.y - 125.f }
 	            , & game_state->mojito_head );
 #else
 	draw_bitmap( back_buffer
-	            , player_ground_pos_x, player_ground_pos_y - scast(f32, hero_bitmaps->align_y)
+	            , { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
 	            , & hero_bitmaps->head );
 #endif
 
@@ -1158,17 +1170,18 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	{
 		f32 snapshot_percent_x = ((state->auto_snapshot_timer / state->auto_snapshot_interval)) * (f32)back_buffer->width / 4.f;
 		draw_rectangle( back_buffer
-			, 0.f, 0.f
-			, snapshot_percent_x, 10.f
+			, Zero(Vec2)
+			, { snapshot_percent_x, 10.f }
 			, 0.f, 0.15f, 0.35f );
 	}
 
 #if Build_Development
 	if ( memory->replay_mode == ReplayMode_Record )
 	{
+		// TODO(Ed) : We're prob going to need a better indicator for recording...
 		draw_rectangle( back_buffer
-			, player->position.x + 50.f, player->position.y - 50.f
-			, player->position.x + 10.f, player->position.y + 40.f
+			, { player->position.rel_pos.x + 50.f, player->position.rel_pos.y - 50.f }
+			, { player->position.rel_pos.x + 10.f, player->position.rel_pos.y + 40.f }
 			, 1.f, 1.f, 1.f );
 	}
 #endif
@@ -1177,8 +1190,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	if ( 0 )
 	{
 		draw_rectangle( back_buffer
-			, (f32)input->controllers[0].mouse->X.end, (f32)input->controllers[0].mouse->Y.end
-			, (f32)input->controllers[0].mouse->X.end + 10.f, (f32)input->controllers[0].mouse->Y.end + 10.f
+			, { (f32)input->controllers[0].mouse->X.end, (f32)input->controllers[0].mouse->Y.end }
+			, { (f32)input->controllers[0].mouse->X.end + 10.f, (f32)input->controllers[0].mouse->Y.end + 10.f }
 			, 1.f, 1.f, 0.f );
 	}
 

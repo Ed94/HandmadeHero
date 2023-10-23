@@ -74,7 +74,7 @@ struct PlayerState
 	f32 width;
 	f32 height;
 
-	engine::TileMapPosition position;
+	engine::TileMapPos position;
 
 	b32 mid_jump;
 	f32 jump_time;
@@ -124,7 +124,7 @@ struct GameState
 
 	Bitmap test_bg_hh;
 	
-	engine::TileMapPosition camera_pos;
+	engine::TileMapPos camera_pos;
 
 	EHeroBitmapsDirection hero_direction;
 	HeroBitmaps hero_bitmaps[4];
