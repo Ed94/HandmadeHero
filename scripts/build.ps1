@@ -1,9 +1,11 @@
 Clear-Host
 
-$target_arch      = Join-Path $PSScriptRoot 'helpers/target_arch.psm1'
-$devshell         = Join-Path $PSScriptRoot 'helpers/devshell.ps1'
-$format_cpp	      = Join-Path $PSScriptRoot 'helpers/format_cpp.psm1'
-$config_toolchain = Join-Path $PSScriptRoot 'helpers/configure_toolchain.ps1'
+$target_arch        = Join-Path $PSScriptRoot 'helpers/target_arch.psm1'
+$devshell           = Join-Path $PSScriptRoot 'helpers/devshell.ps1'
+$format_cpp	        = Join-Path $PSScriptRoot 'helpers/format_cpp.psm1'
+$incremental_checks = Join-Path $PSScriptRoot 'helpers/incremental_checks.ps1'
+$vendor_toolchain   = Join-Path $PSScriptRoot 'helpers/vendor_toolchain.ps1'
+$update_deps        = Join-Path $PSScriptRoot 'update_deps.ps1'
 
 $path_root   = git rev-parse --show-toplevel
 $path_build  = Join-Path $path_root 'build'
@@ -35,7 +37,7 @@ if ( $args ) { $args | ForEach-Object {
 		"analysis"            { $analysis  = $true }
 		"dev"                 { $dev       = $true }
 		"verbose"             { $verbose   = $true }
-		"platform"            { $platform  = $true }
+		"platform"            { $platform  = $true; $module_specified = $true }
 		"engine"              { $engine    = $true; $module_specified = $true }
 		"game"                { $game      = $true; $module_specified = $true }
 	}
@@ -50,79 +52,8 @@ if ( -not $module_specified )
 }
 
 # Load up toolchain configuraion
-. $config_toolchain
-
-function check-FileForChanges
-{
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$path_file
-    )
-
-    if (-not (Test-Path $path_file -PathType Leaf)) {
-        Write-Error "The provided path is not a valid file: $path_file"
-        return $false
-    }
-    $file_name = Split-Path $path_file -Leaf
-    $path_csv  = Join-Path $path_build ($file_name + "_file_hash.csv")
-
-    $csv_file_hash = $null
-    if (Test-Path $path_csv) {
-        $csv_file_hash = Import-Csv $path_csv | Select-Object -ExpandProperty value
-    }
-
-    $current_hash_info = Get-FileHash -Path $path_file -Algorithm MD5
-    $current_file_hash = $current_hash_info.Hash
-
-    # Save the current hash to the CSV
-    [PSCustomObject]@{
-        name  = $path_file
-        value = $current_file_hash
-    } | Export-Csv $path_csv -NoTypeInformation
-
-    if ($csv_file_hash -and $csv_file_hash -eq $current_file_hash) {
-        return $false
-    } else {
-        return $true
-    }
-}
-
-# Check to see if the module has changed files since the last build
-function check-ModuleForChanges
-{
-	param( [string]$path_module, [array]$excludes )
-
-	$module_name = split-path $path_module -leaf
-	$path_csv    = Join-Path $path_build ($module_name + "_module_hashes.csv")
-
-	$csv_file_hashes = $null
-	if ( test-path $path_csv ) {
-		$csv_file_hashes = @{}
-		import-csv $path_csv | foreach-object {
-			$csv_file_hashes[ $_.name ] = $_.value
-		}
-	}
-
-	$file_hashes = @{}
-	get-childitem -path $path_module -recurse -file -Exclude $excludes | foreach-object {
-		$id                 = $_.fullname
-		$hash_info          = get-filehash -path $id -Algorithm MD5
-		$file_hashes[ $id ] = $hash_info.Hash
-	}
-
-	$file_hashes.GetEnumerator() | foreach-object { [PSCustomObject]$_ } |
-		export-csv $path_csv -NoTypeInformation
-
-	if ( -not $csv_file_hashes )                         { return $true }
-	if ( $csv_file_hashes.Count -ne $file_hashes.Count ) { return $true }
-
-	foreach ( $key in $csv_file_hashes.Keys ) {
-		if ( $csv_file_hashes[ $key ] -ne $file_hashes[ $key ] ) {
-			return $true
-		}
-	}
-	return $false
-}
+. $vendor_toolchain
+. $incremental_checks
 
 #region Building
 write-host "Building HandmadeHero with $vendor"
@@ -136,9 +67,6 @@ $path_codegen    = Join-Path $path_project 'codegen'
 $path_platform   = Join-Path $path_project 'platform'
 $path_engine     = Join-Path $path_project 'engine'
 $path_engine_gen = Join-Path $path_engine  'gen'
-
-
-$update_deps = Join-Path $PSScriptRoot 'update_deps.ps1'
 
 $handmade_process_active = Get-Process | Where-Object {$_.Name -like 'handmade_win32*'}
 
@@ -173,6 +101,7 @@ $stack_size = 1024 * 1024 * 4
 $compiler_args = @(
 	($flag_define + 'UNICODE'),
 	($flag_define + '_UNICODE')
+	( $flag_define + 'INTELLISENSE_DIRECTIVES=0'),
 	# ($flag_set_stack_size + $stack_size)
 	$flag_wall
 	$flag_warnings_as_errors

@@ -176,7 +176,6 @@ if ( $vendor -match "clang" )
 		$pdb    = $binary -replace '\.(exe|dll)$', "_$(get-random).pdb"
 
 		$compiler_args += @(
-			( $flag_define + 'INTELLISENSE_DIRECTIVES=0' ),
 			$flag_no_color_diagnostics,
 			$flag_exceptions_disabled,
 			$flag_target_arch, $target_arch,
@@ -230,12 +229,6 @@ if ( $vendor -match "clang" )
 
 		$linker_args += $object
 		return run-linker $linker $binary $linker_args
-
-		# $compiler_args += $unit
-		# $linker_args | ForEach-Object {
-		# 	$compiler_args += $flag_linker + $_
-		# }
-		# run-compiler $compiler $unit $compiler_args
 	}
 
 	$compiler = 'clang++'
@@ -305,7 +298,6 @@ if ( $vendor -match "msvc" )
 
 		$compiler_args += @(
 			$flag_nologo,
-			( $flag_define + 'INTELLISENSE_DIRECTIVES=0'),
 			# $flag_all_cpp,
 			$flag_exceptions_disabled,
 			( $flag_define + '_HAS_EXCEPTIONS=0' ),
@@ -364,11 +356,6 @@ if ( $vendor -match "msvc" )
 
 		$linker_args += $object
 		return run-linker $linker $binary $linker_args
-
-		# $compiler_args += $unit
-		# $compiler_args += $flag_linker
-		# $compiler_args += $linker_args
-		# run-compiler $compiler $unit $compiler_args
 	}
 
 	$compiler = 'cl'
