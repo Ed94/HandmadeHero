@@ -2,6 +2,10 @@
 #include "platform.hpp"
 #include "jsl.hpp"
 #include "win32.hpp"
+
+NS_PLATFORM_BEGIN
+using namespace win32;
+NS_PLATFORM_END
 #endif
 
 NS_PLATFORM_BEGIN
@@ -127,8 +131,10 @@ b32 file_read_content( File* file )
 		return {};
 	}
 
+	// This has to be done or for some reason file_handle will be consumed to null by `GetFileSizeEx` (Clang bug?)
+	HANDLE file_handle_clang_bug = file_handle;
 	u32 size;
-	GetFileSizeEx( file_handle, rcast(LARGE_INTEGER*, &size) );
+	GetFileSizeEx( file_handle_clang_bug, rcast(LARGE_INTEGER*, &size) );
 	if ( size == 0 )
 	{
 		// TODO(Ed) : Logging

@@ -27,4 +27,5 @@
 #pragma clang diagnostic ignored "-Wvarargs"
 #pragma clang diagnostic ignored "-Wunused-function"
 #pragma clang diagnostic ignored "-Wunused-but-set-variable"
+#pragma clang diagnostic ignored "-Wmissing-braces"
 #endif

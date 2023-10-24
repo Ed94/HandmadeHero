@@ -59,7 +59,7 @@ enum CS : UINT
 	CS_Horizontal_Redraw  = CS_HREDRAW,
 	CS_Vertical_Redraw    = CS_VREDRAW,
 };
-		
+
 enum CW : s32
 {
 	CW_Use_Default = CW_USEDEFAULT,

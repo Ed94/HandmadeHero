@@ -250,10 +250,10 @@ function build-engine
 		$local:compiler_args = $script:compiler_args
 		$compiler_args      += ($flag_define + 'Build_DLL=1' )
 
-		if ( $vendor -eq 'msvc' ) {
+		if ( $IsWindows ) {
 			$compiler_args += ($flag_define + 'Engine_API=__declspec(dllexport)')
 		}
-		if ( $vendor -eq 'clang' ) {
+		else {
 			$compiler_args += ($flag_define + 'Engine_API=__attribute__((visibility("default")))')
 		}
 

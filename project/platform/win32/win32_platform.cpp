@@ -503,6 +503,9 @@ engine::ModuleAPI load_engine_module_api()
 	{
 		OutputDebugStringA( "Loaded engine module API\n" );
 	}
+	else {
+		fatal( "Failed to load engine module API!\n" );
+	}
 	return engine_api;
 }
 
@@ -864,6 +867,13 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 				, "Warning", MB_ICONEXCLAMATION );
 		}
 	}
+
+	// Populate an initial polling state for the inputs
+	poll_input( window_handle, & input, jsl_num_devices, jsl_device_handles
+		, old_keyboard, new_keyboard
+		, old_mouse, new_mouse
+		, old_xpads, new_xpads
+		, old_ds_pads, new_ds_pads );
 
 	engine_api.startup( rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.memory), & engine_memory, & platform_api );
 

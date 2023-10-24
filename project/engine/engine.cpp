@@ -238,12 +238,12 @@ void draw_bitmap( OffscreenBuffer* buffer, Vec2 pos, Bitmap* bitmap )
 {
 	s32 half_width  = bitmap->width / 2;
 	s32 half_height = bitmap->height / 2;
-	
+
 	Vec2i pos_rounded   { round(pos.x), round(pos.y) };
 	Vec2i bmp_half_size { bitmap->width / 2, bitmap->height / 2 };
 	Vec2i min = pos_rounded - bmp_half_size;
 	Vec2i max = pos_rounded + bmp_half_size;
-	
+
 	s32 max_x = round( pos.x ) + half_width;
 	s32 max_y = round( pos.y ) + half_height;
 
@@ -306,7 +306,7 @@ inline
 void draw_debug_point(OffscreenBuffer* back_buffer, World* world, TileMapPos pos, f32 red, f32 green, f32 blue)
 {
 	TileMap* tile_map = world->tile_map;
-	
+
 	Vec2 min {
 		pos.rel_pos.x * world->tile_meters_to_pixels + world->tile_lower_left_x + scast(f32, pos.tile_x * world->tile_size_in_pixels),
 		pos.rel_pos.y * world->tile_meters_to_pixels + world->tile_lower_left_y + scast(f32, pos.tile_y * world->tile_size_in_pixels)
@@ -1035,7 +1035,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 
 	Vec2 screen_center {
-		scast(f32, back_buffer->width)  * 0.5f, 
+		scast(f32, back_buffer->width)  * 0.5f,
 		scast(f32, back_buffer->height) * 0.5f
 	};
 
@@ -1058,7 +1058,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			s32 tile_id  = TileMap_get_tile_value( tile_map, col, row, game_state->camera_pos.tile_z );
 			f32 color[3] = { 0.15f, 0.15f, 0.15f };
 
-			if ( tile_id > 1 || row == player->position.tile_y && col == player->position.tile_x )
+			if ( tile_id > 1 || (row == player->position.tile_y && col == player->position.tile_x) )
 //			if ( tile_id > 1 )
 			{
 				if ( tile_id == 2 )
@@ -1125,7 +1125,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	f32 player_blue  = 0.3f;
 
 	TileMapPos player_to_camera = subtract( player->position, game_state->camera_pos );
-	
+
 	Vec2 player_to_screenspace {
 		      player_to_camera.rel_pos.x + scast(f32, player_to_camera.tile_x) * world->tile_map->tile_size_in_meters,
 		-1 * (player_to_camera.rel_pos.y + scast(f32, player_to_camera.tile_y) * world->tile_map->tile_size_in_meters)
@@ -1140,7 +1140,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		player_ground_pos.y - player->height    * world->tile_meters_to_pixels,
 	};
 	Vec2 player_collision_max {
-		player_ground_pos.x + player_half_width * world->tile_meters_to_pixels, 
+		player_ground_pos.x + player_half_width * world->tile_meters_to_pixels,
 		player_ground_pos.y
 	};
 

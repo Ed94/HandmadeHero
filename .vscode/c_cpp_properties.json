@@ -34,7 +34,9 @@
                 "UNICODE",
                 "_UNICODE",
                 "GEN_TIME",
-                "INTELLISENSE_DIRECTIVES"
+                "INTELLISENSE_DIRECTIVES",
+                "Build_Debug",
+                "Build_Development"
             ],
             "windowsSdkVersion": "10.0.22621.0",
             "compilerPath": "clang.exe",
