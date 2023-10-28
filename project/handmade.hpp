@@ -75,6 +75,7 @@ struct PlayerState
 	f32 height;
 
 	engine::TileMapPos position;
+	Vel2               move_velocity;
 
 	b32 mid_jump;
 	f32 jump_time;

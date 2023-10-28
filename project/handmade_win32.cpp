@@ -14,6 +14,7 @@ Handmade Win32 Platform Translation Unit
 #include "math_constants.hpp"
 #include "types.hpp"
 #include "intrinsics.hpp"
+#include "float_ops.hpp"
 #include "strings.hpp"
 #include "context.hpp"
 #include "platform.hpp"
@@ -21,10 +22,10 @@ Handmade Win32 Platform Translation Unit
 // Engine layer headers
 #include "engine/engine_module.hpp"
 #include "engine/gen/vectors.hpp"
-#include "engine/gen/physics.hpp"
 #include "engine/input.hpp"
 #include "engine/tile_map.hpp"
 #include "engine/engine.hpp"
+#include "engine/gen/physics.hpp"
 #include "engine/engine_to_platform_api.hpp"
 #include "engine/gen/engine_symbols.gen.hpp"
 

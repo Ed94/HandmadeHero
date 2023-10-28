@@ -3,56 +3,19 @@
 #include "input.hpp"
 #include "engine_to_platform_api.hpp"
 
-// TODO(Ed) : This needs to be moved out eventually
-#include "handmade.hpp"
-
 #include "tile_map.cpp"
 #include "random.cpp"
+
+// TODO(Ed) : This needs to be moved out eventually
+#include "handmade.hpp"
 #endif
 
 NS_ENGINE_BEGIN
-
-#define pressed( btn ) (btn.ended_down && btn.half_transitions > 0)
-
-// Used to determine if analog input is at move threshold
-constexpr f32 analog_move_threshold = 0.5f;
-
-struct EngineActions
-{
-	b32 move_up;
-	b32 move_down;
-	b32 move_left;
-	b32 move_right;
-
-	b32 loop_mode_engine;
-	b32 loop_mode_game;
-
-	b32 raise_volume;
-	b32 lower_volume;
-	b32 raise_tone_hz;
-	b32 lower_tone_hz;
-
-	b32 toggle_wave_tone;
-
-#if Build_Development
-	b32 pause_renderer;
-
-	b32 load_auto_snapshot;
-	b32 set_snapshot_slot_1;
-	b32 set_snapshot_slot_2;
-	b32 set_snapshot_slot_3;
-	b32 set_snapshot_slot_4;
-
-	b32 force_null_access_violation;
-#endif
-};
-
 struct EngineState
 {
 	hh::Memory game_memory;
 
 	MemoryArena world_arena;
-	World*      world;
 
 	f32 auto_snapshot_interval;
 	f32 auto_snapshot_timer;
@@ -66,8 +29,9 @@ struct EngineState
 
 	f32 sample_wave_sine_time;
 	b32 sample_wave_switch;
-};
 
+	EngineContext context;
+};
 NS_ENGINE_END
 
 // TODO(Ed) : does this need to be here or can it be moved to handmade_engine.cpp?
@@ -80,6 +44,15 @@ NS_ENGINE_END
 #endif
 
 NS_ENGINE_BEGIN
+
+global EngineContext* Engine_Context = nullptr;
+
+EngineContext* get_context()
+{
+	return Engine_Context;
+}
+
+#define pressed( btn ) (btn.ended_down && btn.half_transitions > 0)
 
 internal
 void input_poll_engine_actions( InputState* input, EngineActions* actions )
@@ -391,7 +364,7 @@ Bitmap load_bmp( platform::ModuleAPI* platform_api, Str file_path  )
 Engine_API
 void on_module_reload( Memory* memory, platform::ModuleAPI* platfom_api )
 {
-
+	Engine_Context = & rcast(EngineState*, memory->persistent)->context;
 }
 
 Engine_API
@@ -415,6 +388,8 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 	EngineState* state = rcast( EngineState*, memory->persistent );
 	assert( sizeof(EngineState) <= memory->persistent_size );
 
+	Engine_Context = & state->context;
+
 	state->auto_snapshot_interval = 60.f;
 
 	state->tone_volume = 1000;
@@ -432,6 +407,8 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 	state->game_memory.transient_size  = memory->transient_size / Memory::game_memory_factor;
 	state->game_memory.transient       = rcast(Byte*, memory->transient) + state->game_memory.transient_size;
 
+	World* world;
+
 	// World setup
 	{
 		ssize world_arena_size    = memory->engine_persistent_size() - sizeof(EngineState);
@@ -439,8 +416,8 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 		MemoryArena::init( & state->world_arena, world_arena_size, world_arena_storage );
 
 		//state->world = MemoryArena_push_struct( & state->world_arena, World);
-		state->world = state->world_arena.push_struct( World );
-		World* world = state->world;
+		state->context.world = state->world_arena.push_struct( World );
+		world = state->context.world;
 
 		TileMap* tile_map = state->world_arena.push_struct( TileMap );
 		world->tile_map = tile_map;
@@ -702,14 +679,16 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 		game_state->hero_direction = HeroBitmaps_Front;
 	}
 
-	game_state->camera_pos.tile_x = state->world->tiles_per_screen_x / 2;
-	game_state->camera_pos.tile_y = state->world->tiles_per_screen_y / 2;
+	game_state->camera_pos.tile_x = world->tiles_per_screen_x / 2;
+	game_state->camera_pos.tile_y = world->tiles_per_screen_y / 2;
 
 	hh::PlayerState* player = & game_state->player_state;
 	player->position.tile_x    = 4;
 	player->position.tile_y    = 4;
 	player->position.rel_pos.x = 0.f;
 	player->position.rel_pos.y = 0.f;
+
+	player->move_velocity = {};
 
 	player->mid_jump   = false;
 	player->jump_time  = 0.f;
@@ -729,6 +708,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 {
 	EngineState* state = rcast( EngineState*, memory->persistent );
 	assert( sizeof(EngineState) <= memory->persistent_size );
+
+	state->context.delta_time = delta_time;
 
 	// Engine auto_snapshot
 	{
@@ -866,7 +847,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	hh::GameState*   game_state = rcast( hh::GameState*, state->game_memory.persistent );
 	hh::PlayerState* player     = & game_state->player_state;
 
-	World*   world    = state->world;
+	World*   world    = state->context.world;
 	TileMap* tile_map = world->tile_map;
 
 	f32 tile_size_in_pixels   = scast(f32, world->tile_size_in_pixels);
@@ -881,37 +862,35 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 	input_poll_player_actions( input, & player_actions );
 	{
-		f32 move_speed = 6.f;
-
+		f32 move_accel = 36.f;
 		if ( player_actions.sprint )
 		{
-			move_speed = 24.f;
+			move_accel = 94.f;
 		}
 
 		Pos2_f32 new_player_pos = { player->position.rel_pos.x, player->position.rel_pos.y };
 
-		b32 moved_x = player_actions.player_x_move_analog != 0 || player_actions.player_x_move_digital != 0;
-		b32 moved_y = player_actions.player_y_move_analog != 0 || player_actions.player_y_move_digital != 0;
-
-		Vel2_f32 player_move_vel = {};
+		Vec2 player_move_vec = {};
 		if ( player_actions.player_x_move_analog || player_actions.player_y_move_analog )
 		{
-			player_move_vel.x = scast(f32, player_actions.player_x_move_analog * delta_time * move_speed);
-			player_move_vel.y = scast(f32, player_actions.player_y_move_analog * delta_time * move_speed);
+			player_move_vec.x = scast(f32, player_actions.player_x_move_analog );
+			player_move_vec.y = scast(f32, player_actions.player_y_move_analog );
 		}
 		else
 		{
-			player_move_vel.x = scast(f32, player_actions.player_x_move_digital) * delta_time * move_speed;
-			player_move_vel.y = scast(f32, player_actions.player_y_move_digital) * delta_time * move_speed;
+			player_move_vec.x = scast(f32, player_actions.player_x_move_digital );
+			player_move_vec.y = scast(f32, player_actions.player_y_move_digital );
 		}
 
-		if ( moved_x && moved_y )
-		{
-			player_move_vel *= (f32)0.707106781187f;
-		}
+		Dir2   player_direction  = cast( Dir2, player_move_vec );
+		Accel2 player_move_accel = scast( Accel2, player_direction ) * move_accel;
 
-		new_player_pos   += player_move_vel;
-		new_player_pos.y -= sinf( player->jump_time * TAU ) * 10.f * delta_time;
+		// TODO(Ed) : ODE!
+		Accel2 friction = pcast( Accel2, player->move_velocity) * 9.f;
+		player_move_accel -= friction;
+
+		player->move_velocity += player_move_accel * 0.5f;
+		new_player_pos        += player->move_velocity;
 
 		b32 valid_new_pos = true;
 		{
@@ -1033,7 +1012,6 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		}
 	}
 
-
 	Vec2 screen_center {
 		scast(f32, back_buffer->width)  * 0.5f,
 		scast(f32, back_buffer->height) * 0.5f
@@ -1088,12 +1066,12 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 				}
 
 				Vec2 tile_pixel_size = { tile_size_in_pixels * 0.5f, tile_size_in_pixels * 0.5f };
-				Vec2 center {
+				Pos2 center {
 					screen_center.x + scast(f32, relative_col) * tile_size_in_pixels - game_state->camera_pos.rel_pos.x * world->tile_meters_to_pixels,
 					screen_center.y - scast(f32, relative_row) * tile_size_in_pixels + game_state->camera_pos.rel_pos.y * world->tile_meters_to_pixels
 				};
-				Vec2 min = center - tile_pixel_size;
-				Vec2 max = center + tile_pixel_size;
+				Pos2 min = center - cast( Pos2, tile_pixel_size );
+				Pos2 max = center + cast( Pos2, tile_pixel_size );
 
 				draw_rectangle( back_buffer
 	               , min, max
@@ -1130,7 +1108,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		      player_to_camera.rel_pos.x + scast(f32, player_to_camera.tile_x) * world->tile_map->tile_size_in_meters,
 		-1 * (player_to_camera.rel_pos.y + scast(f32, player_to_camera.tile_y) * world->tile_map->tile_size_in_meters)
 	};
-	Vec2 player_ground_pos = screen_center + player_to_screenspace * world->tile_meters_to_pixels;
+	Pos2 player_ground_pos = cast( Pos2, screen_center + player_to_screenspace * world->tile_meters_to_pixels );
 
 	hh::HeroBitmaps* hero_bitmaps = & game_state->hero_bitmaps[game_state->hero_direction];
 

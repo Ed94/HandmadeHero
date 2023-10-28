@@ -12703,8 +12703,10 @@ char const* AST::debug_str()
 
 		case Parameters :
 			result.append_fmt( "\n\tNumEntries: %d", NumEntries );
-			result.append_fmt( "\n\tLast      : %S", Last->Name );
-			result.append_fmt( "\n\tNext      : %S", Next->Name );
+			if ( Last )
+				result.append_fmt( "\n\tLast      : %S", Last->Name );
+			if ( Next )
+				result.append_fmt( "\n\tNext      : %S", Next->Name );
 			result.append_fmt( "\n\tValueType : %S", ValueType ? ValueType->to_string() : "Null" );
 			result.append_fmt( "\n\tValue     : %S", Value ? Value->to_string() : "Null" );
 			break;
@@ -15189,7 +15191,10 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 					break;
 
 				case 2 :
-					if ( ! params_code->ValueType.is_equal( ret_type ) )
+				break;
+				// Its not required by c++ to have this constraint so I'm omitting it.
+#if 0
+					if ( ! params_code->ValueType.is_equal( ret_type ) && ! params_code->Next.is_equal( ret_type ) )
 					{
 						log_failure(
 						    "gen::def_operator: "
@@ -15202,6 +15207,7 @@ OpValidateResult operator__validate( OperatorT op, CodeParam params_code, CodeTy
 						return OpValidateResult::Fail;
 					}
 					break;
+#endif
 
 				default :
 					log_failure(

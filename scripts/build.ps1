@@ -121,7 +121,7 @@ function build-engine
 	$should_build = (check-FileForChanges $unit) -eq $true
 	if ( $should_build )
 	{
-		$executable = Join-Path $path_build   'engine_gen.exe'
+		$executable = Join-Path $path_build 'engine_gen.exe'
 
 		$compiler_args = @()
 		$compiler_args += ( $flag_define + 'GEN_TIME' )

@@ -14,16 +14,18 @@ Handmade Engine Translation Unit
 #include "platform/math_constants.hpp"
 #include "platform/types.hpp"
 #include "platform/intrinsics.hpp"
+#include "platform/float_ops.hpp"
 #include "platform/strings.hpp"
 #include "platform/context.hpp"
 #include "platform/platform.hpp"
 
 #include "engine_module.hpp"
 #include "gen/vectors.hpp"
-#include "gen/physics.hpp"
 #include "input.hpp"
 #include "tile_map.hpp"
 #include "engine.hpp"
+// Physics Depends on stuff in engine.hpp for now.
+#include "gen/physics.hpp"
 #include "engine_to_platform_api.hpp"
 
 // Game layer headers

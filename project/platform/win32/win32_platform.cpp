@@ -936,6 +936,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			engine_api_load_time = engine_api_current_time;
 			unload_engine_module_api( & engine_api );
 			engine_api = load_engine_module_api();
+			engine_api.on_module_reload( & engine_memory, & platform_api );
 		} while (0);
 
 

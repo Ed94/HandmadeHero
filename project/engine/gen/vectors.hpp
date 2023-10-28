@@ -31,6 +31,24 @@ inline Vec2_f32 abs( Vec2_f32 v )
 	return result;
 }
 
+inline f32 magnitude( Vec2_f32 v )
+{
+	f32 result = sqrt( v.x * v.x + v.y * v.y );
+	return result;
+}
+
+inline Vec2_f32 normalize( Vec2_f32 v )
+{
+	f32 square_size = v.x * v.x + v.y * v.y;
+	if ( square_size < scast( f32, 1e-4 ) )
+	{
+		return Zero( Vec2_f32 );
+	}
+	f32      mag = sqrt( square_size );
+	Vec2_f32 result { v.x / mag, v.y / mag };
+	return result;
+}
+
 inline Vec2_f32 operator-( Vec2_f32 v )
 {
 	Vec2_f32 result { -v.x, -v.y };
@@ -50,6 +68,12 @@ inline Vec2_f32 operator-( Vec2_f32 a, Vec2_f32 b )
 }
 
 inline Vec2_f32 operator*( Vec2_f32 v, f32 s )
+{
+	Vec2_f32 result { v.x * s, v.y * s };
+	return result;
+}
+
+inline Vec2_f32 operator*( f32 s, Vec2_f32 v )
 {
 	Vec2_f32 result { v.x * s, v.y * s };
 	return result;
@@ -115,6 +139,24 @@ inline Vec2_s32 abs( Vec2_s32 v )
 	return result;
 }
 
+inline s32 magnitude( Vec2_s32 v )
+{
+	s32 result = sqrt( v.x * v.x + v.y * v.y );
+	return result;
+}
+
+inline Vec2_s32 normalize( Vec2_s32 v )
+{
+	s32 square_size = v.x * v.x + v.y * v.y;
+	if ( square_size < scast( s32, 1e-4 ) )
+	{
+		return Zero( Vec2_s32 );
+	}
+	s32      mag = sqrt( square_size );
+	Vec2_s32 result { v.x / mag, v.y / mag };
+	return result;
+}
+
 inline Vec2_s32 operator-( Vec2_s32 v )
 {
 	Vec2_s32 result { -v.x, -v.y };
@@ -134,6 +176,12 @@ inline Vec2_s32 operator-( Vec2_s32 a, Vec2_s32 b )
 }
 
 inline Vec2_s32 operator*( Vec2_s32 v, s32 s )
+{
+	Vec2_s32 result { v.x * s, v.y * s };
+	return result;
+}
+
+inline Vec2_s32 operator*( s32 s, Vec2_s32 v )
 {
 	Vec2_s32 result { v.x * s, v.y * s };
 	return result;

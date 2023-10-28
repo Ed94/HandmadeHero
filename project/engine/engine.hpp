@@ -7,9 +7,9 @@
 #if INTELLISENSE_DIRECTIVES
 #include "platform/platform.hpp"
 #include "gen/vectors.hpp"
-#include "gen/physics.hpp"
 #include "engine_module.hpp"
 #include "tile_map.hpp"
+
 #endif
 
 NS_ENGINE_BEGIN
@@ -219,5 +219,47 @@ struct Bitmap
 	s32  height;
 	u32  bits_per_pixel;
 };
+
+// Used to determine if analog input is at move threshold
+constexpr f32 analog_move_threshold = 0.5f;
+
+struct EngineActions
+{
+	b32 move_up;
+	b32 move_down;
+	b32 move_left;
+	b32 move_right;
+
+	b32 loop_mode_engine;
+	b32 loop_mode_game;
+
+	b32 raise_volume;
+	b32 lower_volume;
+	b32 raise_tone_hz;
+	b32 lower_tone_hz;
+
+	b32 toggle_wave_tone;
+
+#if Build_Development
+	b32 pause_renderer;
+
+	b32 load_auto_snapshot;
+	b32 set_snapshot_slot_1;
+	b32 set_snapshot_slot_2;
+	b32 set_snapshot_slot_3;
+	b32 set_snapshot_slot_4;
+
+	b32 force_null_access_violation;
+#endif
+};
+
+// TODO(Ed) : Do this properly?
+struct EngineContext
+{
+	World* world;
+	float  delta_time;
+};
+
+EngineContext* get_context();
 
 NS_ENGINE_END

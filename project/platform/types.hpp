@@ -38,6 +38,9 @@
 #define F64_MIN 2.2250738585072014e-308
 #define F64_MAX 1.7976931348623157e+308
 
+#define F32_EPSILON 1.1920929e-7f
+#define F64_EPSILON 2.220446049250313e-16
+
 #if defined( COMPILER_MSVC )
 #	if _MSC_VER < 1300
 typedef unsigned char  u8;

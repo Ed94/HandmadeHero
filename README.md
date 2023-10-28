@@ -33,7 +33,7 @@ Module build order:
 
 ## Milestone
 
-Day 40 : Cursor Hiding and Fullscreen Support
+Day 43 : The Equations of Motion
 
 Features Done so far:
 
@@ -68,9 +68,11 @@ Features Done so far:
     * Basic rendering
       * Linear alpha blending
       * Anchored to center position
+  * Experimental type sytem for physics vectors.
 
 ## Gallery
 
+![img](docs/imgs/10x_2023-10-28_16-58-16.gif)
 ![img](docs/imgs/10x_2023-10-22_01-44-21.gif)
 ![img](docs/imgs/handmade_win32_2023-10-21_22-18-47.gif)
 ![img](docs/imgs/handmade_win32_2023-10-21_02-16-43.png)
