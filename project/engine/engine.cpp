@@ -892,13 +892,18 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		player->move_velocity += player_move_accel * 0.5f;
 		new_player_pos        += player->move_velocity;
 
-		b32 valid_new_pos = true;
+		b32 collision_nw = false;
+		b32 collision_ne = false;
+		b32 collision_sw = false;
+		b32 collision_se = false;
+		do
 		{
-			TileMapPos test_pos = {
-				new_player_pos.x, new_player_pos.y,
-				player->position.tile_x, player->position.tile_y, player->position.tile_z
-			};
-			test_pos = recannonicalize_position( tile_map, test_pos );
+			// Base position
+			//TileMapPos test_pos = {
+				//new_player_pos.x, new_player_pos.y,
+				//player->position.tile_x, player->position.tile_y, player->position.tile_z
+			//};
+			//test_pos = recannonicalize_position( tile_map, test_pos );
 
 			// TODO(Ed) : Need a delta-function that auto-reconnonicalizes.
 
@@ -906,72 +911,105 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 				new_player_pos.x - player_half_width, new_player_pos.y + player_quarter_height,
 				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
-			test_pos_nw       = recannonicalize_position( tile_map, test_pos_nw );
-			valid_new_pos    &= TileMap_is_point_empty( tile_map, test_pos_nw );
+			test_pos_nw  = recannonicalize_position( tile_map, test_pos_nw );
+			collision_nw = ! TileMap_is_point_empty( tile_map, test_pos_nw );
 
 			TileMapPos test_pos_ne {
 				new_player_pos.x + player_half_width, new_player_pos.y + player_quarter_height,
 				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
-			test_pos_ne    = recannonicalize_position( tile_map, test_pos_ne );
-			valid_new_pos &= TileMap_is_point_empty( tile_map, test_pos_ne );
+			test_pos_ne  = recannonicalize_position( tile_map, test_pos_ne );
+			collision_ne = ! TileMap_is_point_empty( tile_map, test_pos_ne );
 
 			TileMapPos test_pos_sw {
 				new_player_pos.x - player_half_width, new_player_pos.y,
 				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
-			test_pos_sw    = recannonicalize_position( tile_map, test_pos_sw );
-			valid_new_pos &= TileMap_is_point_empty( tile_map, test_pos_sw );
+			test_pos_sw  = recannonicalize_position( tile_map, test_pos_sw );
+			collision_sw = ! TileMap_is_point_empty( tile_map, test_pos_sw );
 
 			TileMapPos test_pos_se {
 				new_player_pos.x + player_half_width, new_player_pos.y,
 				player->position.tile_x, player->position.tile_y, player->position.tile_z
 			};
-			test_pos_se    = recannonicalize_position( tile_map, test_pos_se );
-			valid_new_pos &= TileMap_is_point_empty( tile_map, test_pos_se );
+			test_pos_se  = recannonicalize_position( tile_map, test_pos_se );
+			collision_se = ! TileMap_is_point_empty( tile_map, test_pos_se );
+		} 
+		while(0);
+
+		if ( collision_se || collision_sw || collision_ne || collision_nw )
+		{
+			// Should be colliding with a wall
+			
+			Vec2 wall_vector = { 0, 0 };
+			if ( collision_nw && collision_sw )
+			{
+				wall_vector = { 1.f, 0.f };
+			}
+			if ( collision_ne && collision_se )
+			{
+				wall_vector = { -1.f, 0.f };
+			}
+			if ( collision_nw && collision_ne )
+			{
+				wall_vector = { 0.f, 1.f };
+			}
+			if ( collision_se && collision_sw )
+			{
+				wall_vector = { 0.f, -1.f };
+			}
+			
+			//if ( collision_nw && !collision_ne && !collision_sw && !collision_se )
+			//{
+			//	wall_vector = { 1.f, 1.f };
+			//}
+			
+			// The 2x multiplier allows for the the "bounce off" velocity to occur instead of the player just looking like they impacted the wall and stopped
+			player->move_velocity -= cast( Vel2,  1.f * scalar_product( Vec2( player->move_velocity ), wall_vector ) * wall_vector );
+			
+			
+			new_player_pos = { player->position.rel_pos.x, player->position.rel_pos.y };
+			new_player_pos += player->move_velocity;
+		}
+		
+		TileMapPos new_pos = {
+			new_player_pos.x, new_player_pos.y,
+			player->position.tile_x, player->position.tile_y, player->position.tile_z
+		};
+		new_pos = recannonicalize_position( tile_map, new_pos );
+
+		bool on_new_tile = TileMap_are_on_same_tile( & new_pos, & player->position );
+		if ( ! on_new_tile )
+		{
+			u32 new_tile_value = TileMap_get_tile_value( tile_map, new_pos );
+
+			if ( new_tile_value == 3 )
+			{
+				++ new_pos.tile_z;
+			}
+			else if ( new_tile_value == 4 )
+			{
+				-- new_pos.tile_z;
+			}
 		}
 
-		if ( valid_new_pos )
+		player->position = new_pos;
+
+		if ( player_actions.player_y_move_digital > 0 || player_actions.player_y_move_analog > 0 )
 		{
-			TileMapPos new_pos = {
-				new_player_pos.x, new_player_pos.y,
-				player->position.tile_x, player->position.tile_y, player->position.tile_z
-			};
-			new_pos = recannonicalize_position( tile_map, new_pos );
-
-			bool on_new_tile = TileMap_are_on_same_tile( & new_pos, & player->position );
-			if ( ! on_new_tile )
-			{
-				u32 new_tile_value = TileMap_get_tile_value( tile_map, new_pos );
-
-				if ( new_tile_value == 3 )
-				{
-					++ new_pos.tile_z;
-				}
-				else if ( new_tile_value == 4 )
-				{
-					-- new_pos.tile_z;
-				}
-			}
-
-			player->position = new_pos;
-
-			if ( player_actions.player_y_move_digital > 0 || player_actions.player_y_move_analog > 0 )
-			{
-				game_state->hero_direction = HeroBitmaps_Back;
-			}
-			if ( player_actions.player_y_move_digital < 0 || player_actions.player_y_move_analog < 0 )
-			{
-				game_state->hero_direction = HeroBitmaps_Front;
-			}
-			if ( player_actions.player_x_move_digital > 0 || player_actions.player_x_move_analog > 0 )
-			{
-				game_state->hero_direction = HeroBitmaps_Right;
-			}
-			if ( player_actions.player_x_move_digital < 0 || player_actions.player_x_move_analog < 0 )
-			{
-				game_state->hero_direction = HeroBitmaps_Left;
-			}
+			game_state->hero_direction = HeroBitmaps_Back;
+		}
+		if ( player_actions.player_y_move_digital < 0 || player_actions.player_y_move_analog < 0 )
+		{
+			game_state->hero_direction = HeroBitmaps_Front;
+		}
+		if ( player_actions.player_x_move_digital > 0 || player_actions.player_x_move_analog > 0 )
+		{
+			game_state->hero_direction = HeroBitmaps_Right;
+		}
+		if ( player_actions.player_x_move_digital < 0 || player_actions.player_x_move_analog < 0 )
+		{
+			game_state->hero_direction = HeroBitmaps_Left;
 		}
 
 		if ( player->jump_time > 0.f )

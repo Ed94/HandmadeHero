@@ -26,7 +26,7 @@ constexpr StrC fname_vec_header = txt("vectors.hpp");
 
 #pragma push_macro("scast")
 #undef scast
-constexpr char const* vec2_ops = stringize(
+constexpr char const* vec2f_ops = stringize(
 	template<>
 	constexpr <type> tmpl_zero< <type> >() {
 		return { 0, 0 };
@@ -40,25 +40,32 @@ constexpr char const* vec2_ops = stringize(
 		};
 		return result;
 	}
-	
+
 	inline
 	<unit_type> magnitude( <type> v ) {
 		<unit_type> result = sqrt( v.x * v.x + v.y * v.y );
 		return result;
 	}
-	
+
 	inline
 	<type> normalize( <type> v ) {
 		<unit_type> square_size = v.x * v.x + v.y * v.y;
 		if ( square_size < scast(<unit_type>, 1e-4) ) {
 			return Zero( <type> );
 		}
-		
+
 		<unit_type> mag = sqrt( square_size );
 		<type> result {
 			v.x / mag,
 			v.y / mag
 		};
+		return result;
+	}
+
+	inline
+	<unit_type> scalar_product( <type> a, <type> b )
+	{
+		<unit_type> result = a.x * b.x + a.y * b.y;
 		return result;
 	}
 
@@ -88,7 +95,7 @@ constexpr char const* vec2_ops = stringize(
 		};
 		return result;
 	}
-	
+
 	inline
 	<type> operator * ( <type> v, <unit_type> s ) {
 		<type> result {
@@ -97,7 +104,7 @@ constexpr char const* vec2_ops = stringize(
 		};
 		return result;
 	}
-		
+
 	inline
 	<type> operator * ( <unit_type> s, <type> v ) {
 		<type> result {
@@ -106,7 +113,110 @@ constexpr char const* vec2_ops = stringize(
 		};
 		return result;
 	}
-		
+
+	inline
+	<type> operator / ( <type> v, <unit_type> s ) {
+		<type> result {
+			v.x / s,
+			v.y / s
+		};
+		return result;
+	}
+
+	inline
+	<type>& operator += ( <type>& a, <type> b ) {
+		a.x += b.x;
+		a.y += b.y;
+		return a;
+	}
+	inline
+	<type>& operator -= ( <type>& a, <type> b ) {
+		a.x -= b.x;
+		a.y -= b.y;
+		return a;
+	}
+
+	inline
+	<type>& operator *= ( <type>& v, <unit_type> s ) {
+		v.x *= s;
+		v.y *= s;
+		return v;
+	}
+
+	inline
+	<type>& operator /= ( <type>& v, <unit_type> s ) {
+		v.x /= s;
+		v.y /= s;
+		return v;
+	}
+);
+
+constexpr char const* vec2i_ops = stringize(
+	template<>
+	constexpr <type> tmpl_zero< <type> >() {
+		return { 0, 0 };
+	}
+
+	inline
+	<type> abs( <type> v ) {
+		<type> result {
+			abs( v.x ),
+			abs( v.y )
+		};
+		return result;
+	}
+
+	inline
+	<unit_type> magnitude( <type> v ) {
+		<unit_type> result = sqrt( v.x * v.x + v.y * v.y );
+		return result;
+	}
+
+	inline
+	<type> operator - ( <type> v ) {
+		<type> result {
+			- v.x,
+			- v.y
+		};
+		return result;
+	}
+
+	inline
+	<type> operator + ( <type> a, <type> b ) {
+		<type> result {
+			a.x + b.x,
+			a.y + b.y
+		};
+		return result;
+	}
+
+	inline
+	<type> operator - ( <type> a, <type> b ) {
+		<type> result {
+			a.x - b.x,
+			a.y - b.y
+		};
+		return result;
+	}
+
+	inline
+	<type> operator * ( <type> v, <unit_type> s ) {
+		<type> result {
+			v.x * s,
+			v.y * s
+		};
+		return result;
+	}
+
+	inline
+	<type> operator * ( <unit_type> s, <type> v ) {
+		<type> result {
+			v.x * s,
+			v.y * s
+		};
+		return result;
+	}
+
 	inline
 	<type> operator / ( <type> v, <unit_type> s ) {
 		<type> result {
@@ -145,8 +255,8 @@ constexpr char const* vec2_ops = stringize(
 );
 #pragma pop_macro("scast")
 
-#define gen_vec2( vec_name, type ) gen__vec2( txt( stringize(vec_name) ), txt( stringize(type) ) )
-CodeBody gen__vec2( StrC vec_name, StrC type )
+#define gen_vec2f( vec_name, type ) gen__vec2f( txt( stringize(vec_name) ), txt( stringize(type) ) )
+CodeBody gen__vec2f( StrC vec_name, StrC type )
 {
 	CodeStruct vec_struct = parse_struct( token_fmt( "type", vec_name, "unit_type", type, stringize(
 		struct <type>
@@ -161,7 +271,33 @@ CodeBody gen__vec2( StrC vec_name, StrC type )
 		};
 	)));
 
-	CodeBody vec_ops = parse_global_body( token_fmt( "type", vec_name, "unit_type", type, vec2_ops) );
+	CodeBody vec_ops = parse_global_body( token_fmt( "type", vec_name, "unit_type", type, vec2f_ops) );
+	CodeBody vec_def = def_global_body( args(
+		vec_struct,
+		fmt_newline,
+		vec_ops
+	));
+
+	return vec_def;
+}
+
+#define gen_vec2i( vec_name, type ) gen__vec2i( txt( stringize(vec_name) ), txt( stringize(type) ) )
+CodeBody gen__vec2i( StrC vec_name, StrC type )
+{
+	CodeStruct vec_struct = parse_struct( token_fmt( "type", vec_name, "unit_type", type, stringize(
+		struct <type>
+		{
+			union {
+				struct {
+					<unit_type> x;
+					<unit_type> y;
+				};
+				<unit_type> Basis[2];
+			};
+		};
+	)));
+	
+	CodeBody vec_ops = parse_global_body( token_fmt( "type", vec_name, "unit_type", type, vec2i_ops) );
 	CodeBody vec_def = def_global_body( args(
 		vec_struct,
 		fmt_newline,
@@ -199,20 +335,20 @@ Code gen__phys2( StrC type )
 				return * rcast(<vec_type>*, this);
 			}
 		};
-		
+
 		template<>
 		inline
 		<type> tmpl_cast< <type>, <vec_type> >( <vec_type> vec )
 		{
 			return pcast( <type>, vec );
-		}	
+		}
 	);
 	CodeBody pos_struct = parse_global_body( token_fmt( "type", (StrC)sym_pos, "unit_type", type, "vec_type", (StrC)sym_vec, tmpl_struct ));
-	CodeBody pos_ops    = parse_global_body( token_fmt( "type", (StrC)sym_pos, "unit_type", type, vec2_ops ));
-	
-	CodeBody dir_struct = parse_global_body( token_fmt( 
-		"type", (StrC)sym_dir, 
-		"unit_type", type, 
+	CodeBody pos_ops    = parse_global_body( token_fmt( "type", (StrC)sym_pos, "unit_type", type, vec2f_ops ));
+
+	CodeBody dir_struct = parse_global_body( token_fmt(
+		"type", (StrC)sym_dir,
+		"unit_type", type,
 		"vec_type", (StrC)sym_vec,
 		"vel_type", (StrC)sym_vel,
 		"accel_type", (StrC)sym_accel,
@@ -226,7 +362,7 @@ Code gen__phys2( StrC type )
 				};
 				<unit_type> Basis[2];
 			};
-			
+
 			operator <vec_type>() {
 				return * rcast(<vec_type>*, this);
 			}
@@ -237,7 +373,7 @@ Code gen__phys2( StrC type )
 				return * rcast(<accel_type>*, this);
 			}
 		};
-		
+
 		template<>
 		inline
 		<type> tmpl_cast< <type>, <vec_type> >( <vec_type> vec )
@@ -248,17 +384,17 @@ Code gen__phys2( StrC type )
 
 			<vec_type> normalized = normalize(vec);
 			return pcast( <type>, normalized );
-		}			
+		}
 	)));
 
-	CodeBody dist_def = parse_global_body( token_fmt( 
-		"type",      (StrC)sym_dist, 
-		"unit_type", type, 
+	CodeBody dist_def = parse_global_body( token_fmt(
+		"type",      (StrC)sym_dist,
+		"unit_type", type,
 		"dist_type", (StrC)sym_dist,
 		"pos_type",  (StrC)sym_pos,
 	stringize(
 		using <dist_type> = <unit_type>;
-		
+
 		inline
 		<dist_type> distance( <pos_type> a, <pos_type> b ) {
 			<unit_type> x = b.x - a.x;
@@ -268,13 +404,13 @@ Code gen__phys2( StrC type )
 			return result;
 		}
 	)));
-	
+
 	CodeBody vel_struct = parse_global_body( token_fmt( "type", (StrC)sym_vel, "unit_type", type, "vec_type", (StrC)sym_vec, tmpl_struct ));
-	CodeBody vel_ops    = parse_global_body( token_fmt( "type", (StrC)sym_vel, "unit_type", type, vec2_ops ));
-	
+	CodeBody vel_ops    = parse_global_body( token_fmt( "type", (StrC)sym_vel, "unit_type", type, vec2f_ops ));
+
 	CodeBody accel_struct = parse_global_body( token_fmt( "type", (StrC)sym_accel, "unit_type", type, "vec_type", (StrC)sym_vec, tmpl_struct ));
-	CodeBody accel_ops    = parse_global_body( token_fmt( "type", (StrC)sym_accel, "unit_type", type, vec2_ops ));
-	
+	CodeBody accel_ops    = parse_global_body( token_fmt( "type", (StrC)sym_accel, "unit_type", type, vec2f_ops ));
+
 	// TODO(Ed): Is there a better name for this?
 	Code ops = parse_global_body( token_fmt(
 		"unit_type",  (StrC)type,
@@ -302,27 +438,27 @@ Code gen__phys2( StrC type )
 			<vec_type> result = b - a;
 			return pcast(<accel_type>, result);
 		}
-		
+
 		inline
 		<vel_type>& operator +=(<vel_type>& vel, const <accel_type> accel) {
 			vel.x += accel.x * engine::get_context()->delta_time;
 			vel.y += accel.y * engine::get_context()->delta_time;
 			return vel;
 		}
-		
+
 		inline
 		<dir_type> direction( <pos_type> pos_a, <pos_type> pos_b )
 		{
 			<vec_type>  diff = pos_b - pos_a;
 			<unit_type> mag  = magnitude( diff );
-		
+
 			<dir_type> result {
 				diff.x / mag,
 				diff.y / mag
 			};
 			return result;
 		}
-		
+
 		inline
 		<dir_type> direction( <vel_type> vel )
 		{
@@ -333,7 +469,7 @@ Code gen__phys2( StrC type )
 			};
 			return result;
 		}
-				
+
 		inline
 		<dir_type> direction( <accel_type> accel )
 		{
@@ -383,16 +519,11 @@ int gen_main()
 
 		CodeUsing using_vec2  = parse_using( code( using Vec2  = Vec2_f32; ));
 		CodeUsing using_vec2i = parse_using( code( using Vec2i = Vec2_s32; ));
-		vec_header.print( gen_vec2( Vec2_f32, f32) );
-		vec_header.print( gen_vec2( Vec2_s32, s32) );
+		vec_header.print( gen_vec2f( Vec2_f32, f32) );
+		vec_header.print( gen_vec2i( Vec2_s32, s32) );
 		vec_header.print( using_vec2 );
 		vec_header.print( using_vec2i );
 
-		CodeUsing using_vec3  = parse_using( code( using Vec2  = Vec3_f32; ));
-		CodeUsing using_vec3i = parse_using( code( using Vec2i = Vec3_f32; ));
-
-		// vec_header.print( using_vec3 );
-		
 //		vec_header.print_fmt( "NS_ENGINE_END\n" );
 		vec_header.write();
 	}

@@ -49,6 +49,12 @@ inline Vec2_f32 normalize( Vec2_f32 v )
 	return result;
 }
 
+inline f32 scalar_product( Vec2_f32 a, Vec2_f32 b )
+{
+	f32 result = a.x * b.x + a.y * b.y;
+	return result;
+}
+
 inline Vec2_f32 operator-( Vec2_f32 v )
 {
 	Vec2_f32 result { -v.x, -v.y };
@@ -142,18 +148,6 @@ inline Vec2_s32 abs( Vec2_s32 v )
 inline s32 magnitude( Vec2_s32 v )
 {
 	s32 result = sqrt( v.x * v.x + v.y * v.y );
-	return result;
-}
-
-inline Vec2_s32 normalize( Vec2_s32 v )
-{
-	s32 square_size = v.x * v.x + v.y * v.y;
-	if ( square_size < scast( s32, 1e-4 ) )
-	{
-		return Zero( Vec2_s32 );
-	}
-	s32      mag = sqrt( square_size );
-	Vec2_s32 result { v.x / mag, v.y / mag };
 	return result;
 }
 

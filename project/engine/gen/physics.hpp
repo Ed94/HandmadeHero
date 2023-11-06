@@ -60,6 +60,12 @@ inline Pos2_f32 normalize( Pos2_f32 v )
 	return result;
 }
 
+inline f32 scalar_product( Pos2_f32 a, Pos2_f32 b )
+{
+	f32 result = a.x * b.x + a.y * b.y;
+	return result;
+}
+
 inline Pos2_f32 operator-( Pos2_f32 v )
 {
 	Pos2_f32 result { -v.x, -v.y };
@@ -189,6 +195,12 @@ inline Vel2_f32 normalize( Vel2_f32 v )
 	return result;
 }
 
+inline f32 scalar_product( Vel2_f32 a, Vel2_f32 b )
+{
+	f32 result = a.x * b.x + a.y * b.y;
+	return result;
+}
+
 inline Vel2_f32 operator-( Vel2_f32 v )
 {
 	Vel2_f32 result { -v.x, -v.y };
@@ -305,6 +317,12 @@ inline Accel2_f32 normalize( Accel2_f32 v )
 	}
 	f32        mag = sqrt( square_size );
 	Accel2_f32 result { v.x / mag, v.y / mag };
+	return result;
+}
+
+inline f32 scalar_product( Accel2_f32 a, Accel2_f32 b )
+{
+	f32 result = a.x * b.x + a.y * b.y;
 	return result;
 }
 

@@ -15,6 +15,7 @@
 #pragma warning( disable: 4710 ) // Support automatic inline expansion
 #pragma warning( disable: 4805 ) // Support comparisons of s32 to bool.
 #pragma warning( disable: 5246 ) // Support for initialization of subobject without braces.
+#pragma warning( disable: 4701 ) // Support for potentially uninitalized variables
 #endif
 
 #ifdef __clang__

@@ -23,16 +23,17 @@ using namespace gen;
 #include "platform/generics.hpp"
 #include "platform/types.hpp"
 #include "platform/intrinsics.hpp"
+#include "platform/float_ops.hpp"
 #include "platform/strings.hpp"
 #include "platform/platform.hpp"
 
 #include "engine/engine_module.hpp"
 #include "engine/gen/vectors.hpp"
-#include "engine/gen/physics.hpp"
 #include "engine/input.hpp"
 #include "engine/tile_map.hpp"
 #include "engine/engine.hpp"
 #include "engine/engine_to_platform_api.hpp"
+#include "engine/gen/physics.hpp"
 
 constexpr StrC fname_handmade_engine_symbols = txt("handmade_engine.symbols");
 
