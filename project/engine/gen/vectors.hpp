@@ -55,6 +55,12 @@ inline f32 scalar_product( Vec2_f32 a, Vec2_f32 b )
 	return result;
 }
 
+inline f32 magnitude_squared( Vec2_f32 v )
+{
+	f32 result = scalar_product( v, v );
+	return result;
+}
+
 inline Vec2_f32 operator-( Vec2_f32 v )
 {
 	Vec2_f32 result { -v.x, -v.y };

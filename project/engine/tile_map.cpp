@@ -94,7 +94,7 @@ TileChunk* TileMap_get_chunk( TileMap* tile_map, s32 tile_chunk_x, s32 tile_chun
 }
 
 inline
-TileChunkPosition get_tile_chunk_position_for( TileMap* tile_map, u32 abs_tile_x, u32 abs_tile_y, u32 abs_tile_z )
+TileChunkPosition get_tile_chunk_position_for( TileMap* tile_map, s32 abs_tile_x, s32 abs_tile_y, s32 abs_tile_z )
 {
 	assert( tile_map != nullptr );
 
@@ -131,17 +131,23 @@ u32 TileMap_get_tile_value( TileMap* tile_map, TileMapPos position )
 }
 
 internal
+b32 TileMap_is_tile_value_empty(s32 tile_value)
+{
+	b32 
+	is_empty  = tile_value == 1;
+	is_empty |= tile_value == 3;
+	is_empty |= tile_value == 4;
+	return is_empty;
+}
+
+internal
 b32 TileMap_is_point_empty( TileMap* tile_map, TileMapPos position )
 {
 	assert( tile_map != nullptr );
 
 	u32 chunk_value = TileMap_get_tile_value( tile_map, position.tile_x, position.tile_y, position.tile_z );
 	
-	b32 
-	is_empty  = chunk_value == 1;
-	is_empty |= chunk_value == 3;
-	is_empty |= chunk_value == 4;
-	return is_empty;
+	return TileMap_is_tile_value_empty( chunk_value );
 }
 
 internal
@@ -174,6 +180,16 @@ b32 TileMap_are_on_same_tile( TileMapPos* pos_a, TileMapPos* pos_b )
 		pos_a->tile_x == pos_b->tile_x
 	&&  pos_a->tile_y == pos_b->tile_y
 	&&  pos_a->tile_z == pos_b->tile_z;
+	return result;
+}
+
+inline
+TileMapPos centered_tile_point( s32 tile_x, s32 tile_y, s32 tile_z )
+{
+	TileMapPos result {};
+	result.tile_x = tile_x;
+	result.tile_y = tile_y;
+	result.tile_z = tile_z;
 	return result;
 }
 

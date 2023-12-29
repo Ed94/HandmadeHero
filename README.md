@@ -33,7 +33,7 @@ Module build order:
 
 ## Milestone
 
-Day 43 : The Equations of Motion
+Day 45 : Geometric vs. Temporal Movement Search
 
 Features Done so far:
 

@@ -46,7 +46,7 @@ constexpr char const* vec2f_ops = stringize(
 		<unit_type> result = sqrt( v.x * v.x + v.y * v.y );
 		return result;
 	}
-
+	
 	inline
 	<type> normalize( <type> v ) {
 		<unit_type> square_size = v.x * v.x + v.y * v.y;
@@ -63,9 +63,14 @@ constexpr char const* vec2f_ops = stringize(
 	}
 
 	inline
-	<unit_type> scalar_product( <type> a, <type> b )
-	{
+	<unit_type> scalar_product( <type> a, <type> b ) {
 		<unit_type> result = a.x * b.x + a.y * b.y;
+		return result;
+	}
+	
+	inline
+	<unit_type> magnitude_squared( <type> v ) {
+		<unit_type> result = scalar_product( v, v );
 		return result;
 	}
 

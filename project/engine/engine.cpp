@@ -876,7 +876,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			move_accel = 94.f;
 		}
 
-		Pos2_f32 new_player_pos = { player->position.rel_pos.x, player->position.rel_pos.y };
+		TileMapPos old_pos = player->position;
+		Pos2_f32 new_player_pos = { old_pos.rel_pos.x, old_pos.rel_pos.y };
 
 		Vec2 player_move_vec = {};
 		if ( player_actions.player_x_move_analog || player_actions.player_y_move_analog )
@@ -900,108 +901,153 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		player->move_velocity += player_move_accel * 0.5f;
 		new_player_pos        += player->move_velocity;
 
-		b32 collision_nw = false;
-		b32 collision_ne = false;
-		b32 collision_sw = false;
-		b32 collision_se = false;
-		do
+		// Old collision implmentation
+		#if 1
 		{
-			// Base position
-			//TileMapPos test_pos = {
-				//new_player_pos.x, new_player_pos.y,
-				//player->position.tile_x, player->position.tile_y, player->position.tile_z
-			//};
-			//test_pos = recannonicalize_position( tile_map, test_pos );
-
-			// TODO(Ed) : Need a delta-function that auto-reconnonicalizes.
-
-			TileMapPos test_pos_nw {
-				new_player_pos.x - player_half_width, new_player_pos.y + player_quarter_height,
-				player->position.tile_x, player->position.tile_y, player->position.tile_z
-			};
-			test_pos_nw  = recannonicalize_position( tile_map, test_pos_nw );
-			collision_nw = ! TileMap_is_point_empty( tile_map, test_pos_nw );
-
-			TileMapPos test_pos_ne {
-				new_player_pos.x + player_half_width, new_player_pos.y + player_quarter_height,
-				player->position.tile_x, player->position.tile_y, player->position.tile_z
-			};
-			test_pos_ne  = recannonicalize_position( tile_map, test_pos_ne );
-			collision_ne = ! TileMap_is_point_empty( tile_map, test_pos_ne );
-
-			TileMapPos test_pos_sw {
-				new_player_pos.x - player_half_width, new_player_pos.y,
-				player->position.tile_x, player->position.tile_y, player->position.tile_z
-			};
-			test_pos_sw  = recannonicalize_position( tile_map, test_pos_sw );
-			collision_sw = ! TileMap_is_point_empty( tile_map, test_pos_sw );
-
-			TileMapPos test_pos_se {
-				new_player_pos.x + player_half_width, new_player_pos.y,
-				player->position.tile_x, player->position.tile_y, player->position.tile_z
-			};
-			test_pos_se  = recannonicalize_position( tile_map, test_pos_se );
-			collision_se = ! TileMap_is_point_empty( tile_map, test_pos_se );
-		} 
-		while(0);
-
-		if ( collision_se || collision_sw || collision_ne || collision_nw )
-		{
-			// Should be colliding with a wall
-			
-			Vec2 wall_vector = { 0, 0 };
-			if ( collision_nw && collision_sw )
+			b32 collision_nw = false;
+			b32 collision_ne = false;
+			b32 collision_sw = false;
+			b32 collision_se = false;
+			do
 			{
-				wall_vector = { 1.f, 0.f };
-			}
-			if ( collision_ne && collision_se )
+				// Base position
+				//TileMapPos test_pos = {
+					//new_player_pos.x, new_player_pos.y,
+					//old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+				//};
+				//test_pos = recannonicalize_position( tile_map, test_pos );
+	
+				// TODO(Ed) : Need a delta-function that auto-reconnonicalizes.
+	
+				TileMapPos test_pos_nw {
+					new_player_pos.x - player_half_width, new_player_pos.y + player_quarter_height,
+					old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+				};
+				test_pos_nw  = recannonicalize_position( tile_map, test_pos_nw );
+				collision_nw = ! TileMap_is_point_empty( tile_map, test_pos_nw );
+	
+				TileMapPos test_pos_ne {
+					new_player_pos.x + player_half_width, new_player_pos.y + player_quarter_height,
+					old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+				};
+				test_pos_ne  = recannonicalize_position( tile_map, test_pos_ne );
+				collision_ne = ! TileMap_is_point_empty( tile_map, test_pos_ne );
+	
+				TileMapPos test_pos_sw {
+					new_player_pos.x - player_half_width, new_player_pos.y,
+					old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+				};
+				test_pos_sw  = recannonicalize_position( tile_map, test_pos_sw );
+				collision_sw = ! TileMap_is_point_empty( tile_map, test_pos_sw );
+	
+				TileMapPos test_pos_se {
+					new_player_pos.x + player_half_width, new_player_pos.y,
+					old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+				};
+				test_pos_se  = recannonicalize_position( tile_map, test_pos_se );
+				collision_se = ! TileMap_is_point_empty( tile_map, test_pos_se );
+			} 
+			while(0);
+	
+			if ( collision_se || collision_sw || collision_ne || collision_nw )
 			{
-				wall_vector = { -1.f, 0.f };
+				// Should be colliding with a wall
+				
+				Vec2 wall_vector = { 0, 0 };
+				if ( collision_nw && collision_sw )
+				{
+					wall_vector = { 1.f, 0.f };
+				}
+				{
+					wall_vector = { -1.f, 0.f };
+				}
+				if ( collision_nw && collision_ne )
+				{
+					wall_vector = { 0.f, 1.f };
+				}
+				if ( collision_se && collision_sw )
+				{
+					wall_vector = { 0.f, -1.f };
+				}
+				
+				//if ( collision_nw && !collision_ne && !collision_sw && !collision_se )
+				//{
+				//	wall_vector = { 1.f, 1.f };
+				//}
+				
+				// The 2x multiplier allows for the the "bounce off" velocity to occur instead of the player just looking like they impacted the wall and stopped
+				player->move_velocity -= cast( Vel2,  1.f * scalar_product( Vec2( player->move_velocity ), wall_vector ) * wall_vector );
+				
+				new_player_pos = { old_pos.rel_pos.x, old_pos.rel_pos.y };
+				new_player_pos += player->move_velocity;
 			}
-			if ( collision_nw && collision_ne )
-			{
-				wall_vector = { 0.f, 1.f };
-			}
-			if ( collision_se && collision_sw )
-			{
-				wall_vector = { 0.f, -1.f };
-			}
 			
-			//if ( collision_nw && !collision_ne && !collision_sw && !collision_se )
-			//{
-			//	wall_vector = { 1.f, 1.f };
-			//}
-			
-			// The 2x multiplier allows for the the "bounce off" velocity to occur instead of the player just looking like they impacted the wall and stopped
-			player->move_velocity -= cast( Vel2,  1.f * scalar_product( Vec2( player->move_velocity ), wall_vector ) * wall_vector );
-			
-			
-			new_player_pos = { player->position.rel_pos.x, player->position.rel_pos.y };
-			new_player_pos += player->move_velocity;
+			TileMapPos new_pos = {
+				new_player_pos.x, new_player_pos.y,
+				old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+			};
+			new_pos = recannonicalize_position( tile_map, new_pos );
+			player->position = new_pos;
 		}
+		#else
+		{
+			TileMapPos new_pos = {
+				new_player_pos.x, new_player_pos.y,
+				old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+			};
+			new_pos = recannonicalize_position( tile_map, new_pos );
 		
-		TileMapPos new_pos = {
-			new_player_pos.x, new_player_pos.y,
-			player->position.tile_x, player->position.tile_y, player->position.tile_z
-		};
-		new_pos = recannonicalize_position( tile_map, new_pos );
-
-		bool on_new_tile = TileMap_are_on_same_tile( & new_pos, & player->position );
+			s32 min_tile_x = 0;
+			s32 min_tile_y = 0;
+			
+			TileMapPos best_position  = old_pos;
+			Dist2      best_distance2 = cast(Dist2, magnitude_squared( player->move_velocity ) );
+		
+			for ( s32 tile_y = 0; tile_y <= min_tile_y; ++ tile_y )
+			{
+				for ( s32 tile_x = 0; tile_x <= min_tile_x; ++ tile_x )
+				{
+					TileMapPos test_tile_pos = centered_tile_point( tile_x, tile_y, new_pos.tile_z );
+					s32        tile_value    = TileMap_get_tile_value( tile_map, test_tile_pos );
+					
+					if ( TileMap_is_tile_value_empty( tile_value ) )
+					{
+						Vec2 tile_xy_in_meters = Vec2 { tile_map->tile_size_in_meters, tile_map->tile_size_in_meters };
+						
+						Vec2 min_corner = -0.5f * tile_xy_in_meters;
+						Vec2 max_corner =  0.5f * tile_xy_in_meters;
+						
+						TileMapPos rel_new_player_pos = subtract( test_tile_pos, new_pos );
+						Vec2       test_pos           = closest_point_in_rectangle( min_corner, max_corner, rel_new_player_pos );
+						
+						f32 test_dist2 = ;
+						if ( best_distance2 > test_dst )
+						{
+							best_position  = ;
+							best_distance2 = ;
+						}
+					}
+				}
+			}
+			
+			player->position = new_pos;
+		}
+		#endif
+		
+		bool on_new_tile = TileMap_are_on_same_tile( & player->position, & old_pos );
 		if ( ! on_new_tile )
 		{
-			u32 new_tile_value = TileMap_get_tile_value( tile_map, new_pos );
+			u32 new_tile_value = TileMap_get_tile_value( tile_map, player->position );
 
 			if ( new_tile_value == 3 )
 			{
-				++ new_pos.tile_z;
+				++ player->position.tile_z;
 			}
 			else if ( new_tile_value == 4 )
 			{
-				-- new_pos.tile_z;
+				-- player->position.tile_z;
 			}
 		}
-
-		player->position = new_pos;
 
 		if ( player_actions.player_y_move_digital > 0 || player_actions.player_y_move_analog > 0 )
 		{
