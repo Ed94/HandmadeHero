@@ -1,7 +1,24 @@
 #if INTELLISENSE_DIRECTIVES
 #include "platform.hpp"
 #include "engine/engine.hpp"
+#include "engine/engine_to_platform_api.hpp"
 #include "win32.hpp"
+
+// This is the "backbuffer" data related to the windowing surface provided by the operating system.
+struct OffscreenBuffer
+{
+	BITMAPINFO info;
+	char       _PAD_[4];
+	void*      memory; // Lets use directly mess with the "pixel's memory buffer"
+	s32        width;
+	s32        height;
+	s32        pitch;
+	s32        bytes_per_pixel;
+};
+
+extern OffscreenBuffer Surface_Back_Buffer;
+extern f32             Engine_Frame_Target_MS;
+extern u32             Engine_Refresh_Hz;
 #endif
 
 NS_PLATFORM_BEGIN

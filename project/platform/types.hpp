@@ -1,3 +1,7 @@
+#if INTELLISENSE_DIRECTIVES
+#include "grime.hpp"
+#endif
+
 #pragma once
 
 #pragma region Basic Types

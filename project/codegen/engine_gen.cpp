@@ -1,6 +1,5 @@
 #include "platform/compiler_ignores.hpp"
 
-#if GEN_TIME
 #define GEN_DEFINE_LIBRARY_CODE_CONSTANTS
 #define GEN_IMPLEMENTATION
 #define GEN_BENCHMARK
@@ -25,6 +24,7 @@ using namespace gen;
 constexpr StrC fname_vec_header = txt("vectors.hpp");
 
 #pragma push_macro("scast")
+#pragma push_macro("Zero")
 #undef scast
 constexpr char const* vec2f_ops = stringize(
 	template<>
@@ -254,6 +254,7 @@ constexpr char const* vec2i_ops = stringize(
 	}
 );
 #pragma pop_macro("scast")
+#pragma pop_macro("Zero")
 
 #define gen_vec2f( vec_name, type ) gen__vec2f( txt( stringize(vec_name) ), txt( stringize(type) ) )
 CodeBody gen__vec2f( StrC vec_name, StrC type )
@@ -296,7 +297,7 @@ CodeBody gen__vec2i( StrC vec_name, StrC type )
 			};
 		};
 	)));
-	
+
 	CodeBody vec_ops = parse_global_body( token_fmt( "type", vec_name, "unit_type", type, vec2i_ops) );
 	CodeBody vec_def = def_global_body( args(
 		vec_struct,
@@ -481,6 +482,8 @@ Code gen__phys2( StrC type )
 			return result;
 		}
 	)));
+#pragma pop_macro("rcast")
+#pragma pop_macro("pcast")
 
 	CodeBody result = def_global_body( args(
 		pos_struct,
@@ -494,8 +497,6 @@ Code gen__phys2( StrC type )
 		ops
 	));
 	return result;
-#pragma pop_macro("rcast")
-#pragma pop_macro("pcast")
 }
 
 int gen_main()
@@ -558,4 +559,3 @@ int gen_main()
 	// gen::deinit();
 	return 0;
 }
-#endif

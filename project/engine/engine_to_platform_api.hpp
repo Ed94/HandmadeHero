@@ -4,6 +4,7 @@
 #pragma once
 #if INTELLISENSE_DIRECTIVES
 #include "engine_module.hpp"
+#include "input.hpp"
 #endif
 
 NS_ENGINE_BEGIN

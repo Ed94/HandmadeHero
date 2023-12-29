@@ -1081,6 +1081,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 
 	engine_api.shutdown( & engine_memory, & platform_api );
 
+#if Build_Development
 	for ( s32 slot = 0; slot < engine_memory.Num_Snapshot_Slots; ++slot )
 	{
 		engine::MemorySnapshot& snapshot = engine_memory.snapshots[ slot ];
@@ -1089,6 +1090,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		CloseHandle( snapshot.opaque_handle_2 );
 		CloseHandle( snapshot.opaque_handle );
 	}
+#endif
 
 	unload_engine_module_api( & engine_api );
 	DeleteFileA( Path_Engine_DLL_InUse );

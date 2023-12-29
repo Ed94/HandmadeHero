@@ -17,8 +17,10 @@ struct EngineState
 
 	MemoryArena world_arena;
 
+#if Build_Development
 	f32 auto_snapshot_interval;
 	f32 auto_snapshot_timer;
+#endif
 
 	s32 wave_tone_hz;
 	s32 tone_volume;
@@ -93,7 +95,9 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 	actions->move_up    = (mouse->vertical_wheel.end > 0.f) * 10;
 	actions->move_down  = (mouse->vertical_wheel.end < 0.f) * 10;
 
+#if Build_Development
 	actions->load_auto_snapshot |= pressed( keyboard->L ) && keyboard->right_alt.ended_down;
+#endif
 }
 
 internal
@@ -390,7 +394,9 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 
 	Engine_Context = & state->context;
 
+#if Build_Development
 	state->auto_snapshot_interval = 60.f;
+#endif
 
 	state->tone_volume = 1000;
 
@@ -712,6 +718,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	state->context.delta_time = delta_time;
 
 	// Engine auto_snapshot
+	#if Build_Development
 	{
 		state->auto_snapshot_timer += delta_time;
 		if ( state->auto_snapshot_timer >= state->auto_snapshot_interval )
@@ -726,6 +733,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			state->auto_snapshot_timer = 0.f;
 		}
 	}
+	#endif
 
 	ControllerState* controller = & input->controllers[0];
 
@@ -734,6 +742,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 
 	input_poll_engine_actions( input, & engine_actions );
 
+#if Build_Development
 	if ( engine_actions.load_auto_snapshot )
 	{
 		s32 current_slot = memory->active_snapshot_slot;
@@ -742,7 +751,6 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		memory->active_snapshot_slot = current_slot;
 	}
 
-#if Build_Development
 	// Ease of use: Allow user to press L key without shift if engine loop recording is active.
 	engine_actions.loop_mode_engine |= engine_actions.loop_mode_game && memory->engine_loop_active;
 
@@ -800,13 +808,13 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			state->sample_wave_switch ^= true;
 		}
 
+	#if Build_Development
 		if ( engine_actions.loop_mode_game && ! memory->engine_loop_active )
 		{
 			process_loop_mode( & take_game_snapshot, & load_game_snapshot, memory, state, input, platform_api );
 			memory->game_loop_active = memory->replay_mode > ReplayMode_Off;
 		}
 
-	#if Build_Development
 		if ( engine_actions.pause_renderer )
 		{
 			if ( state->renderer_paused )
@@ -1181,6 +1189,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	            , & hero_bitmaps->head );
 #endif
 
+#if Build_Development
 	// Auto-Snapshot percent bar
 	if (1)
 	{
@@ -1191,7 +1200,6 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			, 0.f, 0.15f, 0.35f );
 	}
 
-#if Build_Development
 	if ( memory->replay_mode == ReplayMode_Record )
 	{
 		// TODO(Ed) : We're prob going to need a better indicator for recording...

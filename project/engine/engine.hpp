@@ -6,7 +6,6 @@
 
 #if INTELLISENSE_DIRECTIVES
 #include "platform/platform.hpp"
-#include "gen/vectors.hpp"
 #include "engine_module.hpp"
 #include "tile_map.hpp"
 

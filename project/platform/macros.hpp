@@ -64,6 +64,6 @@
 #	define fatal( message )             platform::impl_fatal( message )
 #else
 #	define congrats( message )
-#	define ensure( condition, message )
+#	define ensure( condition, message ) true
 #	define fatal( message )
 #endif
