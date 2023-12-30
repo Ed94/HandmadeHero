@@ -8,6 +8,14 @@ to a game module.
 
 #if INTELLISENSE_DIRECTIVES
 #include "engine/engine.hpp"
+#include "handmade.hpp"
 #endif
 
+NS_HANDMADE_BEGIN
 
+//GameState* get_context()
+//{
+//	
+//}
+
+NS_HANDMADE_END

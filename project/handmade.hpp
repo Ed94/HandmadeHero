@@ -63,6 +63,9 @@ struct ActionableMode
 
 struct ControllerState
 {
+	s32 xpad_id;
+	s32 ds_pad_id;
+
 	engine::KeyboardState*     keyboard;
 	engine::MousesState*       mouse;
 	engine::XInputPadState*    xpad;
@@ -89,14 +92,19 @@ struct HeroBitmaps
 	Bitmap torso;
 };
 
-struct PlayerState
+struct Entity
 {
+	b32 exists;
+	
 	f32 width;
 	f32 height;
-
+	
 	engine::TileMapPos position;
 	Vel2               move_velocity;
+};
 
+struct PlayerState
+{
 	b32 mid_jump;
 	f32 jump_time;
 	
@@ -120,16 +128,24 @@ struct Player
 {
 	// So far just has an assigned controller.
 	ControllerState controller;
+	
+	s32             entity_id;
+	//Entity          entity;
 	PlayerState     state;
+	
+	// TODO(Ed) : If the player ever gets different actions depending on a context, change it here.
+	PlayerActions actions;
 };
 
 struct GameState
 {
+	Entity entities[256];
+
 	Player player_1;
 	Player player_2;
 
-	PlayerState player_state;
-	PlayerState player_state_2;
+//	PlayerState player_state;
+//	PlayerState player_state_2;
 
 	using Bitmap = engine::Bitmap;
 
@@ -140,6 +156,8 @@ struct GameState
 
 	Bitmap test_bg_hh;
 	
+	// TODO(Ed) : Allow splitscreen?
+	s32 camera_assigned_entity_id;
 	engine::TileMapPos camera_pos;
 
 	HeroBitmaps hero_bitmaps[4];

@@ -97,11 +97,7 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 		input_process_digital_btn( & old_keyboard->left_shift,  & new_keyboard->left_shift,  GetAsyncKeyState( VK_LSHIFT ), is_down );
 		input_process_digital_btn( & old_keyboard->right_shift, & new_keyboard->right_shift, GetAsyncKeyState( VK_RSHIFT ), is_down );
 
-	#if NEW_INPUT_DESIGN
 		input->keyboard = new_keyboard;
-	#else
-		input->controllers[0].keyboard = new_keyboard;
-	#endif
 	}
 
 	// Mouse polling
@@ -123,11 +119,7 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 		new_mouse->X.end = (f32)mouse_pos.x;
 		new_mouse->Y.end = (f32)mouse_pos.y;
 		
-	#if NEW_INPUT_DESIGN
 		input->mouse = new_mouse;
-	#else
-		input->controllers[0].mouse = new_mouse;
-	#endif
 	}
 
 	// XInput Polling
@@ -171,19 +163,11 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 			new_xpad->stick.left.X.average = left_x;
 			new_xpad->stick.left.Y.average = left_y;
 
-		#if NEW_INPUT_DESIGN
 			input->xpads[ controller_index ] = new_xpad;
-		#else 
-			input->controllers[ controller_index ].xpad = new_xpad;
-		#endif
 		}
 		else
 		{
-		#if NEW_INPUT_DESIGN
 			input->xpads[ controller_index ] = nullptr;
-		#else 
-			input->controllers[ controller_index ].xpad = nullptr;
-		#endif
 		}
 	}
 
@@ -194,11 +178,7 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 		{
 			OutputDebugStringA( "Error: JSLStillConnected returned false\n" );
 			
-		#if NEW_INPUT_DESIGN
 			input->ds_pads[ jsl_device_index ] = nullptr;
-		#else
-			input->controllers[ jsl_device_index ].ds_pad = nullptr;
-		#endif
 			continue;
 		}
 
@@ -244,11 +224,7 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 		new_ds_pad->stick.left.X.average = left_x;
 		new_ds_pad->stick.left.Y.average = left_y;
 
-	#if NEW_INPUT_DESIGN
 		input->ds_pads[ jsl_device_index ] = new_ds_pad;
-	#else
-		input->controllers[ jsl_device_index ].ds_pad = new_ds_pad;
-	#endif
 	}
 }
 

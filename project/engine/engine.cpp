@@ -111,8 +111,12 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 
 // TODO(Ed) : Move to handmade module
 internal
-void input_poll_player_actions( hh::ControllerState* controller, hh::PlayerActions* actions, b32 is_player_2 )
+void input_poll_player_actions( hh::Player* player, b32 is_player_2 )
 {
+	hh::ControllerState* controller = & player->controller;
+	hh::PlayerActions*   actions    = & player->actions;
+	* actions = {};
+
 	if ( controller->ds_pad )
 	{
 		DualsensePadState* pad = controller->ds_pad;
@@ -383,46 +387,184 @@ Bitmap load_bmp( platform::ModuleAPI* platform_api, Str file_path  )
 	return result;
 }
 
+inline
+hh::Entity* get_entity( hh::GameState* gs, s32 id )
+{
+	hh::Entity* entity = nullptr;
+	
+	if ( id > 0 && id < array_count(gs->entities) )
+	{
+		entity = & gs->entities[ id - 1 ];
+	}
+	
+	return entity;
+}
+
+inline
+s32 get_entity( hh::GameState* gs )
+{
+	for ( s32 id = 0; id < array_count(gs->entities); ++ id )
+	{
+		hh::Entity* entity = & gs->entities[ id ];
+		if ( ! entity->exists )
+		{
+			entity->exists = true;
+			return id + 1;
+		}
+	}
+	
+	return 0;
+}
+
+// TODO(Ed): Move to handmade module
+inline
+void player_init( hh::Player* player, hh::GameState* gs )
+{
+	player->controller.xpad_id   = 0;
+	player->controller.ds_pad_id = 0;
+
+	hh::PlayerState* state     = & player->state;
+	s32              entity_id = get_entity( gs );
+	assert( entity_id );
+	
+	hh::Entity* entity = get_entity( gs, entity_id );
+	
+	entity->position.tile_x    = 4;
+	entity->position.tile_y    = 4;
+	entity->position.rel_pos.x = 0.f;
+	entity->position.rel_pos.y = 0.f;
+
+	entity->move_velocity = {};
+
+	state->mid_jump   = false;
+	state->jump_time  = 0.f;
+
+	entity->height = 1.4f;
+	entity->width  = entity->height * 0.7f;
+	
+	state->hero_direction = hh::HeroBitmaps_Front;
+	
+	player->entity_id = entity_id; 
+}
+
+// Update mouse & keyboard states for player 1
+void update_player_controllers( hh::GameState* gs, InputState* input )
+{	
+	gs->player_1.controller.keyboard = input->keyboard;
+	gs->player_1.controller.mouse    = input->mouse;
+
+	// Update controller states for the players
+	for ( s32 id = 1; id <= Max_Controllers; ++ id )
+	{
+		XInputPadState*    xpad   = input->xpads  [ id - 1 ];
+		DualsensePadState* ds_pad = input->ds_pads[ id - 1 ];
+		if ( gs->player_1.controller.xpad_id == id )
+		{
+			gs->player_1.controller.xpad = xpad;
+			xpad = nullptr;
+		}
+		if ( gs->player_1.controller.ds_pad_id == id )
+		{
+			gs->player_1.controller.ds_pad = ds_pad;
+			ds_pad = nullptr;
+		}
+		if ( gs->player_2.controller.xpad_id == id )
+		{
+			gs->player_2.controller.xpad = xpad;
+			xpad = nullptr;
+		}
+		if ( gs->player_2.controller.ds_pad_id == id )
+		{
+			gs->player_2.controller.ds_pad = ds_pad;
+			ds_pad = nullptr;
+		}
+		
+	#define can_assign( player ) ( player.controller.xpad == nullptr && player.controller.ds_pad == nullptr )
+		if ( xpad && pressed( xpad->start ) )
+		{
+			if ( can_assign( gs->player_1 ) )
+			{
+				gs->player_1.controller.xpad_id = id;
+				gs->player_1.controller.xpad    = xpad;
+				continue;
+			}
+				
+			if ( can_assign( gs->player_2 ) )
+			{
+				gs->player_2.controller.xpad_id = id;
+				gs->player_2.controller.xpad    = xpad;
+				do_once() {
+					player_init( & gs->player_2, gs );
+				}
+			}
+		}
+		
+		if ( ds_pad && pressed( ds_pad->options ) )
+		{
+			if ( can_assign( gs->player_1 ) )
+			{
+				gs->player_1.controller.ds_pad_id = id;
+				gs->player_1.controller.ds_pad    = ds_pad;
+				continue;
+			}
+				
+			if ( can_assign( gs->player_2 ) )
+			{
+				gs->player_2.controller.ds_pad_id = id;
+				gs->player_2.controller.ds_pad    = ds_pad;
+				do_once() {
+					player_init( & gs->player_2, gs );
+				}
+			}
+		}
+	#undef can_assign
+	}
+}
+
 // TODO(Ed) : Move to handmade module?
 internal
-void update_player_state( f32 delta_time, World* world, hh::GameState* game_state, hh::PlayerState* player, hh::PlayerActions* player_actions )
+void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameState* gs )
 {
+	hh::PlayerState*   state   = & player->state;
+	hh::Entity*        entity  = get_entity( gs, player->entity_id );
+	hh::PlayerActions* actions = & player->actions;
+
 	TileMap* tile_map = world->tile_map;
 
 	f32 tile_size_in_pixels   = scast(f32, world->tile_size_in_pixels);
-	f32 player_half_width     = player->width  / 2.f;
-	f32 player_quarter_height = player->height / 4.f;
+	f32 player_half_width     = entity->width  / 2.f;
+	f32 player_quarter_height = entity->height / 4.f;
 
 	f32 move_accel = 36.f;
-	if ( player_actions->sprint )
+	if ( actions->sprint )
 	{
 		move_accel = 94.f;
 	}
 
-	TileMapPos old_pos = player->position;
-	Pos2_f32 new_player_pos = { old_pos.rel_pos.x, old_pos.rel_pos.y };
+	TileMapPos old_pos        = entity->position;
+	Pos2_f32   new_player_pos = { old_pos.rel_pos.x, old_pos.rel_pos.y };
 
 	Vec2 player_move_vec = {};
-	if ( player_actions->player_x_move_analog || player_actions->player_y_move_analog )
+	if ( actions->player_x_move_analog || actions->player_y_move_analog )
 	{
-		player_move_vec.x = scast(f32, player_actions->player_x_move_analog );
-		player_move_vec.y = scast(f32, player_actions->player_y_move_analog );
+		player_move_vec.x = scast(f32, actions->player_x_move_analog );
+		player_move_vec.y = scast(f32, actions->player_y_move_analog );
 	}
 	else
 	{
-		player_move_vec.x = scast(f32, player_actions->player_x_move_digital );
-		player_move_vec.y = scast(f32, player_actions->player_y_move_digital );
+		player_move_vec.x = scast(f32, actions->player_x_move_digital );
+		player_move_vec.y = scast(f32, actions->player_y_move_digital );
 	}
 
 	Dir2   player_direction  = cast( Dir2, player_move_vec );
 	Accel2 player_move_accel = scast( Accel2, player_direction ) * move_accel;
 
 	// TODO(Ed) : ODE!
-	Accel2 friction = pcast( Accel2, player->move_velocity) * 9.f;
+	Accel2 friction    = pcast( Accel2, entity->move_velocity) * 9.f;
 	player_move_accel -= friction;
 
-	player->move_velocity += player_move_accel * 0.5f;
-	new_player_pos        += player->move_velocity;
+	entity->move_velocity += player_move_accel * 0.5f;
+	new_player_pos        += entity->move_velocity;
 
 	// Old collision implmentation
 	#if 1
@@ -481,6 +623,7 @@ void update_player_state( f32 delta_time, World* world, hh::GameState* game_stat
 			{
 				wall_vector = { 1.f, 0.f };
 			}
+			if ( collision_ne && collision_se )
 			{
 				wall_vector = { -1.f, 0.f };
 			}
@@ -499,10 +642,10 @@ void update_player_state( f32 delta_time, World* world, hh::GameState* game_stat
 			//}
 			
 			// The 2x multiplier allows for the the "bounce off" velocity to occur instead of the player just looking like they impacted the wall and stopped
-			player->move_velocity -= cast( Vel2,  1.f * scalar_product( Vec2( player->move_velocity ), wall_vector ) * wall_vector );
+			entity->move_velocity -= cast( Vel2,  1.f * scalar_product( Vec2( entity->move_velocity ), wall_vector ) * wall_vector );
 			
 			new_player_pos = { old_pos.rel_pos.x, old_pos.rel_pos.y };
-			new_player_pos += player->move_velocity;
+			new_player_pos += entity->move_velocity;
 		}
 		
 		TileMapPos new_pos = {
@@ -510,7 +653,7 @@ void update_player_state( f32 delta_time, World* world, hh::GameState* game_stat
 			old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
 		};
 		new_pos = recannonicalize_position( tile_map, new_pos );
-		player->position = new_pos;
+		entity->position = new_pos;
 	}
 	#else
 	{
@@ -524,7 +667,7 @@ void update_player_state( f32 delta_time, World* world, hh::GameState* game_stat
 		s32 min_tile_y = 0;
 		
 		TileMapPos best_position  = old_pos;
-		Dist2      best_distance2 = cast(Dist2, magnitude_squared( player->move_velocity ) );
+		Dist2      best_distance2 = cast(Dist2, magnitude_squared( entity->move_velocity ) );
 	
 		for ( s32 tile_y = 0; tile_y <= min_tile_y; ++ tile_y )
 		{
@@ -553,22 +696,22 @@ void update_player_state( f32 delta_time, World* world, hh::GameState* game_stat
 			}
 		}
 		
-		player->position = new_pos;
+		entity->position = new_pos;
 	}
 	#endif
 	
-	bool on_new_tile = TileMap_are_on_same_tile( & player->position, & old_pos );
+	b32    on_new_tile = TileMap_are_on_same_tile( & entity->position, & old_pos );
 	if ( ! on_new_tile )
 	{
-		u32 new_tile_value = TileMap_get_tile_value( tile_map, player->position );
+		u32 new_tile_value = TileMap_get_tile_value( tile_map, entity->position );
 
 		if ( new_tile_value == 3 )
 		{
-			++ player->position.tile_z;
+			++ entity->position.tile_z;
 		}
 		else if ( new_tile_value == 4 )
 		{
-			-- player->position.tile_z;
+			-- entity->position.tile_z;
 		}
 	}
 	
@@ -578,54 +721,57 @@ void update_player_state( f32 delta_time, World* world, hh::GameState* game_stat
 	using hh::HeroBitmaps_Left;
 	using hh::HeroBitmaps_Right;
 
-	if ( player_actions->player_y_move_digital > 0 || player_actions->player_y_move_analog > 0 )
+	if ( actions->player_y_move_digital > 0 || actions->player_y_move_analog > 0 )
 	{
-		player->hero_direction = HeroBitmaps_Back;
+		state->hero_direction = HeroBitmaps_Back;
 	}
-	if ( player_actions->player_y_move_digital < 0 || player_actions->player_y_move_analog < 0 )
+	if ( actions->player_y_move_digital < 0 || actions->player_y_move_analog < 0 )
 	{
-		player->hero_direction = HeroBitmaps_Front;
+		state->hero_direction = HeroBitmaps_Front;
 	}
-	if ( player_actions->player_x_move_digital > 0 || player_actions->player_x_move_analog > 0 )
+	if ( actions->player_x_move_digital > 0 || actions->player_x_move_analog > 0 )
 	{
-		player->hero_direction = HeroBitmaps_Right;
+		state->hero_direction = HeroBitmaps_Right;
 	}
-	if ( player_actions->player_x_move_digital < 0 || player_actions->player_x_move_analog < 0 )
+	if ( actions->player_x_move_digital < 0 || actions->player_x_move_analog < 0 )
 	{
-		player->hero_direction = HeroBitmaps_Left;
+		state->hero_direction = HeroBitmaps_Left;
 	}
 
-	if ( player->jump_time > 0.f )
+	if ( state->jump_time > 0.f )
 	{
-		player->jump_time -= delta_time;
+		state->jump_time -= delta_time;
 	}
 	else
 	{
-		player->jump_time = 0.f;
-		player->mid_jump  = false;
+		state->jump_time = 0.f;
+		state->mid_jump  = false;
 	}
 
-	if ( ! player->mid_jump && player_actions->jump )
+	if ( ! state->mid_jump && actions->jump )
 	{
-		player->jump_time = 1.f;
-		player->mid_jump  = true;
+		state->jump_time = 1.f;
+		state->mid_jump  = true;
 	}
 }
 
-void render_player( hh::PlayerState* player, World* world, hh::GameState* game_state, OffscreenBuffer* back_buffer )
+void render_player( hh::Player* player, World* world, hh::GameState* gs, OffscreenBuffer* back_buffer )
 {
 	Vec2 screen_center = get_screen_center( back_buffer );
+	
+	hh::Entity*      entity = get_entity( gs, player->entity_id );
+	hh::PlayerState* state  = & player->state;
 
 	f32 player_red   = 0.7f;
 	f32 player_green = 0.7f;
 	f32 player_blue  = 0.3f;
 	
-	f32 player_half_width = player->width  / 2.f;
+	f32 player_half_width = entity->width  / 2.f;
 	
-	if ( player->position.tile_z != game_state->camera_pos.tile_z )
+	if ( entity->position.tile_z != gs->camera_pos.tile_z )
 		return;
 
-	TileMapPos player_to_camera = subtract( player->position, game_state->camera_pos );
+	TileMapPos player_to_camera = subtract( entity->position, gs->camera_pos );
 
 	Vec2 player_to_screenspace {
 			  player_to_camera.rel_pos.x + scast(f32, player_to_camera.tile_x) * world->tile_map->tile_size_in_meters,
@@ -633,12 +779,12 @@ void render_player( hh::PlayerState* player, World* world, hh::GameState* game_s
 	};
 	Pos2 player_ground_pos = cast( Pos2, screen_center + player_to_screenspace * world->tile_meters_to_pixels );
 
-	hh::HeroBitmaps* hero_bitmaps = & game_state->hero_bitmaps[player->hero_direction];
+	hh::HeroBitmaps* hero_bitmaps = & gs->hero_bitmaps[state->hero_direction];
 
 #if 1
 	Vec2 player_collision_min {
 		player_ground_pos.x - player_half_width * world->tile_meters_to_pixels,
-		player_ground_pos.y - player->height    * world->tile_meters_to_pixels,
+		player_ground_pos.y - entity->height    * world->tile_meters_to_pixels,
 	};
 	Vec2 player_collision_max {
 		player_ground_pos.x + player_half_width * world->tile_meters_to_pixels,
@@ -659,7 +805,7 @@ void render_player( hh::PlayerState* player, World* world, hh::GameState* game_s
 #if 1
 	draw_bitmap( back_buffer
 		, { player_ground_pos.x, player_ground_pos.y - 125.f }
-		, & game_state->mojito_head );
+		, & gs->mojito_head );
 #else
 	draw_bitmap( back_buffer
 		, { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
@@ -816,14 +962,14 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 
 					s32 tile_value = 1;
 
-					bool in_middle_x = tile_x == (world->tiles_per_screen_x / 2);
-					bool in_middle_y = tile_y == (world->tiles_per_screen_y / 2);
+					b32 in_middle_x = tile_x == (world->tiles_per_screen_x / 2);
+					b32 in_middle_y = tile_y == (world->tiles_per_screen_y / 2);
 
-					bool on_right = tile_x == (world->tiles_per_screen_x - 1);
-					bool on_left  = tile_x == 0;
+					b32 on_right = tile_x == (world->tiles_per_screen_x - 1);
+					b32 on_left  = tile_x == 0;
 
-					bool on_bottom = tile_y == 0;
-					bool on_top    = tile_y == (world->tiles_per_screen_y - 1);
+					b32 on_bottom = tile_y == 0;
+					b32 on_top    = tile_y == (world->tiles_per_screen_y - 1);
 
 					if ( on_left && (! in_middle_y || ! door_left ))
 					{
@@ -899,33 +1045,33 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 		}
 	}
 
-	hh::GameState* game_state = rcast( hh::GameState*, state->game_memory.persistent );
+	hh::GameState* gs = rcast( hh::GameState*, state->game_memory.persistent );
 	assert( sizeof(hh::GameState) <= state->game_memory.persistent_size );
 
 	// Personally made assets
 	{
 		StrPath path_test_bg {};
 		path_test_bg.concat( platform_api->path_content, str_ascii("test_background.bmp") );
-		game_state->test_bg = load_bmp( platform_api, path_test_bg );
+		gs->test_bg = load_bmp( platform_api, path_test_bg );
 
 		StrPath path_mojito {};
 		path_mojito.concat( platform_api->path_content, str_ascii("mojito.bmp") );
-		game_state->mojito = load_bmp( platform_api, path_mojito );
+		gs->mojito = load_bmp( platform_api, path_mojito );
 
 		StrPath path_mojito_head {};
 		path_mojito_head.concat( platform_api->path_content, str_ascii("mojito_head.bmp") );
-		game_state->mojito_head = load_bmp( platform_api, path_mojito_head );
+		gs->mojito_head = load_bmp( platform_api, path_mojito_head );
 
 		StrPath path_debug_bitmap {};
 		path_debug_bitmap.concat( platform_api->path_content, str_ascii("debug_bitmap2.bmp") );
-		game_state->debug_bitmap = load_bmp( platform_api, path_debug_bitmap );
+		gs->debug_bitmap = load_bmp( platform_api, path_debug_bitmap );
 	}
 
 	// Offical assets
 	{
 		StrPath path_test_bg_hh;
 		path_test_bg_hh.concat( platform_api->path_content, str_ascii("offical/test/test_background.bmp"));
-		game_state->test_bg_hh = load_bmp( platform_api, path_test_bg_hh );
+		gs->test_bg_hh = load_bmp( platform_api, path_test_bg_hh );
 
 	#define path_test "offical\\test\\"
 		constexpr char const subpath_hero_front_head[] = path_test "test_hero_front_head.bmp";
@@ -956,71 +1102,45 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 		using hh::HeroBitmaps_Left;
 		using hh::HeroBitmaps_Right;
 
-		load_bmp_asset( subpath_hero_front_head, game_state->hero_bitmaps[HeroBitmaps_Front].head );
-		load_bmp_asset( subpath_hero_back_head,  game_state->hero_bitmaps[HeroBitmaps_Back ].head );
-		load_bmp_asset( subpath_hero_left_head,  game_state->hero_bitmaps[HeroBitmaps_Left ].head );
-		load_bmp_asset( subpath_hero_right_head, game_state->hero_bitmaps[HeroBitmaps_Right].head );
+		load_bmp_asset( subpath_hero_front_head, gs->hero_bitmaps[HeroBitmaps_Front].head );
+		load_bmp_asset( subpath_hero_back_head,  gs->hero_bitmaps[HeroBitmaps_Back ].head );
+		load_bmp_asset( subpath_hero_left_head,  gs->hero_bitmaps[HeroBitmaps_Left ].head );
+		load_bmp_asset( subpath_hero_right_head, gs->hero_bitmaps[HeroBitmaps_Right].head );
 
-		load_bmp_asset( subpath_hero_front_cape, game_state->hero_bitmaps[HeroBitmaps_Front].cape );
-		load_bmp_asset( subpath_hero_back_cape,  game_state->hero_bitmaps[HeroBitmaps_Back ].cape );
-		load_bmp_asset( subpath_hero_left_cape,  game_state->hero_bitmaps[HeroBitmaps_Left ].cape );
-		load_bmp_asset( subpath_hero_right_cape, game_state->hero_bitmaps[HeroBitmaps_Right].cape );
+		load_bmp_asset( subpath_hero_front_cape, gs->hero_bitmaps[HeroBitmaps_Front].cape );
+		load_bmp_asset( subpath_hero_back_cape,  gs->hero_bitmaps[HeroBitmaps_Back ].cape );
+		load_bmp_asset( subpath_hero_left_cape,  gs->hero_bitmaps[HeroBitmaps_Left ].cape );
+		load_bmp_asset( subpath_hero_right_cape, gs->hero_bitmaps[HeroBitmaps_Right].cape );
 
-		load_bmp_asset( subpath_hero_front_torso, game_state->hero_bitmaps[HeroBitmaps_Front].torso );
-		load_bmp_asset( subpath_hero_back_torso,  game_state->hero_bitmaps[HeroBitmaps_Back ].torso );
-		load_bmp_asset( subpath_hero_left_torso,  game_state->hero_bitmaps[HeroBitmaps_Left ].torso );
-		load_bmp_asset( subpath_hero_right_torso, game_state->hero_bitmaps[HeroBitmaps_Right].torso );
+		load_bmp_asset( subpath_hero_front_torso, gs->hero_bitmaps[HeroBitmaps_Front].torso );
+		load_bmp_asset( subpath_hero_back_torso,  gs->hero_bitmaps[HeroBitmaps_Back ].torso );
+		load_bmp_asset( subpath_hero_left_torso,  gs->hero_bitmaps[HeroBitmaps_Left ].torso );
+		load_bmp_asset( subpath_hero_right_torso, gs->hero_bitmaps[HeroBitmaps_Right].torso );
 
 		s32 align_x = 0;
 		s32 align_y = 76;
-		game_state->hero_bitmaps[HeroBitmaps_Front].align_x = align_x;
-		game_state->hero_bitmaps[HeroBitmaps_Back ].align_x = align_x;
-		game_state->hero_bitmaps[HeroBitmaps_Left ].align_x = align_x;
-		game_state->hero_bitmaps[HeroBitmaps_Right].align_x = align_x;
-		game_state->hero_bitmaps[HeroBitmaps_Front].align_y = align_y;
-		game_state->hero_bitmaps[HeroBitmaps_Back ].align_y = align_y;
-		game_state->hero_bitmaps[HeroBitmaps_Left ].align_y = align_y;
-		game_state->hero_bitmaps[HeroBitmaps_Right].align_y = align_y;
+		gs->hero_bitmaps[HeroBitmaps_Front].align_x = align_x;
+		gs->hero_bitmaps[HeroBitmaps_Back ].align_x = align_x;
+		gs->hero_bitmaps[HeroBitmaps_Left ].align_x = align_x;
+		gs->hero_bitmaps[HeroBitmaps_Right].align_x = align_x;
+		gs->hero_bitmaps[HeroBitmaps_Front].align_y = align_y;
+		gs->hero_bitmaps[HeroBitmaps_Back ].align_y = align_y;
+		gs->hero_bitmaps[HeroBitmaps_Left ].align_y = align_y;
+		gs->hero_bitmaps[HeroBitmaps_Right].align_y = align_y;
 
 	#undef load_bmp_asset
 	}
 
-	game_state->camera_pos.tile_x = world->tiles_per_screen_x / 2;
-	game_state->camera_pos.tile_y = world->tiles_per_screen_y / 2;
+	gs->camera_pos.tile_x = world->tiles_per_screen_x / 2;
+	gs->camera_pos.tile_y = world->tiles_per_screen_y / 2;
 	
 	using hh::HeroBitmaps_Front;
 
-	hh::PlayerState* player = & game_state->player_state;
-	player->position.tile_x    = 4;
-	player->position.tile_y    = 4;
-	player->position.rel_pos.x = 0.f;
-	player->position.rel_pos.y = 0.f;
+	player_init( & gs->player_1, gs );
+//	player_init( & gs->player_2, gs );
+	gs->player_2 = {};
 
-	player->move_velocity = {};
-
-	player->mid_jump   = false;
-	player->jump_time  = 0.f;
-
-	player->height = 1.4f;
-	player->width  = player->height * 0.7f;
-	
-	player->hero_direction = HeroBitmaps_Front;
-	
-	hh::PlayerState* player_2 = & game_state->player_state_2;
-	player_2->position.tile_x    = 4;
-	player_2->position.tile_y    = 4;
-	player_2->position.rel_pos.x = 0.f;
-	player_2->position.rel_pos.y = 0.f;
-
-	player_2->move_velocity = {};
-
-	player_2->mid_jump   = false;
-	player_2->jump_time  = 0.f;
-
-	player_2->height = 1.4f;
-	player_2->width  = player_2->height * 0.7f;
-	
-	player_2->hero_direction = HeroBitmaps_Front;
+	gs->camera_assigned_entity_id = gs->player_1.entity_id;
 }
 
 Engine_API
@@ -1174,100 +1294,46 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	#endif
 	}
 
-	hh::GameState*   game_state = rcast( hh::GameState*, state->game_memory.persistent );
-	hh::PlayerState* player     = & game_state->player_state;
+	hh::GameState* gs = rcast( hh::GameState*, state->game_memory.persistent );
+	update_player_controllers( gs, input );
 	
-	hh::PlayerActions player_actions   {};
-	hh::PlayerActions player_actions_2 {};
+	input_poll_player_actions( & gs->player_1, 0 );
 	
-	do_once()
-	{	
-		game_state->player_1.controller.keyboard = input->keyboard;
-		game_state->player_1.controller.mouse    = input->mouse;
-	}
-	
-	// This is a crappy way of assigning controllers I'm doing for now...
-	for ( s32 idx = 0; idx < Max_Controllers; ++ idx )
-	{
-	#define can_assign( player ) ( ! game_state->player.controller.xpad && ! game_state->player.controller.ds_pad )
-		XInputPadState* xpad = input->xpads[ idx ];
-		if ( game_state->player_1.controller.xpad == xpad || game_state->player_2.controller.xpad == xpad )
-			continue;
-		
-		if ( xpad && pressed( xpad->start ) )
-		{
-			if ( can_assign( player_1 ) )
-			{
-				game_state->player_1.controller.xpad = xpad;
-				continue;
-			}
-				
-			if ( can_assign( player_2 ) )
-				game_state->player_2.controller.xpad = xpad;
-		}
-		
-		DualsensePadState* ds_pad = input->ds_pads[ idx ];
-		if ( game_state->player_1.controller.ds_pad == ds_pad || game_state->player_2.controller.ds_pad == ds_pad )
-			continue;
-		
-		if ( ds_pad && pressed( ds_pad->options ) )
-		{
-			if ( can_assign( player_1 ) )
-			{
-				game_state->player_1.controller.ds_pad = ds_pad;
-				continue;
-			}
-				
-			if ( can_assign( player_2 ) )
-				game_state->player_2.controller.ds_pad = ds_pad;
-		}
-	#undef can_assign
-	}
-	
-	input_poll_player_actions( & game_state->player_1.controller, & player_actions,   0 );
-	
-	if ( game_state->player_2.controller.xpad || game_state->player_2.controller.ds_pad )
-		input_poll_player_actions( & game_state->player_2.controller, & player_actions_2, 1 );
+	if ( gs->player_2.controller.xpad || gs->player_2.controller.ds_pad )
+		input_poll_player_actions( & gs->player_2, 1 );
 
 	World*   world    = state->context.world;
 	TileMap* tile_map = world->tile_map;
 
-	f32 tile_size_in_pixels   = scast(f32, world->tile_size_in_pixels);
-	f32 player_half_width     = player->width  / 2.f;
-	f32 player_quarter_height = player->height / 4.f;
-
-	using hh::EHeroBitmapsDirection;
-	using hh::HeroBitmaps_Front;
-	using hh::HeroBitmaps_Back;
-	using hh::HeroBitmaps_Left;
-	using hh::HeroBitmaps_Right;
-
-	update_player_state( delta_time, world, game_state, player, & player_actions );
-	update_player_state( delta_time, world, game_state, & game_state->player_state_2, & player_actions_2 );
+	update_player( & gs->player_1, delta_time, world, gs );
+	
+	if ( gs->player_2.entity_id )
+		update_player( & gs->player_2, delta_time, world, gs );
 	
 	// TODO(Ed) : Move to handmade module?
 	// Camera Update
 	// void update_camera( ... )
 	{
-		TileMapPos player_to_camera = subtract( player->position, game_state->camera_pos );
-	
-		game_state->camera_pos.tile_z = player->position.tile_z;
+		hh::Entity* entity_followed = get_entity( gs, gs->camera_assigned_entity_id );
+		TileMapPos player_to_camera = subtract( entity_followed->position, gs->camera_pos );
+		
+		gs->camera_pos.tile_z = entity_followed->position.tile_z;
 	
 		if ( player_to_camera.tile_x > world->tiles_per_screen_x / 2 )
 		{
-			game_state->camera_pos.tile_x += world->tiles_per_screen_x;
+			gs->camera_pos.tile_x += world->tiles_per_screen_x;
 		}
 		if ( player_to_camera.tile_y > world->tiles_per_screen_y / 2 )
 		{
-			game_state->camera_pos.tile_y += world->tiles_per_screen_y;
+			gs->camera_pos.tile_y += world->tiles_per_screen_y;
 		}
 		if ( player_to_camera.tile_x < -world->tiles_per_screen_x / 2 )
 		{
-			game_state->camera_pos.tile_x -= world->tiles_per_screen_x;
+			gs->camera_pos.tile_x -= world->tiles_per_screen_x;
 		}
 		if ( player_to_camera.tile_y < -world->tiles_per_screen_y / 2 )
 		{
-			game_state->camera_pos.tile_y -= world->tiles_per_screen_y;
+			gs->camera_pos.tile_y -= world->tiles_per_screen_y;
 		}
 	}
 	
@@ -1276,26 +1342,28 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	// Background & Tile Render relative to player 1's camera
 	// void render_bg_and_level( ... )
 	{
+		hh::Entity* entity_followed = get_entity( gs, gs->camera_assigned_entity_id );
+		
 		draw_rectangle( back_buffer
 			, Zero(Vec2)
 			, { scast(f32, back_buffer->width), scast(f32, back_buffer->height) }
 			, 1.f, 0.24f, 0.24f );
 	
-		draw_bitmap( back_buffer, screen_center, & game_state->test_bg );
-		draw_bitmap( back_buffer, screen_center, & game_state->test_bg_hh );
+		draw_bitmap( back_buffer, screen_center, & gs->test_bg );
+		draw_bitmap( back_buffer, screen_center, & gs->test_bg_hh );
 	
 		// Screen Camera
 		for ( s32 relative_row = -10; relative_row < +10; ++ relative_row )
 		{
 			for ( s32 relative_col = -20; relative_col < +20; ++ relative_col )
 			{
-				s32 col = game_state->camera_pos.tile_x + relative_col;
-				s32 row = game_state->camera_pos.tile_y + relative_row;
+				s32 col = gs->camera_pos.tile_x + relative_col;
+				s32 row = gs->camera_pos.tile_y + relative_row;
 	
-				s32 tile_id  = TileMap_get_tile_value( tile_map, col, row, game_state->camera_pos.tile_z );
+				s32 tile_id  = TileMap_get_tile_value( tile_map, col, row, gs->camera_pos.tile_z );
 				f32 color[3] = { 0.15f, 0.15f, 0.15f };
 	
-				if ( tile_id > 1 || (row == player->position.tile_y && col == player->position.tile_x) )
+				if ( tile_id > 1 || (row == entity_followed->position.tile_y && col == entity_followed->position.tile_x) )
 //				if ( tile_id > 1 )
 				{
 					if ( tile_id == 2 )
@@ -1317,17 +1385,19 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 						color[2] = 0.42f;
 					}
 	
-					if ( row == player->position.tile_y && col == player->position.tile_x )
+					if ( row == entity_followed->position.tile_y && col == entity_followed->position.tile_x )
 					{
 						color[0] = 0.44f;
 						color[1] = 0.3f;
 						color[2] = 0.3f;
 					}
+					
+					f32 tile_size_in_pixels   = scast(f32, world->tile_size_in_pixels);
 	
 					Vec2 tile_pixel_size = { tile_size_in_pixels * 0.5f, tile_size_in_pixels * 0.5f };
 					Pos2 center {
-						screen_center.x + scast(f32, relative_col) * tile_size_in_pixels - game_state->camera_pos.rel_pos.x * world->tile_meters_to_pixels,
-						screen_center.y - scast(f32, relative_row) * tile_size_in_pixels + game_state->camera_pos.rel_pos.y * world->tile_meters_to_pixels
+						screen_center.x + scast(f32, relative_col) * tile_size_in_pixels - gs->camera_pos.rel_pos.x * world->tile_meters_to_pixels,
+						screen_center.y - scast(f32, relative_row) * tile_size_in_pixels + gs->camera_pos.rel_pos.y * world->tile_meters_to_pixels
 					};
 					Pos2 min = center - cast( Pos2, tile_pixel_size );
 					Pos2 max = center + cast( Pos2, tile_pixel_size );
@@ -1343,11 +1413,11 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	// Bad bitmap test
 	#if 0
 	{
-		u32* src = game_state->mojito_head.pixels;
+		u32* src = gs->mojito_head.pixels;
 		u32* dst = rcast(u32*, back_buffer->memory);
-		for ( s32 y = 0; y < game_state->mojito_head.height; ++ y )
+		for ( s32 y = 0; y < gs->mojito_head.height; ++ y )
 		{
-			for ( s32 x = 0; x < game_state->mojito_head.width; ++ x )
+			for ( s32 x = 0; x < gs->mojito_head.width; ++ x )
 			{
 				*dst = *src;
 				++ dst;
@@ -1358,10 +1428,10 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	#endif
 
 	// Player Rendering
-	render_player( player, world, game_state, back_buffer );
+	render_player( & gs->player_1, world, gs, back_buffer );
 	
-	if ( game_state->player_2.controller.xpad || game_state->player_2.controller.ds_pad )
-		render_player( & game_state->player_state_2, world, game_state, back_buffer );
+	if ( gs->player_2.entity_id )
+		render_player( & gs->player_2, world, gs, back_buffer );
 	
 	// Snapshot Visual Aid
 	#if Build_Development
@@ -1379,10 +1449,12 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		// Replay indicator
 		if ( memory->replay_mode == ReplayMode_Record )
 		{
+			hh::Entity* entity_followed = get_entity( gs, gs->camera_assigned_entity_id );
+		
 			// TODO(Ed) : We're prob going to need a better indicator for recording...
 			draw_rectangle( back_buffer
-				, { player->position.rel_pos.x + 50.f, player->position.rel_pos.y - 50.f }
-				, { player->position.rel_pos.x + 10.f, player->position.rel_pos.y + 40.f }
+				, { entity_followed->position.rel_pos.x + 50.f, entity_followed->position.rel_pos.y - 50.f }
+				, { entity_followed->position.rel_pos.x + 10.f, entity_followed->position.rel_pos.y + 40.f }
 				, 1.f, 1.f, 1.f );
 		}
 	}
