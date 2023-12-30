@@ -136,13 +136,13 @@ inline Pos2_f32& operator/=( Pos2_f32& v, f32 s )
 	return v;
 }
 
-using Dist2_f32 = f32;
+using Dist_f32 = f32;
 
-inline Dist2_f32 distance( Pos2_f32 a, Pos2_f32 b )
+inline Dist_f32 distance( Pos2_f32 a, Pos2_f32 b )
 {
-	f32       x      = b.x - a.x;
-	f32       y      = b.y - a.y;
-	Dist2_f32 result = sqrt( x * x + y * y );
+	f32      x      = b.x - a.x;
+	f32      y      = b.y - a.y;
+	Dist_f32 result = sqrt( x * x + y * y );
 	return result;
 }
 
@@ -495,8 +495,8 @@ inline Dir2_f32 direction( Accel2_f32 accel )
 	return result;
 }
 
+using Dist   = Dist_f32;
 using Pos2   = Pos2_f32;
 using Dir2   = Dir2_f32;
-using Dist2  = Dist2_f32;
 using Vel2   = Vel2_f32;
 using Accel2 = Accel2_f32;

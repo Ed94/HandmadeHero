@@ -10,13 +10,15 @@
 inline
 f32 abs( f32 value )
 {
-	return fabsf(value);
+	f32 result = fabsf(value);
+	return result;
 }
 
 inline
 f32 sqrt( f32 value )
 {
-	return sqrtf(value);
+	f32 result = sqrtf(value);
+	return result;
 }
 
 inline
@@ -112,4 +114,18 @@ b32 bitscan_forward( u32* index, u32 value )
 	}
 #endif
 	return found;
+}
+
+inline
+u32 rotate_left( u32 mask, s32 shift )
+{
+	u32 result = _rotl( mask, shift);
+	return result;
+}
+
+inline
+u32 rotate_right( u32 mask, s32 shift )
+{
+	u32 result = _rotl( mask, shift );
+	return result;
 }

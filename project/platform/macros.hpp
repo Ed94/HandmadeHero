@@ -38,6 +38,9 @@
 #define gigabytes( x ) ( megabytes( x ) * ( s64 )( 1024 ) )
 #define terabytes( x ) ( gigabytes( x ) * ( s64 )( 1024 ) )
 
+#define max( a, b ) ( (a > b) ? (a) : (b) )
+#define min( a, b ) ( (a < b) ? (a) : (b) )
+
 // TODO(Ed) : Move to debug header eventually
 
 #if Build_Development

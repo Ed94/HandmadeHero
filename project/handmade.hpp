@@ -109,7 +109,7 @@ struct Entity
 	EFacingDirection facing_direction;
 	
 	engine::TileMapPos position;
-	Vel2               move_velocity;
+	Vel2               velocity;
 };
 
 struct PlayerState

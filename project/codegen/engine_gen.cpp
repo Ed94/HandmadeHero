@@ -5,6 +5,8 @@
 #define GEN_BENCHMARK
 #define GEN_ENFORCE_STRONG_CODE_TYPES
 #include "dependencies/gen.hpp"
+#undef min
+#undef max
 #undef ccast
 #undef pcast
 #undef rcast
@@ -319,7 +321,7 @@ Code gen__phys2( StrC type )
 	String sym_vec   = String::fmt_buf( GlobalAllocator, "Vec2_%s",   type.Ptr );
 	String sym_pos   = String::fmt_buf( GlobalAllocator, "Pos2_%s",   type.Ptr );
 	String sym_dir   = String::fmt_buf( GlobalAllocator, "Dir2_%s",   type.Ptr);
-	String sym_dist  = String::fmt_buf( GlobalAllocator, "Dist2_%s",  type.Ptr );
+	String sym_dist  = String::fmt_buf( GlobalAllocator, "Dist_%s",   type.Ptr );
 	String sym_vel   = String::fmt_buf( GlobalAllocator, "Vel2_%s",   type.Ptr );
 	String sym_accel = String::fmt_buf( GlobalAllocator, "Accel2_%s", type.Ptr );
 
@@ -549,9 +551,9 @@ int gen_main()
 		physics_header.print( gen_phys2( f32 ) );
 
 		physics_header.print( parse_global_body( code(
+			using Dist   = Dist_f32;
 			using Pos2   = Pos2_f32;
 			using Dir2   = Dir2_f32;
-			using Dist2  = Dist2_f32;
 			using Vel2   = Vel2_f32;
 			using Accel2 = Accel2_f32;
 		)));

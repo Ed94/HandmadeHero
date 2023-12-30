@@ -332,6 +332,8 @@ Bitmap load_bmp( platform::ModuleAPI* platform_api, Str file_path  )
 
 	BitmapHeaderPacked* header = pcast(BitmapHeaderPacked*, file.data);
 	assert( header->compression == 3 );
+	
+	u32 alpha_mask = ~(header->red_mask | header->green_mask | header->blue_mask);
 
 	// TODO(Ed) : Do not directly assign this, allocate the pixels to somewhere in game or engine persistent.
 	result.pixels         = rcast(u32*, rcast(Byte*, file.data) + header->bitmap_offset);
@@ -339,20 +341,27 @@ Bitmap load_bmp( platform::ModuleAPI* platform_api, Str file_path  )
 	result.height         = header->height;
 	result.bits_per_pixel = header->bits_per_pixel;
 
-	u32 red_shift   = 0;
-	u32 green_shift = 0;
-	u32 blue_shift  = 0;
-	u32 alpha_shift = 0;
+	u32 red_scan   = 0;
+	u32 green_scan = 0;
+	u32 blue_scan  = 0;
+	u32 alpha_scan = 0;
 
-	b32 red_found    = bitscan_forward( & red_shift,   header->red_mask );
-	b32 green_found  = bitscan_forward( & green_shift, header->green_mask );
-	b32 blue_found   = bitscan_forward( & blue_shift,  header->blue_mask );
-	b32 alpha_found  = bitscan_forward( & alpha_shift, ~(header->red_mask | header->green_mask | header->blue_mask) );
-
+	b32 red_found    = bitscan_forward( & red_scan,   header->red_mask );
+	b32 green_found  = bitscan_forward( & green_scan, header->green_mask );
+	b32 blue_found   = bitscan_forward( & blue_scan,  header->blue_mask );
+	b32 alpha_found  = bitscan_forward( & alpha_scan, alpha_mask );
+	
 	assert( red_found );
 	assert( green_found );
 	assert( blue_found );
 	assert( alpha_found );
+	
+#if 1
+	s32 blue_shift  =  0 - scast( s32, blue_scan  );
+	s32 green_shift =  8 - scast( s32, green_scan );
+	s32 red_shift   = 16 - scast( s32, red_scan   );
+	s32 alpha_shift = 24 - scast( s32, alpha_scan );
+#endif
 
 	u32* src = result.pixels;
 	for ( s32 y = 0; y < header->width; ++ y )
@@ -369,10 +378,17 @@ Bitmap load_bmp( platform::ModuleAPI* platform_api, Str file_path  )
 
 			Pixel* px = rcast(Pixel*, src);
 
-			u32 alpha = (( *src >> alpha_shift ) & 0xFF) << 24;
-			u32 red   = (( *src >> red_shift   ) & 0xFF) << 16;
-			u32 green = (( *src >> green_shift ) & 0xFF) << 8;
-			u32 blue  = (( *src >> blue_shift  ) & 0xFF) << 0;
+		#if 0
+			u32 alpha = (( *src >> alpha_scan ) & 0xFF) << 24;
+			u32 red   = (( *src >> red_scan   ) & 0xFF) << 16;
+			u32 green = (( *src >> green_scan ) & 0xFF) << 8;
+			u32 blue  = (( *src >> blue_scan  ) & 0xFF) << 0;
+		#else
+			u32 alpha = rotate_left( *src & alpha_mask,         alpha_shift );
+			u32 red   = rotate_left( *src & header->red_mask,   red_shift   );
+			u32 green = rotate_left( *src & header->green_mask, green_shift );
+			u32 blue  = rotate_left( *src & header->blue_mask,  blue_shift  );
+		#endif
 
 			 *src = alpha | red | green | blue;
 			++ src;
@@ -417,9 +433,6 @@ s32 get_entity( hh::GameState* gs )
 inline
 void player_init( hh::Player* player, hh::GameState* gs )
 {
-	player->controller.xpad_id   = 0;
-	player->controller.ds_pad_id = 0;
-
 	hh::PlayerState* state     = & player->state;
 	s32              entity_id = get_entity( gs );
 	assert( entity_id );
@@ -433,7 +446,7 @@ void player_init( hh::Player* player, hh::GameState* gs )
 	entity->position.rel_pos.x = 0.f;
 	entity->position.rel_pos.y = 0.f;
 
-	entity->move_velocity = {};
+	entity->velocity = {};
 
 	state->mid_jump   = false;
 	state->jump_time  = 0.f;
@@ -555,18 +568,29 @@ void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameSt
 		player_move_vec.x = scast(f32, actions->player_x_move_digital );
 		player_move_vec.y = scast(f32, actions->player_y_move_digital );
 	}
-
+	
+	// vec_x_adjusted = desired_vec_len / curr_vec_len * curr_vec_x
+	
+	// Allows for more ganular movement with the analog
+	if (0)
+	{
+		f32 accel_scale = magnitude( player_move_vec );
+		if ( accel_scale > 1.f )
+			accel_scale = 1.f;
+		move_accel *= accel_scale;
+	}
+	
 	Dir2   player_direction  = cast( Dir2, player_move_vec );
 	Accel2 player_move_accel = scast( Accel2, player_direction ) * move_accel;
 
 	// TODO(Ed) : ODE!
-	Accel2 friction    = pcast( Accel2, entity->move_velocity) * 9.f;
+	Accel2 friction    = pcast( Accel2, entity->velocity) * 9.f;
 	player_move_accel -= friction;
 
-	entity->move_velocity += player_move_accel * 0.5f;
-	new_player_pos        += entity->move_velocity;
+	entity->velocity += player_move_accel * 0.5f;
+	new_player_pos   += entity->velocity;
 
-	// Old collision implmentation
+	// Collision
 	#if 1
 	{
 		b32 collision_nw = false;
@@ -642,10 +666,10 @@ void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameSt
 			//}
 			
 			// The 2x multiplier allows for the the "bounce off" velocity to occur instead of the player just looking like they impacted the wall and stopped
-			entity->move_velocity -= cast( Vel2,  1.f * scalar_product( Vec2( entity->move_velocity ), wall_vector ) * wall_vector );
+			entity->velocity -= cast( Vel2,  1.f * scalar_product( Vec2( entity->velocity ), wall_vector ) * wall_vector );
 			
 			new_player_pos = { old_pos.rel_pos.x, old_pos.rel_pos.y };
-			new_player_pos += entity->move_velocity;
+			new_player_pos += entity->velocity;
 		}
 		
 		TileMapPos new_pos = {
@@ -662,16 +686,20 @@ void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameSt
 			old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
 		};
 		new_pos = recannonicalize_position( tile_map, new_pos );
-	
-		s32 min_tile_x = 0;
-		s32 min_tile_y = 0;
+		
+		s32 min_tile_x = min( old_pos.tile_x, new_pos.tile_x );
+		s32 min_tile_y = min( old_pos.tile_y, new_pos.tile_y );
+		
+		s32 max_tile_x = max( old_pos.tile_x, new_pos.tile_x );
+		s32 max_tile_y = max( old_pos.tile_y, new_pos.tile_y );
 		
 		TileMapPos best_position  = old_pos;
-		Dist2      best_distance2 = cast(Dist2, magnitude_squared( entity->move_velocity ) );
+		
+		f32 min_interp_delta = 1.0f;
 	
-		for ( s32 tile_y = 0; tile_y <= min_tile_y; ++ tile_y )
+		for ( s32 tile_y = min_tile_y; tile_y <= max_tile_x; ++ tile_y )
 		{
-			for ( s32 tile_x = 0; tile_x <= min_tile_x; ++ tile_x )
+			for ( s32 tile_x = min_tile_x; tile_x <= max_tile_x; ++ tile_x )
 			{
 				TileMapPos test_tile_pos = centered_tile_point( tile_x, tile_y, new_pos.tile_z );
 				s32        tile_value    = TileMap_get_tile_value( tile_map, test_tile_pos );
@@ -684,14 +712,16 @@ void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameSt
 					Vec2 max_corner =  0.5f * tile_xy_in_meters;
 					
 					TileMapPos rel_new_player_pos = subtract( test_tile_pos, new_pos );
-					Vec2       test_pos           = closest_point_in_rectangle( min_corner, max_corner, rel_new_player_pos );
 					
-					f32 test_dist2 = ;
-					if ( best_distance2 > test_dst )
-					{
-						best_position  = ;
-						best_distance2 = ;
-					}
+					// TODO(Ed) : Test all four walls and take the minimum Z
+					/*
+						ts = wx -p0x * 1/dx
+							
+						wall_x - start_pos_x * 1 / distance_interval_x
+						
+						result = wall.x - rel_new_player_pos.rel_pos.x * 1 / entity->velocity;
+					*/
+					test_wall( min_corner.x, rel_new_player_pos.rel_pos.x, Vec2 { min_corner.y, max_corner.y }, );
 				}
 			}
 		}
@@ -721,13 +751,13 @@ void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameSt
 	using hh::FacingDirection_Left;
 	using hh::FacingDirection_Right;
 	
-	if ( is_nearly_zero( entity->move_velocity.x ) && is_nearly_zero( entity->move_velocity.y ) )
+	if ( is_nearly_zero( entity->velocity.x ) && is_nearly_zero( entity->velocity.y ) )
 	{
 		// Note(Ed): Leave facing directiona alone
 	}
-	else if ( abs( entity->move_velocity.x ) > abs( entity->move_velocity.y ) )
+	else if ( abs( entity->velocity.x ) > abs( entity->velocity.y ) )
 	{
-		if ( entity->move_velocity.x > 0 )
+		if ( entity->velocity.x > 0 )
 		{
 			entity->facing_direction = FacingDirection_Right;
 		}
@@ -736,9 +766,9 @@ void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameSt
 			entity->facing_direction = FacingDirection_Left;
 		}
 	}
-	else if ( abs( entity->move_velocity.x ) < abs( entity->move_velocity.y ) )
+	else if ( abs( entity->velocity.x ) < abs( entity->velocity.y ) )
 	{
-		if ( entity->move_velocity.y >= 0 )
+		if ( entity->velocity.y >= 0 )
 		{
 			entity->facing_direction = FacingDirection_Back;
 		}

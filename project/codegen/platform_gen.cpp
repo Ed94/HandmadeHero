@@ -4,6 +4,8 @@
 #define GEN_BENCHMARK
 #define GEN_ENFORCE_STRONG_CODE_TYPES
 #include "dependencies/gen.hpp"
+#undef min
+#undef max
 using namespace gen;
 
 #define path_gen "./gen/"
