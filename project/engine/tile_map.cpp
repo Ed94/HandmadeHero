@@ -172,7 +172,6 @@ void TileMap_set_tile_value( MemoryArena* arena, TileMap* tile_map, s32 abs_tile
 	TileChunk_set_tile_value( chunk, tile_map, chunk_pos.tile_x, chunk_pos.tile_y, value );
 }
 
-
 internal
 b32 TileMap_are_on_same_tile( TileMapPos* pos_a, TileMapPos* pos_b )
 {

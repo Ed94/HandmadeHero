@@ -61,36 +61,15 @@ struct ActionableMode
 	Player : Controller, Actionables, ActionSets
 */
 
-struct Player
+#if NEW_INPUT_DESIGN
+struct ControllerState
 {
-	// So far just has an assigned controller.
-	engine::ControllerState* controller;
-
-	// Possilby some other stuff in the future.
+	engine::KeyboardState*     keyboard;
+	engine::MousesState*       mouse;
+	engine::XInputPadState*    xpad;
+	engine::DualsensePadState* ds_pad;
 };
-
-struct PlayerState
-{
-	f32 width;
-	f32 height;
-
-	engine::TileMapPos position;
-	Vel2               move_velocity;
-
-	b32 mid_jump;
-	f32 jump_time;
-};
-
-struct PlayerActions
-{
-	s32 player_x_move_digital;
-	s32 player_y_move_digital;
-	f32 player_x_move_analog;
-	f32 player_y_move_analog;
-
-	b32 sprint;
-	b32 jump;
-};
+#endif
 
 enum EHeroBitmapsDirection : u32
 {
@@ -112,9 +91,52 @@ struct HeroBitmaps
 	Bitmap torso;
 };
 
+struct PlayerState
+{
+	f32 width;
+	f32 height;
+
+	engine::TileMapPos position;
+	Vel2               move_velocity;
+
+	b32 mid_jump;
+	f32 jump_time;
+	
+	EHeroBitmapsDirection hero_direction;
+};
+
+struct PlayerActions
+{
+	s32 player_x_move_digital;
+	s32 player_y_move_digital;
+	f32 player_x_move_analog;
+	f32 player_y_move_analog;
+
+	b32 sprint;
+	b32 jump;
+	
+	b32 join;
+};
+
+struct Player
+{
+#if NEW_INPUT_DESIGN
+	// So far just has an assigned controller.
+	ControllerState controller;
+#else
+	engine::ControllerState* controller;
+#endif
+
+	PlayerState state;
+};
+
 struct GameState
 {
+	Player player_1;
+	Player player_2;
+
 	PlayerState player_state;
+	PlayerState player_state_2;
 
 	using Bitmap = engine::Bitmap;
 
@@ -127,7 +149,6 @@ struct GameState
 	
 	engine::TileMapPos camera_pos;
 
-	EHeroBitmapsDirection hero_direction;
 	HeroBitmaps hero_bitmaps[4];
 };
 

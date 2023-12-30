@@ -7,6 +7,9 @@
 
 NS_ENGINE_BEGIN
 
+// Max controllers for the platform layer and thus for all other layers is 4. (Sanity and xinput limit)
+constexpr u32 Max_Controllers = 4;
+
 struct DigitalBtn
 {
 	s32 half_transitions;
@@ -105,6 +108,7 @@ struct XInputPadState
 		};
 	};
 };
+using XInputPadStates = XInputPadState*[ Max_Controllers ];
 
 struct DualsensePadState
 {
@@ -137,6 +141,26 @@ struct DualsensePadState
 		};
 	};
 };
+using DualsensePadStates = DualsensePadState*[ Max_Controllers ];
+
+#define NEW_INPUT_DESIGN 1
+
+#if NEW_INPUT_DESIGN
+struct InputStateSnapshot
+{
+	KeyboardState     keyboard;
+	MousesState       mouse;	
+	XInputPadState    xpads  [ Max_Controllers ];
+	DualsensePadState ds_pads[ Max_Controllers ];
+};
+#else
+struct ControllerStateSnapshot
+{
+	KeyboardState     keyboard;
+	MousesState       mouse;
+	XInputPadState    xpad;
+	DualsensePadState ds_pad;
+};
 
 struct ControllerState
 {
@@ -146,22 +170,22 @@ struct ControllerState
 	DualsensePadState* ds_pad;
 };
 
-struct ControllerStateSnapshot
-{
-	KeyboardState     keyboard;
-	MousesState       mouse;
-	XInputPadState    xpad;
-	DualsensePadState ds_pad;
-};
-
-struct InputState
-{
-	ControllerState controllers[4];
-};
-
 struct InputStateSnapshot
 {
 	ControllerStateSnapshot controllers[4];
+};
+#endif
+
+struct InputState
+{
+#if NEW_INPUT_DESIGN
+	KeyboardState*     keyboard;
+	MousesState*       mouse;
+	XInputPadStates    xpads;
+	DualsensePadStates ds_pads;
+#else
+	ControllerState controllers[4];
+#endif
 };
 
 using InputBindCallback             = void( void* );

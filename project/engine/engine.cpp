@@ -56,11 +56,24 @@ EngineContext* get_context()
 
 #define pressed( btn ) (btn.ended_down && btn.half_transitions > 0)
 
+inline
+Vec2 get_screen_center( OffscreenBuffer* back_buffer )
+{
+	Vec2 result {
+		scast(f32, back_buffer->width)  * 0.5f,
+		scast(f32, back_buffer->height) * 0.5f
+	};
+	return result;
+}
+
 internal
 void input_poll_engine_actions( InputState* input, EngineActions* actions )
 {
-	ControllerState* controller = & input->controllers[0];
-	KeyboardState*   keyboard   = controller->keyboard;
+#if NEW_INPUT_DESIGN
+	KeyboardState* keyboard = input->keyboard;
+#else
+	KeyboardState* keyboard = input->controllers[0].keyboard;
+#endif
 
 	// actions->move_right |= keyboard->D.EndedDown;
 	// actions->move_left  |= keyboard->A.EndedDown;
@@ -87,7 +100,11 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 	actions->loop_mode_game   |= pressed( keyboard->L ) && ! keyboard->right_shift.ended_down && ! keyboard->right_alt.ended_down;
 	actions->loop_mode_engine |= pressed( keyboard->L ) &&   keyboard->right_shift.ended_down;
 
-	MousesState* mouse = controller->mouse;
+#if NEW_INPUT_DESIGN
+	MousesState* mouse = input->mouse;
+#else
+	MousesState* mouse = input->controllers[0].mouse;
+#endif
 
 	actions->move_right = (mouse->horizontal_wheel.end > 0.f) * 20;
 	actions->move_left  = (mouse->horizontal_wheel.end < 0.f) * 20;
@@ -100,11 +117,16 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 #endif
 }
 
+// TODO(Ed) : Move to handmade module
 internal
-void input_poll_player_actions( InputState* input, hh::PlayerActions* actions )
+void input_poll_player_actions( 
+#if NEW_INPUT_DESIGN
+	hh::ControllerState* controller
+#else
+	ControllerState* controller
+#endif
+	, hh::PlayerActions* actions, b32 is_player_2 )
 {
-	ControllerState* controller = & input->controllers[0];
-
 	if ( controller->ds_pad )
 	{
 		DualsensePadState* pad = controller->ds_pad;
@@ -114,6 +136,11 @@ void input_poll_player_actions( InputState* input, hh::PlayerActions* actions )
 
 		actions->player_x_move_analog += pad->stick.left.X.end;
 		actions->player_y_move_analog += pad->stick.left.Y.end;
+		
+		if ( is_player_2 )
+		{
+			actions->join |= pressed( pad->share );
+		}
 	}
 	if ( controller->xpad )
 	{
@@ -124,6 +151,11 @@ void input_poll_player_actions( InputState* input, hh::PlayerActions* actions )
 
 		actions->player_x_move_analog += pad->stick.left.X.end;
 		actions->player_y_move_analog += pad->stick.left.Y.end;
+		
+		if ( is_player_2 )
+		{
+			actions->join |= pressed( pad->start );
+		}
 	}
 
 	if ( controller->keyboard )
@@ -363,6 +395,287 @@ Bitmap load_bmp( platform::ModuleAPI* platform_api, Str file_path  )
 
 	//platform_api->file_close( & file );
 	return result;
+}
+
+// TODO(Ed) : Move to handmade module?
+internal
+void update_player_state( f32 delta_time, World* world, hh::GameState* game_state, hh::PlayerState* player, hh::PlayerActions* player_actions )
+{
+	TileMap* tile_map = world->tile_map;
+
+	f32 tile_size_in_pixels   = scast(f32, world->tile_size_in_pixels);
+	f32 player_half_width     = player->width  / 2.f;
+	f32 player_quarter_height = player->height / 4.f;
+
+	f32 move_accel = 36.f;
+	if ( player_actions->sprint )
+	{
+		move_accel = 94.f;
+	}
+
+	TileMapPos old_pos = player->position;
+	Pos2_f32 new_player_pos = { old_pos.rel_pos.x, old_pos.rel_pos.y };
+
+	Vec2 player_move_vec = {};
+	if ( player_actions->player_x_move_analog || player_actions->player_y_move_analog )
+	{
+		player_move_vec.x = scast(f32, player_actions->player_x_move_analog );
+		player_move_vec.y = scast(f32, player_actions->player_y_move_analog );
+	}
+	else
+	{
+		player_move_vec.x = scast(f32, player_actions->player_x_move_digital );
+		player_move_vec.y = scast(f32, player_actions->player_y_move_digital );
+	}
+
+	Dir2   player_direction  = cast( Dir2, player_move_vec );
+	Accel2 player_move_accel = scast( Accel2, player_direction ) * move_accel;
+
+	// TODO(Ed) : ODE!
+	Accel2 friction = pcast( Accel2, player->move_velocity) * 9.f;
+	player_move_accel -= friction;
+
+	player->move_velocity += player_move_accel * 0.5f;
+	new_player_pos        += player->move_velocity;
+
+	// Old collision implmentation
+	#if 1
+	{
+		b32 collision_nw = false;
+		b32 collision_ne = false;
+		b32 collision_sw = false;
+		b32 collision_se = false;
+		do
+		{
+			// Base position
+			//TileMapPos test_pos = {
+				//new_player_pos.x, new_player_pos.y,
+				//old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+			//};
+			//test_pos = recannonicalize_position( tile_map, test_pos );
+
+			// TODO(Ed) : Need a delta-function that auto-reconnonicalizes.
+
+			TileMapPos test_pos_nw {
+				new_player_pos.x - player_half_width, new_player_pos.y + player_quarter_height,
+				old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+			};
+			test_pos_nw  = recannonicalize_position( tile_map, test_pos_nw );
+			collision_nw = ! TileMap_is_point_empty( tile_map, test_pos_nw );
+
+			TileMapPos test_pos_ne {
+				new_player_pos.x + player_half_width, new_player_pos.y + player_quarter_height,
+				old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+			};
+			test_pos_ne  = recannonicalize_position( tile_map, test_pos_ne );
+			collision_ne = ! TileMap_is_point_empty( tile_map, test_pos_ne );
+
+			TileMapPos test_pos_sw {
+				new_player_pos.x - player_half_width, new_player_pos.y,
+				old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+			};
+			test_pos_sw  = recannonicalize_position( tile_map, test_pos_sw );
+			collision_sw = ! TileMap_is_point_empty( tile_map, test_pos_sw );
+
+			TileMapPos test_pos_se {
+				new_player_pos.x + player_half_width, new_player_pos.y,
+				old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+			};
+			test_pos_se  = recannonicalize_position( tile_map, test_pos_se );
+			collision_se = ! TileMap_is_point_empty( tile_map, test_pos_se );
+		} 
+		while(0);
+
+		if ( collision_se || collision_sw || collision_ne || collision_nw )
+		{
+			// Should be colliding with a wall
+			
+			Vec2 wall_vector = { 0, 0 };
+			if ( collision_nw && collision_sw )
+			{
+				wall_vector = { 1.f, 0.f };
+			}
+			{
+				wall_vector = { -1.f, 0.f };
+			}
+			if ( collision_nw && collision_ne )
+			{
+				wall_vector = { 0.f, 1.f };
+			}
+			if ( collision_se && collision_sw )
+			{
+				wall_vector = { 0.f, -1.f };
+			}
+			
+			//if ( collision_nw && !collision_ne && !collision_sw && !collision_se )
+			//{
+			//	wall_vector = { 1.f, 1.f };
+			//}
+			
+			// The 2x multiplier allows for the the "bounce off" velocity to occur instead of the player just looking like they impacted the wall and stopped
+			player->move_velocity -= cast( Vel2,  1.f * scalar_product( Vec2( player->move_velocity ), wall_vector ) * wall_vector );
+			
+			new_player_pos = { old_pos.rel_pos.x, old_pos.rel_pos.y };
+			new_player_pos += player->move_velocity;
+		}
+		
+		TileMapPos new_pos = {
+			new_player_pos.x, new_player_pos.y,
+			old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+		};
+		new_pos = recannonicalize_position( tile_map, new_pos );
+		player->position = new_pos;
+	}
+	#else
+	{
+		TileMapPos new_pos = {
+			new_player_pos.x, new_player_pos.y,
+			old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
+		};
+		new_pos = recannonicalize_position( tile_map, new_pos );
+	
+		s32 min_tile_x = 0;
+		s32 min_tile_y = 0;
+		
+		TileMapPos best_position  = old_pos;
+		Dist2      best_distance2 = cast(Dist2, magnitude_squared( player->move_velocity ) );
+	
+		for ( s32 tile_y = 0; tile_y <= min_tile_y; ++ tile_y )
+		{
+			for ( s32 tile_x = 0; tile_x <= min_tile_x; ++ tile_x )
+			{
+				TileMapPos test_tile_pos = centered_tile_point( tile_x, tile_y, new_pos.tile_z );
+				s32        tile_value    = TileMap_get_tile_value( tile_map, test_tile_pos );
+				
+				if ( TileMap_is_tile_value_empty( tile_value ) )
+				{
+					Vec2 tile_xy_in_meters = Vec2 { tile_map->tile_size_in_meters, tile_map->tile_size_in_meters };
+					
+					Vec2 min_corner = -0.5f * tile_xy_in_meters;
+					Vec2 max_corner =  0.5f * tile_xy_in_meters;
+					
+					TileMapPos rel_new_player_pos = subtract( test_tile_pos, new_pos );
+					Vec2       test_pos           = closest_point_in_rectangle( min_corner, max_corner, rel_new_player_pos );
+					
+					f32 test_dist2 = ;
+					if ( best_distance2 > test_dst )
+					{
+						best_position  = ;
+						best_distance2 = ;
+					}
+				}
+			}
+		}
+		
+		player->position = new_pos;
+	}
+	#endif
+	
+	bool on_new_tile = TileMap_are_on_same_tile( & player->position, & old_pos );
+	if ( ! on_new_tile )
+	{
+		u32 new_tile_value = TileMap_get_tile_value( tile_map, player->position );
+
+		if ( new_tile_value == 3 )
+		{
+			++ player->position.tile_z;
+		}
+		else if ( new_tile_value == 4 )
+		{
+			-- player->position.tile_z;
+		}
+	}
+	
+	using hh::EHeroBitmapsDirection;
+	using hh::HeroBitmaps_Front;
+	using hh::HeroBitmaps_Back;
+	using hh::HeroBitmaps_Left;
+	using hh::HeroBitmaps_Right;
+
+	if ( player_actions->player_y_move_digital > 0 || player_actions->player_y_move_analog > 0 )
+	{
+		player->hero_direction = HeroBitmaps_Back;
+	}
+	if ( player_actions->player_y_move_digital < 0 || player_actions->player_y_move_analog < 0 )
+	{
+		player->hero_direction = HeroBitmaps_Front;
+	}
+	if ( player_actions->player_x_move_digital > 0 || player_actions->player_x_move_analog > 0 )
+	{
+		player->hero_direction = HeroBitmaps_Right;
+	}
+	if ( player_actions->player_x_move_digital < 0 || player_actions->player_x_move_analog < 0 )
+	{
+		player->hero_direction = HeroBitmaps_Left;
+	}
+
+	if ( player->jump_time > 0.f )
+	{
+		player->jump_time -= delta_time;
+	}
+	else
+	{
+		player->jump_time = 0.f;
+		player->mid_jump  = false;
+	}
+
+	if ( ! player->mid_jump && player_actions->jump )
+	{
+		player->jump_time = 1.f;
+		player->mid_jump  = true;
+	}
+}
+
+void render_player( hh::PlayerState* player, World* world, hh::GameState* game_state, OffscreenBuffer* back_buffer )
+{
+	Vec2 screen_center = get_screen_center( back_buffer );
+
+	f32 player_red   = 0.7f;
+	f32 player_green = 0.7f;
+	f32 player_blue  = 0.3f;
+	
+	f32 player_half_width = player->width  / 2.f;
+
+	TileMapPos player_to_camera = subtract( player->position, game_state->camera_pos );
+
+	Vec2 player_to_screenspace {
+			  player_to_camera.rel_pos.x + scast(f32, player_to_camera.tile_x) * world->tile_map->tile_size_in_meters,
+		-1 * (player_to_camera.rel_pos.y + scast(f32, player_to_camera.tile_y) * world->tile_map->tile_size_in_meters)
+	};
+	Pos2 player_ground_pos = cast( Pos2, screen_center + player_to_screenspace * world->tile_meters_to_pixels );
+
+	hh::HeroBitmaps* hero_bitmaps = & game_state->hero_bitmaps[player->hero_direction];
+
+#if 1
+	Vec2 player_collision_min {
+		player_ground_pos.x - player_half_width * world->tile_meters_to_pixels,
+		player_ground_pos.y - player->height    * world->tile_meters_to_pixels,
+	};
+	Vec2 player_collision_max {
+		player_ground_pos.x + player_half_width * world->tile_meters_to_pixels,
+		player_ground_pos.y
+	};
+
+	draw_rectangle( back_buffer
+		, player_collision_min, player_collision_max
+		, player_red, player_green, player_blue );
+#endif
+
+	draw_bitmap( back_buffer
+		, { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
+		, & hero_bitmaps->torso );
+	draw_bitmap( back_buffer
+		, { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
+		, & hero_bitmaps->cape );
+#if 1
+	draw_bitmap( back_buffer
+		, { player_ground_pos.x, player_ground_pos.y - 125.f }
+		, & game_state->mojito_head );
+#else
+	draw_bitmap( back_buffer
+		, { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
+		, & hero_bitmaps->head );
+#endif
 }
 
 Engine_API
@@ -681,12 +994,12 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 		game_state->hero_bitmaps[HeroBitmaps_Right].align_y = align_y;
 
 	#undef load_bmp_asset
-
-		game_state->hero_direction = HeroBitmaps_Front;
 	}
 
 	game_state->camera_pos.tile_x = world->tiles_per_screen_x / 2;
 	game_state->camera_pos.tile_y = world->tiles_per_screen_y / 2;
+	
+	using hh::HeroBitmaps_Front;
 
 	hh::PlayerState* player = & game_state->player_state;
 	player->position.tile_x    = 4;
@@ -701,6 +1014,24 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 
 	player->height = 1.4f;
 	player->width  = player->height * 0.7f;
+	
+	player->hero_direction = HeroBitmaps_Front;
+	
+	hh::PlayerState* player_2 = & game_state->player_state_2;
+	player_2->position.tile_x    = 4;
+	player_2->position.tile_y    = 4;
+	player_2->position.rel_pos.x = 0.f;
+	player_2->position.rel_pos.y = 0.f;
+
+	player_2->move_velocity = {};
+
+	player_2->mid_jump   = false;
+	player_2->jump_time  = 0.f;
+
+	player_2->height = 1.4f;
+	player_2->width  = player_2->height * 0.7f;
+	
+	player_2->hero_direction = HeroBitmaps_Front;
 }
 
 Engine_API
@@ -713,147 +1044,205 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	, Memory* memory, platform::ModuleAPI* platform_api, ThreadContext* thread )
 {
 	EngineState* state = rcast( EngineState*, memory->persistent );
-	assert( sizeof(EngineState) <= memory->persistent_size );
-
-	state->context.delta_time = delta_time;
-
-	// Engine auto_snapshot
-	#if Build_Development
+	
+	// TODO(Ed): This can get unscoped when the handmade module impl is offloaded
+	// Engine Update
 	{
-		state->auto_snapshot_timer += delta_time;
-		if ( state->auto_snapshot_timer >= state->auto_snapshot_interval )
+		assert( sizeof(EngineState) <= memory->persistent_size );
+	
+		state->context.delta_time = delta_time;
+	
+		// Engine auto_snapshot
+		#if Build_Development
 		{
-			state->auto_snapshot_timer = 0.f;
-
+			state->auto_snapshot_timer += delta_time;
+			if ( state->auto_snapshot_timer >= state->auto_snapshot_interval )
+			{
+				state->auto_snapshot_timer = 0.f;
+	
+				s32 current_slot = memory->active_snapshot_slot;
+				memory->active_snapshot_slot = 0;
+	
+				take_engine_snapshot( memory, platform_api );
+				memory->active_snapshot_slot = current_slot;
+				state->auto_snapshot_timer = 0.f;
+			}
+		}
+		#endif
+	
+		EngineActions engine_actions {};
+	
+		input_poll_engine_actions( input, & engine_actions );
+	
+	#if Build_Development
+		if ( engine_actions.load_auto_snapshot )
+		{
 			s32 current_slot = memory->active_snapshot_slot;
 			memory->active_snapshot_slot = 0;
-
-			take_engine_snapshot( memory, platform_api );
+			load_engine_snapshot( memory, platform_api );
 			memory->active_snapshot_slot = current_slot;
-			state->auto_snapshot_timer = 0.f;
 		}
-	}
+	
+		// Ease of use: Allow user to press L key without shift if engine loop recording is active.
+		engine_actions.loop_mode_engine |= engine_actions.loop_mode_game && memory->engine_loop_active;
+	
+		if ( engine_actions.loop_mode_engine && ! memory->game_loop_active )
+		{
+			process_loop_mode( & take_engine_snapshot, & load_engine_snapshot, memory, state, input, platform_api );
+			memory->engine_loop_active = memory->replay_mode > ReplayMode_Off;
+		}
+	
+		// Input recording and playback for engine state
+		if ( memory->engine_loop_active )
+		{
+			if ( memory->replay_mode == ReplayMode_Record )
+			{
+				record_input( memory, input, platform_api );
+			}
+			if ( memory->replay_mode == ReplayMode_Playback )
+			{
+				play_input( & load_engine_snapshot, memory, input, platform_api );
+			}
+		}
 	#endif
-
-	ControllerState* controller = & input->controllers[0];
-
-	EngineActions     engine_actions {};
-	hh::PlayerActions player_actions {};
-
-	input_poll_engine_actions( input, & engine_actions );
-
-#if Build_Development
-	if ( engine_actions.load_auto_snapshot )
-	{
-		s32 current_slot = memory->active_snapshot_slot;
-		memory->active_snapshot_slot = 0;
-		load_engine_snapshot( memory, platform_api );
-		memory->active_snapshot_slot = current_slot;
-	}
-
-	// Ease of use: Allow user to press L key without shift if engine loop recording is active.
-	engine_actions.loop_mode_engine |= engine_actions.loop_mode_game && memory->engine_loop_active;
-
-	if ( engine_actions.loop_mode_engine && ! memory->game_loop_active )
-	{
-		process_loop_mode( & take_engine_snapshot, & load_engine_snapshot, memory, state, input, platform_api );
-		memory->engine_loop_active = memory->replay_mode > ReplayMode_Off;
-	}
-
-	// Input recording and playback for engine state
-	if ( memory->engine_loop_active )
-	{
-		if ( memory->replay_mode == ReplayMode_Record )
+	
+		// Process Engine Actions
 		{
-			record_input( memory, input, platform_api );
+			state->x_offset += 3 * engine_actions.move_right;
+			state->x_offset -= 3 * engine_actions.move_left;
+			state->y_offset += 3 * engine_actions.move_down;
+			state->y_offset -= 3 * engine_actions.move_up;
+	
+			if ( engine_actions.raise_volume )
+			{
+				state->tone_volume += 10;
+			}
+			if ( engine_actions.lower_volume )
+			{
+				state->tone_volume -= 10;
+				if ( state->tone_volume <= 0 )
+					state->tone_volume = 0;
+			}
+	
+			if ( engine_actions.raise_tone_hz )
+			{
+				state->wave_tone_hz += 1;
+			}
+			if ( engine_actions.lower_tone_hz )
+			{
+				state->wave_tone_hz -= 1;
+				if ( state->wave_tone_hz <= 0 )
+					state->wave_tone_hz = 1;
+			}
+	
+			if ( engine_actions.toggle_wave_tone )
+			{
+				state->sample_wave_switch ^= true;
+			}
+	
+		#if Build_Development
+			if ( engine_actions.loop_mode_game && ! memory->engine_loop_active )
+			{
+				process_loop_mode( & take_game_snapshot, & load_game_snapshot, memory, state, input, platform_api );
+				memory->game_loop_active = memory->replay_mode > ReplayMode_Off;
+			}
+	
+			if ( engine_actions.pause_renderer )
+			{
+				if ( state->renderer_paused )
+				{
+					platform_api->debug_set_pause_rendering(false);
+					state->renderer_paused = false;
+				}
+				else
+				{
+					platform_api->debug_set_pause_rendering(true);
+					state->renderer_paused = true;
+				}
+			}
+	
+			if ( ! memory->game_loop_active )
+			{
+				if ( engine_actions.set_snapshot_slot_1 ) memory->active_snapshot_slot = 1;
+				if ( engine_actions.set_snapshot_slot_2 ) memory->active_snapshot_slot = 2;
+			}
+		#endif
 		}
-		if ( memory->replay_mode == ReplayMode_Playback )
-		{
-			play_input( & load_engine_snapshot, memory, input, platform_api );
-		}
-	}
-#endif
-
-	// Process Engine Actions
-	{
-		state->x_offset += 3 * engine_actions.move_right;
-		state->x_offset -= 3 * engine_actions.move_left;
-		state->y_offset += 3 * engine_actions.move_down;
-		state->y_offset -= 3 * engine_actions.move_up;
-
-		if ( engine_actions.raise_volume )
-		{
-			state->tone_volume += 10;
-		}
-		if ( engine_actions.lower_volume )
-		{
-			state->tone_volume -= 10;
-			if ( state->tone_volume <= 0 )
-				state->tone_volume = 0;
-		}
-
-		if ( engine_actions.raise_tone_hz )
-		{
-			state->wave_tone_hz += 1;
-		}
-		if ( engine_actions.lower_tone_hz )
-		{
-			state->wave_tone_hz -= 1;
-			if ( state->wave_tone_hz <= 0 )
-				state->wave_tone_hz = 1;
-		}
-
-		if ( engine_actions.toggle_wave_tone )
-		{
-			state->sample_wave_switch ^= true;
-		}
-
+	
 	#if Build_Development
-		if ( engine_actions.loop_mode_game && ! memory->engine_loop_active )
+		if ( ! memory->engine_loop_active )
 		{
-			process_loop_mode( & take_game_snapshot, & load_game_snapshot, memory, state, input, platform_api );
-			memory->game_loop_active = memory->replay_mode > ReplayMode_Off;
-		}
-
-		if ( engine_actions.pause_renderer )
-		{
-			if ( state->renderer_paused )
+			// Input recording and playback for game state
+			if ( memory->replay_mode == ReplayMode_Record )
 			{
-				platform_api->debug_set_pause_rendering(false);
-				state->renderer_paused = false;
+				record_input( memory, input, platform_api );
 			}
-			else
+			if ( memory->replay_mode == ReplayMode_Playback )
 			{
-				platform_api->debug_set_pause_rendering(true);
-				state->renderer_paused = true;
+				play_input( & load_game_snapshot, memory, input, platform_api );
 			}
-		}
-
-		if ( ! memory->game_loop_active )
-		{
-			if ( engine_actions.set_snapshot_slot_1 ) memory->active_snapshot_slot = 1;
-			if ( engine_actions.set_snapshot_slot_2 ) memory->active_snapshot_slot = 2;
 		}
 	#endif
 	}
-
-#if Build_Development
-	if ( ! memory->engine_loop_active )
-	{
-		// Input recording and playback for game state
-		if ( memory->replay_mode == ReplayMode_Record )
-		{
-			record_input( memory, input, platform_api );
-		}
-		if ( memory->replay_mode == ReplayMode_Playback )
-		{
-			play_input( & load_game_snapshot, memory, input, platform_api );
-		}
-	}
-#endif
 
 	hh::GameState*   game_state = rcast( hh::GameState*, state->game_memory.persistent );
 	hh::PlayerState* player     = & game_state->player_state;
+	
+	hh::PlayerActions player_actions   {};
+	hh::PlayerActions player_actions_2 {};
+	
+#if NEW_INPUT_DESIGN
+	do_once()
+	{	
+		game_state->player_1.controller.keyboard = input->keyboard;
+		game_state->player_1.controller.mouse    = input->mouse;
+	}
+	
+	// This is a crappy way of assigning controllers I'm doing for now...
+	for ( s32 idx = 0; idx < Max_Controllers; ++ idx )
+	{
+	#define can_assign( player ) ( ! game_state->player.controller.xpad && ! game_state->player.controller.ds_pad )
+		XInputPadState* xpad = input->xpads[ idx ];
+		if ( game_state->player_1.controller.xpad == xpad || game_state->player_2.controller.xpad == xpad )
+			continue;
+		
+		if ( xpad && pressed( xpad->start ) )
+		{
+			if ( can_assign( player_1 ) )
+			{
+				game_state->player_1.controller.xpad = xpad;
+				continue;
+			}
+				
+			if ( can_assign( player_2 ) )
+				game_state->player_2.controller.xpad = xpad;
+		}
+		
+		DualsensePadState* ds_pad = input->ds_pads[ idx ];
+		if ( game_state->player_1.controller.ds_pad == ds_pad || game_state->player_2.controller.ds_pad == ds_pad )
+			continue;
+		
+		if ( ds_pad && pressed( ds_pad->share ) )
+		{
+			if ( can_assign( player_1 ) )
+			{
+				game_state->player_1.controller.ds_pad = ds_pad;
+				continue;
+			}
+				
+			if ( can_assign( player_2 ) )
+				game_state->player_2.controller.ds_pad = ds_pad;
+		}
+	#undef can_assign
+	}
+	
+	input_poll_player_actions( & game_state->player_1.controller, & player_actions,   0 );
+	
+	if ( game_state->player_2.controller.xpad || game_state->player_2.controller.ds_pad )
+		input_poll_player_actions( & game_state->player_2.controller, & player_actions_2, 1 );
+#else
+	input_poll_player_actions( & input->controllers[0], & player_actions,   0 );
+#endif
 
 	World*   world    = state->context.world;
 	TileMap* tile_map = world->tile_map;
@@ -868,224 +1257,17 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	using hh::HeroBitmaps_Left;
 	using hh::HeroBitmaps_Right;
 
-	input_poll_player_actions( input, & player_actions );
+	update_player_state( delta_time, world, game_state, player, & player_actions );
+	update_player_state( delta_time, world, game_state, & game_state->player_state_2, & player_actions_2 );
+	
+	// TODO(Ed) : Move to handmade module?
+	// Camera Update
+	// void update_camera( ... )
 	{
-		f32 move_accel = 36.f;
-		if ( player_actions.sprint )
-		{
-			move_accel = 94.f;
-		}
-
-		TileMapPos old_pos = player->position;
-		Pos2_f32 new_player_pos = { old_pos.rel_pos.x, old_pos.rel_pos.y };
-
-		Vec2 player_move_vec = {};
-		if ( player_actions.player_x_move_analog || player_actions.player_y_move_analog )
-		{
-			player_move_vec.x = scast(f32, player_actions.player_x_move_analog );
-			player_move_vec.y = scast(f32, player_actions.player_y_move_analog );
-		}
-		else
-		{
-			player_move_vec.x = scast(f32, player_actions.player_x_move_digital );
-			player_move_vec.y = scast(f32, player_actions.player_y_move_digital );
-		}
-
-		Dir2   player_direction  = cast( Dir2, player_move_vec );
-		Accel2 player_move_accel = scast( Accel2, player_direction ) * move_accel;
-
-		// TODO(Ed) : ODE!
-		Accel2 friction = pcast( Accel2, player->move_velocity) * 9.f;
-		player_move_accel -= friction;
-
-		player->move_velocity += player_move_accel * 0.5f;
-		new_player_pos        += player->move_velocity;
-
-		// Old collision implmentation
-		#if 1
-		{
-			b32 collision_nw = false;
-			b32 collision_ne = false;
-			b32 collision_sw = false;
-			b32 collision_se = false;
-			do
-			{
-				// Base position
-				//TileMapPos test_pos = {
-					//new_player_pos.x, new_player_pos.y,
-					//old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
-				//};
-				//test_pos = recannonicalize_position( tile_map, test_pos );
-	
-				// TODO(Ed) : Need a delta-function that auto-reconnonicalizes.
-	
-				TileMapPos test_pos_nw {
-					new_player_pos.x - player_half_width, new_player_pos.y + player_quarter_height,
-					old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
-				};
-				test_pos_nw  = recannonicalize_position( tile_map, test_pos_nw );
-				collision_nw = ! TileMap_is_point_empty( tile_map, test_pos_nw );
-	
-				TileMapPos test_pos_ne {
-					new_player_pos.x + player_half_width, new_player_pos.y + player_quarter_height,
-					old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
-				};
-				test_pos_ne  = recannonicalize_position( tile_map, test_pos_ne );
-				collision_ne = ! TileMap_is_point_empty( tile_map, test_pos_ne );
-	
-				TileMapPos test_pos_sw {
-					new_player_pos.x - player_half_width, new_player_pos.y,
-					old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
-				};
-				test_pos_sw  = recannonicalize_position( tile_map, test_pos_sw );
-				collision_sw = ! TileMap_is_point_empty( tile_map, test_pos_sw );
-	
-				TileMapPos test_pos_se {
-					new_player_pos.x + player_half_width, new_player_pos.y,
-					old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
-				};
-				test_pos_se  = recannonicalize_position( tile_map, test_pos_se );
-				collision_se = ! TileMap_is_point_empty( tile_map, test_pos_se );
-			} 
-			while(0);
-	
-			if ( collision_se || collision_sw || collision_ne || collision_nw )
-			{
-				// Should be colliding with a wall
-				
-				Vec2 wall_vector = { 0, 0 };
-				if ( collision_nw && collision_sw )
-				{
-					wall_vector = { 1.f, 0.f };
-				}
-				{
-					wall_vector = { -1.f, 0.f };
-				}
-				if ( collision_nw && collision_ne )
-				{
-					wall_vector = { 0.f, 1.f };
-				}
-				if ( collision_se && collision_sw )
-				{
-					wall_vector = { 0.f, -1.f };
-				}
-				
-				//if ( collision_nw && !collision_ne && !collision_sw && !collision_se )
-				//{
-				//	wall_vector = { 1.f, 1.f };
-				//}
-				
-				// The 2x multiplier allows for the the "bounce off" velocity to occur instead of the player just looking like they impacted the wall and stopped
-				player->move_velocity -= cast( Vel2,  1.f * scalar_product( Vec2( player->move_velocity ), wall_vector ) * wall_vector );
-				
-				new_player_pos = { old_pos.rel_pos.x, old_pos.rel_pos.y };
-				new_player_pos += player->move_velocity;
-			}
-			
-			TileMapPos new_pos = {
-				new_player_pos.x, new_player_pos.y,
-				old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
-			};
-			new_pos = recannonicalize_position( tile_map, new_pos );
-			player->position = new_pos;
-		}
-		#else
-		{
-			TileMapPos new_pos = {
-				new_player_pos.x, new_player_pos.y,
-				old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
-			};
-			new_pos = recannonicalize_position( tile_map, new_pos );
-		
-			s32 min_tile_x = 0;
-			s32 min_tile_y = 0;
-			
-			TileMapPos best_position  = old_pos;
-			Dist2      best_distance2 = cast(Dist2, magnitude_squared( player->move_velocity ) );
-		
-			for ( s32 tile_y = 0; tile_y <= min_tile_y; ++ tile_y )
-			{
-				for ( s32 tile_x = 0; tile_x <= min_tile_x; ++ tile_x )
-				{
-					TileMapPos test_tile_pos = centered_tile_point( tile_x, tile_y, new_pos.tile_z );
-					s32        tile_value    = TileMap_get_tile_value( tile_map, test_tile_pos );
-					
-					if ( TileMap_is_tile_value_empty( tile_value ) )
-					{
-						Vec2 tile_xy_in_meters = Vec2 { tile_map->tile_size_in_meters, tile_map->tile_size_in_meters };
-						
-						Vec2 min_corner = -0.5f * tile_xy_in_meters;
-						Vec2 max_corner =  0.5f * tile_xy_in_meters;
-						
-						TileMapPos rel_new_player_pos = subtract( test_tile_pos, new_pos );
-						Vec2       test_pos           = closest_point_in_rectangle( min_corner, max_corner, rel_new_player_pos );
-						
-						f32 test_dist2 = ;
-						if ( best_distance2 > test_dst )
-						{
-							best_position  = ;
-							best_distance2 = ;
-						}
-					}
-				}
-			}
-			
-			player->position = new_pos;
-		}
-		#endif
-		
-		bool on_new_tile = TileMap_are_on_same_tile( & player->position, & old_pos );
-		if ( ! on_new_tile )
-		{
-			u32 new_tile_value = TileMap_get_tile_value( tile_map, player->position );
-
-			if ( new_tile_value == 3 )
-			{
-				++ player->position.tile_z;
-			}
-			else if ( new_tile_value == 4 )
-			{
-				-- player->position.tile_z;
-			}
-		}
-
-		if ( player_actions.player_y_move_digital > 0 || player_actions.player_y_move_analog > 0 )
-		{
-			game_state->hero_direction = HeroBitmaps_Back;
-		}
-		if ( player_actions.player_y_move_digital < 0 || player_actions.player_y_move_analog < 0 )
-		{
-			game_state->hero_direction = HeroBitmaps_Front;
-		}
-		if ( player_actions.player_x_move_digital > 0 || player_actions.player_x_move_analog > 0 )
-		{
-			game_state->hero_direction = HeroBitmaps_Right;
-		}
-		if ( player_actions.player_x_move_digital < 0 || player_actions.player_x_move_analog < 0 )
-		{
-			game_state->hero_direction = HeroBitmaps_Left;
-		}
-
-		if ( player->jump_time > 0.f )
-		{
-			player->jump_time -= delta_time;
-		}
-		else
-		{
-			player->jump_time = 0.f;
-			player->mid_jump  = false;
-		}
-
-		if ( ! player->mid_jump && player_actions.jump )
-		{
-			player->jump_time = 1.f;
-			player->mid_jump  = true;
-		}
-
 		TileMapPos player_to_camera = subtract( player->position, game_state->camera_pos );
-
+	
 		game_state->camera_pos.tile_z = player->position.tile_z;
-
+	
 		if ( player_to_camera.tile_x > world->tiles_per_screen_x / 2 )
 		{
 			game_state->camera_pos.tile_x += world->tiles_per_screen_x;
@@ -1103,71 +1285,72 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 			game_state->camera_pos.tile_y -= world->tiles_per_screen_y;
 		}
 	}
-
-	Vec2 screen_center {
-		scast(f32, back_buffer->width)  * 0.5f,
-		scast(f32, back_buffer->height) * 0.5f
-	};
-
-	draw_rectangle( back_buffer
-		, Zero(Vec2)
-		, { scast(f32, back_buffer->width), scast(f32, back_buffer->height) }
-		, 1.f, 0.24f, 0.24f );
-
-	draw_bitmap( back_buffer, screen_center, & game_state->test_bg );
-	draw_bitmap( back_buffer, screen_center, & game_state->test_bg_hh );
-
-// Screen Camera
-	for ( s32 relative_row = -10; relative_row < +10; ++ relative_row )
+	
+	Vec2 screen_center = get_screen_center( back_buffer );
+	
+	// Background & Tile Render relative to player 1's camera
+	// void render_bg_and_level( ... )
 	{
-		for ( s32 relative_col = -20; relative_col < +20; ++ relative_col )
+		draw_rectangle( back_buffer
+			, Zero(Vec2)
+			, { scast(f32, back_buffer->width), scast(f32, back_buffer->height) }
+			, 1.f, 0.24f, 0.24f );
+	
+		draw_bitmap( back_buffer, screen_center, & game_state->test_bg );
+		draw_bitmap( back_buffer, screen_center, & game_state->test_bg_hh );
+	
+		// Screen Camera
+		for ( s32 relative_row = -10; relative_row < +10; ++ relative_row )
 		{
-			s32 col = game_state->camera_pos.tile_x + relative_col;
-			s32 row = game_state->camera_pos.tile_y + relative_row;
-
-			s32 tile_id  = TileMap_get_tile_value( tile_map, col, row, game_state->camera_pos.tile_z );
-			f32 color[3] = { 0.15f, 0.15f, 0.15f };
-
-			if ( tile_id > 1 || (row == player->position.tile_y && col == player->position.tile_x) )
-//			if ( tile_id > 1 )
+			for ( s32 relative_col = -20; relative_col < +20; ++ relative_col )
 			{
-				if ( tile_id == 2 )
+				s32 col = game_state->camera_pos.tile_x + relative_col;
+				s32 row = game_state->camera_pos.tile_y + relative_row;
+	
+				s32 tile_id  = TileMap_get_tile_value( tile_map, col, row, game_state->camera_pos.tile_z );
+				f32 color[3] = { 0.15f, 0.15f, 0.15f };
+	
+				if ( tile_id > 1 || (row == player->position.tile_y && col == player->position.tile_x) )
+//				if ( tile_id > 1 )
 				{
-					color[0] = 0.42f;
-					color[1] = 0.42f;
-					color[2] = 0.52f;
+					if ( tile_id == 2 )
+					{
+						color[0] = 0.42f;
+						color[1] = 0.42f;
+						color[2] = 0.52f;
+					}
+					if ( tile_id == 3 )
+					{
+						color[0] = 0.02f;
+						color[1] = 0.02f;
+						color[2] = 0.02f;
+					}
+					if ( tile_id == 4 )
+					{
+						color[0] = 0.42f;
+						color[1] = 0.62f;
+						color[2] = 0.42f;
+					}
+	
+					if ( row == player->position.tile_y && col == player->position.tile_x )
+					{
+						color[0] = 0.44f;
+						color[1] = 0.3f;
+						color[2] = 0.3f;
+					}
+	
+					Vec2 tile_pixel_size = { tile_size_in_pixels * 0.5f, tile_size_in_pixels * 0.5f };
+					Pos2 center {
+						screen_center.x + scast(f32, relative_col) * tile_size_in_pixels - game_state->camera_pos.rel_pos.x * world->tile_meters_to_pixels,
+						screen_center.y - scast(f32, relative_row) * tile_size_in_pixels + game_state->camera_pos.rel_pos.y * world->tile_meters_to_pixels
+					};
+					Pos2 min = center - cast( Pos2, tile_pixel_size );
+					Pos2 max = center + cast( Pos2, tile_pixel_size );
+	
+					draw_rectangle( back_buffer
+					, min, max
+					, color[0], color[1], color[2] );
 				}
-				if ( tile_id == 3 )
-				{
-					color[0] = 0.02f;
-					color[1] = 0.02f;
-					color[2] = 0.02f;
-				}
-				if ( tile_id == 4 )
-				{
-					color[0] = 0.42f;
-					color[1] = 0.62f;
-					color[2] = 0.42f;
-				}
-
-				if ( row == player->position.tile_y && col == player->position.tile_x )
-				{
-					color[0] = 0.44f;
-					color[1] = 0.3f;
-					color[2] = 0.3f;
-				}
-
-				Vec2 tile_pixel_size = { tile_size_in_pixels * 0.5f, tile_size_in_pixels * 0.5f };
-				Pos2 center {
-					screen_center.x + scast(f32, relative_col) * tile_size_in_pixels - game_state->camera_pos.rel_pos.x * world->tile_meters_to_pixels,
-					screen_center.y - scast(f32, relative_row) * tile_size_in_pixels + game_state->camera_pos.rel_pos.y * world->tile_meters_to_pixels
-				};
-				Pos2 min = center - cast( Pos2, tile_pixel_size );
-				Pos2 max = center + cast( Pos2, tile_pixel_size );
-
-				draw_rectangle( back_buffer
-	               , min, max
-	               , color[0], color[1], color[2] );
 			}
 		}
 	}
@@ -1189,96 +1372,72 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	}
 	#endif
 
-	// Player
-	f32 player_red   = 0.7f;
-	f32 player_green = 0.7f;
-	f32 player_blue  = 0.3f;
-
-	TileMapPos player_to_camera = subtract( player->position, game_state->camera_pos );
-
-	Vec2 player_to_screenspace {
-		      player_to_camera.rel_pos.x + scast(f32, player_to_camera.tile_x) * world->tile_map->tile_size_in_meters,
-		-1 * (player_to_camera.rel_pos.y + scast(f32, player_to_camera.tile_y) * world->tile_map->tile_size_in_meters)
-	};
-	Pos2 player_ground_pos = cast( Pos2, screen_center + player_to_screenspace * world->tile_meters_to_pixels );
-
-	hh::HeroBitmaps* hero_bitmaps = & game_state->hero_bitmaps[game_state->hero_direction];
-
-#if 1
-	Vec2 player_collision_min {
-		player_ground_pos.x - player_half_width * world->tile_meters_to_pixels,
-		player_ground_pos.y - player->height    * world->tile_meters_to_pixels,
-	};
-	Vec2 player_collision_max {
-		player_ground_pos.x + player_half_width * world->tile_meters_to_pixels,
-		player_ground_pos.y
-	};
-
-	draw_rectangle( back_buffer
-		, player_collision_min, player_collision_max
-		, player_red, player_green, player_blue );
+	// Player Rendering
+	render_player( player, world, game_state, back_buffer );
+	
+#if NEW_INPUT_DESIGN
+	if ( game_state->player_2.controller.xpad || game_state->player_2.controller.ds_pad )
+		render_player( & game_state->player_state_2, world, game_state, back_buffer );
 #endif
-
-	draw_bitmap( back_buffer
-	            , { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
-	            , & hero_bitmaps->torso );
-	draw_bitmap( back_buffer
-	            , { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
-	            , & hero_bitmaps->cape );
-#if 1
-	draw_bitmap( back_buffer
-	            , { player_ground_pos.x, player_ground_pos.y - 125.f }
-	            , & game_state->mojito_head );
-#else
-	draw_bitmap( back_buffer
-	            , { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
-	            , & hero_bitmaps->head );
-#endif
-
-#if Build_Development
-	// Auto-Snapshot percent bar
-	if (1)
+	
+	// Snapshot Visual Aid
+	#if Build_Development
 	{
-		f32 snapshot_percent_x = ((state->auto_snapshot_timer / state->auto_snapshot_interval)) * (f32)back_buffer->width / 4.f;
-		draw_rectangle( back_buffer
-			, Zero(Vec2)
-			, { snapshot_percent_x, 10.f }
-			, 0.f, 0.15f, 0.35f );
-	}
-
-	if ( memory->replay_mode == ReplayMode_Record )
-	{
-		// TODO(Ed) : We're prob going to need a better indicator for recording...
-		draw_rectangle( back_buffer
-			, { player->position.rel_pos.x + 50.f, player->position.rel_pos.y - 50.f }
-			, { player->position.rel_pos.x + 10.f, player->position.rel_pos.y + 40.f }
-			, 1.f, 1.f, 1.f );
-	}
-#endif
-
-	// Change above to use draw rectangle
-	if ( 0 )
-	{
-		draw_rectangle( back_buffer
-			, { (f32)input->controllers[0].mouse->X.end, (f32)input->controllers[0].mouse->Y.end }
-			, { (f32)input->controllers[0].mouse->X.end + 10.f, (f32)input->controllers[0].mouse->Y.end + 10.f }
-			, 1.f, 1.f, 0.f );
-	}
-
-	// Mouse buttons test
-	#if 0
-	{
-		if ( input->controllers[0].mouse->left.ended_down == true )
-			render_player( back_buffer, 5, 5 );
-
-		if ( input->controllers[0].mouse->middle.ended_down == true )
-
-			render_player( back_buffer, 5, 20 );
-
-		if ( input->controllers[0].mouse->right.ended_down == true )
-			render_player( back_buffer, 5, 35 );
+		// Auto-Snapshot percent bar
+		if (1)
+		{
+			f32 snapshot_percent_x = ((state->auto_snapshot_timer / state->auto_snapshot_interval)) * (f32)back_buffer->width / 4.f;
+			draw_rectangle( back_buffer
+				, Zero(Vec2)
+				, { snapshot_percent_x, 10.f }
+				, 0.f, 0.15f, 0.35f );
+		}
+	
+		// Replay indicator
+		if ( memory->replay_mode == ReplayMode_Record )
+		{
+			// TODO(Ed) : We're prob going to need a better indicator for recording...
+			draw_rectangle( back_buffer
+				, { player->position.rel_pos.x + 50.f, player->position.rel_pos.y - 50.f }
+				, { player->position.rel_pos.x + 10.f, player->position.rel_pos.y + 40.f }
+				, 1.f, 1.f, 1.f );
+		}
 	}
 	#endif
+
+	// Mouse Debug
+	{
+		// Mouse Position
+		if ( 0 )
+		{
+			#if NEW_INPUT_DESIGN
+				draw_rectangle( back_buffer
+					, { (f32)input->mouse->X.end,        (f32)input->mouse->Y.end }
+					, { (f32)input->mouse->X.end + 10.f, (f32)input->mouse->Y.end + 10.f }
+					, 1.f, 1.f, 0.f );
+			#else
+				draw_rectangle( back_buffer
+					, { (f32)input->controllers[0].mouse->X.end,        (f32)input->controllers[0].mouse->Y.end }
+					, { (f32)input->controllers[0].mouse->X.end + 10.f, (f32)input->controllers[0].mouse->Y.end + 10.f }
+					, 1.f, 1.f, 0.f );
+			#endif
+		}
+	
+		// Mouse buttons test
+		#if 0
+		{
+			if ( input->controllers[0].mouse->left.ended_down == true )
+				render_player( back_buffer, 5, 5 );
+	
+			if ( input->controllers[0].mouse->middle.ended_down == true )
+	
+				render_player( back_buffer, 5, 20 );
+	
+			if ( input->controllers[0].mouse->right.ended_down == true )
+				render_player( back_buffer, 5, 35 );
+		}
+		#endif
+	}
 }
 
 Engine_API

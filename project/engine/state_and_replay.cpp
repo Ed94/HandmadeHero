@@ -6,6 +6,7 @@ Doing my best to follow his advice to leave cleaning to when things are more "ce
 */
 #if INTELLISENSE_DIRECTIVES
 #include "engine.hpp"
+#include "input.hpp"
 #endif
 
 NS_ENGINE_BEGIN
@@ -105,6 +106,26 @@ void end_playback_input( Memory* memory, InputState* input, platform::ModuleAPI*
 
 InputStateSnapshot input_state_snapshot( InputState* input )
 {
+#if NEW_INPUT_DESIGN
+	InputStateSnapshot snapshot = {};
+	if ( input->keyboard )
+		snapshot.keyboard = * input->keyboard;
+	
+	if ( input->mouse )
+		snapshot.mouse = * input->mouse;
+	
+	for ( s32 idx = 0; idx < Max_Controllers; ++ idx )
+	{
+		XInputPadState* xpad = input->xpads[ idx ];
+		if ( xpad )
+			snapshot.xpads[ idx ] = * xpad;
+		
+		DualsensePadState* ds_pad = input->ds_pads[ idx ];
+		if ( ds_pad )
+			snapshot.ds_pads[ idx ] = * ds_pad;
+	}
+	return snapshot;
+#else
 	InputStateSnapshot snapshot = {};
 	for ( s32 idx = 0; idx < array_count( snapshot.controllers ); ++ idx )
 	{
@@ -113,20 +134,19 @@ InputStateSnapshot input_state_snapshot( InputState* input )
 		continue;
 
 		if ( controller->ds_pad )
-		snapshot.controllers[idx].ds_pad = *controller->ds_pad;
+			snapshot.controllers[idx].ds_pad = *controller->ds_pad;
 
 		if ( controller->xpad )
-		snapshot.controllers[idx].xpad = *controller->xpad;
+			snapshot.controllers[idx].xpad = *controller->xpad;
 
 		if ( controller->keyboard )
-		{
 			snapshot.controllers[idx].keyboard = *controller->keyboard;
-		}
 
 		if ( controller->mouse )
-		snapshot.controllers[idx].mouse = *controller->mouse;
+			snapshot.controllers[idx].mouse = *controller->mouse;
 	}
 	return snapshot;
+#endif
 }
 
 internal
@@ -149,18 +169,36 @@ void play_input( SnapshotFn* load_snapshot, Memory* memory, InputState* input, p
 		platform_api->file_rewind( & memory->active_input_replay_file );
 		return;
 	}
-
+	
+#if NEW_INPUT_DESIGN
+	if ( input->keyboard )
+		* input->keyboard = new_input.keyboard;
+	
+	if ( input->mouse )
+		* input->mouse = new_input.mouse;
+		
+	for ( s32 idx = 0; idx < Max_Controllers; ++ idx )
+	{
+		XInputPadState* xpad = input->xpads[ idx ];
+		if ( xpad )
+			* xpad = new_input.xpads[ idx ];
+			
+		DualsensePadState* ds_pad = input->ds_pads[ idx ];
+		if ( ds_pad )
+			* ds_pad = new_input.ds_pads[ idx ];
+	}
+#else 
 	for ( s32 idx = 0; idx < array_count( new_input.controllers ); ++ idx )
 	{
 		ControllerState* controller = & input->controllers[idx];
 		if ( controller == nullptr )
-		continue;
+			continue;
 
 		if ( controller->ds_pad )
-		*controller->ds_pad = new_input.controllers[idx].ds_pad;
+			*controller->ds_pad = new_input.controllers[idx].ds_pad;
 
 		if ( controller->xpad )
-		*controller->xpad = new_input.controllers[idx].xpad;
+			*controller->xpad = new_input.controllers[idx].xpad;
 
 		if ( controller->keyboard )
 		{
@@ -168,8 +206,9 @@ void play_input( SnapshotFn* load_snapshot, Memory* memory, InputState* input, p
 		}
 
 		if ( controller->mouse )
-		*controller->mouse = new_input.controllers[idx].mouse;
+			*controller->mouse = new_input.controllers[idx].mouse;
 	}
+#endif
 }
 
 void process_loop_mode( SnapshotFn* take_snapshot, SnapshotFn* load_snapshot

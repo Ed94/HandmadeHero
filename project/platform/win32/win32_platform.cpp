@@ -962,7 +962,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 			mouse_states[0] = {};
 			mouse_states[0] = {};
 
-			for ( s32 id = 0; id < Max_Controllers; ++ id )
+			for ( s32 id = 0; id < engine::Max_Controllers; ++ id )
 			{
 				xpad_states[0][ id ] = {};
 				xpad_states[1][ id ] = {};

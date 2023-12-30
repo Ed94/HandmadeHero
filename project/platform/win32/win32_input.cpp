@@ -9,12 +9,9 @@
 NS_PLATFORM_BEGIN
 using namespace win32;
 
-// Max controllers for the platform layer and thus for all other layers is 4. (Sanity and xinput limit)
-constexpr u32 Max_Controllers = 4;
-
 using JSL_DeviceHandle      = int;
-using EngineXInputPadStates = engine::XInputPadState[ Max_Controllers ];
-using EngineDSPadStates     = engine::DualsensePadState[Max_Controllers];
+using EngineXInputPadStates = engine::XInputPadState   [ engine::Max_Controllers ];
+using EngineDSPadStates     = engine::DualsensePadState[ engine::Max_Controllers ];
 
 internal void
 input_process_digital_btn( engine::DigitalBtn* old_state, engine::DigitalBtn* new_state, u32 raw_btns, u32 btn_flag )
@@ -100,7 +97,11 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 		input_process_digital_btn( & old_keyboard->left_shift,  & new_keyboard->left_shift,  GetAsyncKeyState( VK_LSHIFT ), is_down );
 		input_process_digital_btn( & old_keyboard->right_shift, & new_keyboard->right_shift, GetAsyncKeyState( VK_RSHIFT ), is_down );
 
+	#if NEW_INPUT_DESIGN
+		input->keyboard = new_keyboard;
+	#else
 		input->controllers[0].keyboard = new_keyboard;
+	#endif
 	}
 
 	// Mouse polling
@@ -121,13 +122,17 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 
 		new_mouse->X.end = (f32)mouse_pos.x;
 		new_mouse->Y.end = (f32)mouse_pos.y;
-
+		
+	#if NEW_INPUT_DESIGN
+		input->mouse = new_mouse;
+	#else
 		input->controllers[0].mouse = new_mouse;
+	#endif
 	}
 
 	// XInput Polling
 	// TODO(Ed) : Should we poll this more frequently?
-	for ( DWORD controller_index = 0; controller_index < Max_Controllers; ++ controller_index )
+	for ( DWORD controller_index = 0; controller_index < engine::Max_Controllers; ++ controller_index )
 	{
 		XINPUT_STATE controller_state;
 		b32 xinput_detected = xinput_get_state( controller_index, & controller_state ) == XI_PluggedIn;
@@ -136,9 +141,9 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 			XINPUT_GAMEPAD*         xpad     = & controller_state.Gamepad;
 			engine::XInputPadState* old_xpad = old_xpads[ controller_index ];
 			engine::XInputPadState* new_xpad = new_xpads[ controller_index ];
-			input_process_digital_btn( & old_xpad->dpad.up,    & new_xpad->dpad.up, xpad->wButtons, XINPUT_GAMEPAD_DPAD_UP );
-			input_process_digital_btn( & old_xpad->dpad.down,  & new_xpad->dpad.down, xpad->wButtons, XINPUT_GAMEPAD_DPAD_DOWN );
-			input_process_digital_btn( & old_xpad->dpad.left,  & new_xpad->dpad.left, xpad->wButtons, XINPUT_GAMEPAD_DPAD_LEFT );
+			input_process_digital_btn( & old_xpad->dpad.up,    & new_xpad->dpad.up,    xpad->wButtons, XINPUT_GAMEPAD_DPAD_UP );
+			input_process_digital_btn( & old_xpad->dpad.down,  & new_xpad->dpad.down,  xpad->wButtons, XINPUT_GAMEPAD_DPAD_DOWN );
+			input_process_digital_btn( & old_xpad->dpad.left,  & new_xpad->dpad.left,  xpad->wButtons, XINPUT_GAMEPAD_DPAD_LEFT );
 			input_process_digital_btn( & old_xpad->dpad.right, & new_xpad->dpad.right, xpad->wButtons, XINPUT_GAMEPAD_DPAD_RIGHT );
 
 			input_process_digital_btn( & old_xpad->Y, & new_xpad->Y, xpad->wButtons, XINPUT_GAMEPAD_Y );
@@ -166,11 +171,19 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 			new_xpad->stick.left.X.average = left_x;
 			new_xpad->stick.left.Y.average = left_y;
 
+		#if NEW_INPUT_DESIGN
+			input->xpads[ controller_index ] = new_xpad;
+		#else 
 			input->controllers[ controller_index ].xpad = new_xpad;
+		#endif
 		}
 		else
 		{
+		#if NEW_INPUT_DESIGN
+			input->xpads[ controller_index ] = nullptr;
+		#else 
 			input->controllers[ controller_index ].xpad = nullptr;
+		#endif
 		}
 	}
 
@@ -180,6 +193,12 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 		if ( ! JslStillConnected( jsl_device_handles[ jsl_device_index ] ) )
 		{
 			OutputDebugStringA( "Error: JSLStillConnected returned false\n" );
+			
+		#if NEW_INPUT_DESIGN
+			input->ds_pads[ jsl_device_index ] = nullptr;
+		#else
+			input->controllers[ jsl_device_index ].ds_pad = nullptr;
+		#endif
 			continue;
 		}
 
@@ -225,7 +244,11 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 		new_ds_pad->stick.left.X.average = left_x;
 		new_ds_pad->stick.left.Y.average = left_y;
 
+	#if NEW_INPUT_DESIGN
+		input->ds_pads[ jsl_device_index ] = new_ds_pad;
+	#else
 		input->controllers[ jsl_device_index ].ds_pad = new_ds_pad;
+	#endif
 	}
 }
 
