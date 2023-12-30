@@ -106,7 +106,6 @@ void end_playback_input( Memory* memory, InputState* input, platform::ModuleAPI*
 
 InputStateSnapshot input_state_snapshot( InputState* input )
 {
-#if NEW_INPUT_DESIGN
 	InputStateSnapshot snapshot = {};
 	if ( input->keyboard )
 		snapshot.keyboard = * input->keyboard;
@@ -125,28 +124,6 @@ InputStateSnapshot input_state_snapshot( InputState* input )
 			snapshot.ds_pads[ idx ] = * ds_pad;
 	}
 	return snapshot;
-#else
-	InputStateSnapshot snapshot = {};
-	for ( s32 idx = 0; idx < array_count( snapshot.controllers ); ++ idx )
-	{
-		ControllerState* controller = & input->controllers[idx];
-		if ( controller == nullptr )
-		continue;
-
-		if ( controller->ds_pad )
-			snapshot.controllers[idx].ds_pad = *controller->ds_pad;
-
-		if ( controller->xpad )
-			snapshot.controllers[idx].xpad = *controller->xpad;
-
-		if ( controller->keyboard )
-			snapshot.controllers[idx].keyboard = *controller->keyboard;
-
-		if ( controller->mouse )
-			snapshot.controllers[idx].mouse = *controller->mouse;
-	}
-	return snapshot;
-#endif
 }
 
 internal
@@ -170,7 +147,6 @@ void play_input( SnapshotFn* load_snapshot, Memory* memory, InputState* input, p
 		return;
 	}
 	
-#if NEW_INPUT_DESIGN
 	if ( input->keyboard )
 		* input->keyboard = new_input.keyboard;
 	
@@ -187,28 +163,6 @@ void play_input( SnapshotFn* load_snapshot, Memory* memory, InputState* input, p
 		if ( ds_pad )
 			* ds_pad = new_input.ds_pads[ idx ];
 	}
-#else 
-	for ( s32 idx = 0; idx < array_count( new_input.controllers ); ++ idx )
-	{
-		ControllerState* controller = & input->controllers[idx];
-		if ( controller == nullptr )
-			continue;
-
-		if ( controller->ds_pad )
-			*controller->ds_pad = new_input.controllers[idx].ds_pad;
-
-		if ( controller->xpad )
-			*controller->xpad = new_input.controllers[idx].xpad;
-
-		if ( controller->keyboard )
-		{
-			*controller->keyboard = new_input.controllers[idx].keyboard;
-		}
-
-		if ( controller->mouse )
-			*controller->mouse = new_input.controllers[idx].mouse;
-	}
-#endif
 }
 
 void process_loop_mode( SnapshotFn* take_snapshot, SnapshotFn* load_snapshot

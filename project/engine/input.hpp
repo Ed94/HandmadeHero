@@ -143,9 +143,6 @@ struct DualsensePadState
 };
 using DualsensePadStates = DualsensePadState*[ Max_Controllers ];
 
-#define NEW_INPUT_DESIGN 1
-
-#if NEW_INPUT_DESIGN
 struct InputStateSnapshot
 {
 	KeyboardState     keyboard;
@@ -153,39 +150,13 @@ struct InputStateSnapshot
 	XInputPadState    xpads  [ Max_Controllers ];
 	DualsensePadState ds_pads[ Max_Controllers ];
 };
-#else
-struct ControllerStateSnapshot
-{
-	KeyboardState     keyboard;
-	MousesState       mouse;
-	XInputPadState    xpad;
-	DualsensePadState ds_pad;
-};
-
-struct ControllerState
-{
-	KeyboardState*     keyboard;
-	MousesState*       mouse;
-	XInputPadState*    xpad;
-	DualsensePadState* ds_pad;
-};
-
-struct InputStateSnapshot
-{
-	ControllerStateSnapshot controllers[4];
-};
-#endif
 
 struct InputState
 {
-#if NEW_INPUT_DESIGN
 	KeyboardState*     keyboard;
 	MousesState*       mouse;
 	XInputPadStates    xpads;
 	DualsensePadStates ds_pads;
-#else
-	ControllerState controllers[4];
-#endif
 };
 
 using InputBindCallback             = void( void* );

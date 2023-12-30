@@ -69,11 +69,7 @@ Vec2 get_screen_center( OffscreenBuffer* back_buffer )
 internal
 void input_poll_engine_actions( InputState* input, EngineActions* actions )
 {
-#if NEW_INPUT_DESIGN
 	KeyboardState* keyboard = input->keyboard;
-#else
-	KeyboardState* keyboard = input->controllers[0].keyboard;
-#endif
 
 	// actions->move_right |= keyboard->D.EndedDown;
 	// actions->move_left  |= keyboard->A.EndedDown;
@@ -100,11 +96,7 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 	actions->loop_mode_game   |= pressed( keyboard->L ) && ! keyboard->right_shift.ended_down && ! keyboard->right_alt.ended_down;
 	actions->loop_mode_engine |= pressed( keyboard->L ) &&   keyboard->right_shift.ended_down;
 
-#if NEW_INPUT_DESIGN
 	MousesState* mouse = input->mouse;
-#else
-	MousesState* mouse = input->controllers[0].mouse;
-#endif
 
 	actions->move_right = (mouse->horizontal_wheel.end > 0.f) * 20;
 	actions->move_left  = (mouse->horizontal_wheel.end < 0.f) * 20;
@@ -119,13 +111,7 @@ void input_poll_engine_actions( InputState* input, EngineActions* actions )
 
 // TODO(Ed) : Move to handmade module
 internal
-void input_poll_player_actions( 
-#if NEW_INPUT_DESIGN
-	hh::ControllerState* controller
-#else
-	ControllerState* controller
-#endif
-	, hh::PlayerActions* actions, b32 is_player_2 )
+void input_poll_player_actions( hh::ControllerState* controller, hh::PlayerActions* actions, b32 is_player_2 )
 {
 	if ( controller->ds_pad )
 	{
@@ -635,6 +621,9 @@ void render_player( hh::PlayerState* player, World* world, hh::GameState* game_s
 	f32 player_blue  = 0.3f;
 	
 	f32 player_half_width = player->width  / 2.f;
+	
+	if ( player->position.tile_z != game_state->camera_pos.tile_z )
+		return;
 
 	TileMapPos player_to_camera = subtract( player->position, game_state->camera_pos );
 
@@ -1191,7 +1180,6 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	hh::PlayerActions player_actions   {};
 	hh::PlayerActions player_actions_2 {};
 	
-#if NEW_INPUT_DESIGN
 	do_once()
 	{	
 		game_state->player_1.controller.keyboard = input->keyboard;
@@ -1222,7 +1210,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		if ( game_state->player_1.controller.ds_pad == ds_pad || game_state->player_2.controller.ds_pad == ds_pad )
 			continue;
 		
-		if ( ds_pad && pressed( ds_pad->share ) )
+		if ( ds_pad && pressed( ds_pad->options ) )
 		{
 			if ( can_assign( player_1 ) )
 			{
@@ -1240,9 +1228,6 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	
 	if ( game_state->player_2.controller.xpad || game_state->player_2.controller.ds_pad )
 		input_poll_player_actions( & game_state->player_2.controller, & player_actions_2, 1 );
-#else
-	input_poll_player_actions( & input->controllers[0], & player_actions,   0 );
-#endif
 
 	World*   world    = state->context.world;
 	TileMap* tile_map = world->tile_map;
@@ -1375,10 +1360,8 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	// Player Rendering
 	render_player( player, world, game_state, back_buffer );
 	
-#if NEW_INPUT_DESIGN
 	if ( game_state->player_2.controller.xpad || game_state->player_2.controller.ds_pad )
 		render_player( & game_state->player_state_2, world, game_state, back_buffer );
-#endif
 	
 	// Snapshot Visual Aid
 	#if Build_Development
@@ -1410,17 +1393,10 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 		// Mouse Position
 		if ( 0 )
 		{
-			#if NEW_INPUT_DESIGN
 				draw_rectangle( back_buffer
 					, { (f32)input->mouse->X.end,        (f32)input->mouse->Y.end }
 					, { (f32)input->mouse->X.end + 10.f, (f32)input->mouse->Y.end + 10.f }
 					, 1.f, 1.f, 0.f );
-			#else
-				draw_rectangle( back_buffer
-					, { (f32)input->controllers[0].mouse->X.end,        (f32)input->controllers[0].mouse->Y.end }
-					, { (f32)input->controllers[0].mouse->X.end + 10.f, (f32)input->controllers[0].mouse->Y.end + 10.f }
-					, 1.f, 1.f, 0.f );
-			#endif
 		}
 	
 		// Mouse buttons test

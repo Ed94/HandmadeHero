@@ -61,7 +61,6 @@ struct ActionableMode
 	Player : Controller, Actionables, ActionSets
 */
 
-#if NEW_INPUT_DESIGN
 struct ControllerState
 {
 	engine::KeyboardState*     keyboard;
@@ -69,7 +68,6 @@ struct ControllerState
 	engine::XInputPadState*    xpad;
 	engine::DualsensePadState* ds_pad;
 };
-#endif
 
 enum EHeroBitmapsDirection : u32
 {
@@ -120,14 +118,9 @@ struct PlayerActions
 
 struct Player
 {
-#if NEW_INPUT_DESIGN
 	// So far just has an assigned controller.
 	ControllerState controller;
-#else
-	engine::ControllerState* controller;
-#endif
-
-	PlayerState state;
+	PlayerState     state;
 };
 
 struct GameState
