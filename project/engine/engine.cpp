@@ -121,31 +121,25 @@ void input_poll_player_actions( hh::Player* player, b32 is_player_2 )
 	{
 		DualsensePadState* pad = controller->ds_pad;
 
-		actions->sprint |= pressed( pad->circle );
+		actions->sprint |= pad->circle.ended_down;
 		actions->jump   |= pressed( pad->cross );
 
 		actions->player_x_move_analog += pad->stick.left.X.end;
 		actions->player_y_move_analog += pad->stick.left.Y.end;
 		
-		if ( is_player_2 )
-		{
-			actions->join |= pressed( pad->share );
-		}
+		actions->join |= pressed( pad->options );
 	}
 	if ( controller->xpad )
 	{
 		XInputPadState* pad = controller->xpad;
 
-		actions->sprint |= pressed( pad->B );
+		actions->sprint |= pad->B.ended_down;
 		actions->jump   |= pressed( pad->A );
 
 		actions->player_x_move_analog += pad->stick.left.X.end;
 		actions->player_y_move_analog += pad->stick.left.Y.end;
 		
-		if ( is_player_2 )
-		{
-			actions->join |= pressed( pad->start );
-		}
+		actions->join |= pressed( pad->start );
 	}
 
 	if ( controller->keyboard )
@@ -156,6 +150,8 @@ void input_poll_player_actions( hh::Player* player, b32 is_player_2 )
 
 		actions->player_x_move_digital += keyboard->D.ended_down - keyboard->A.ended_down;
 		actions->player_y_move_digital += keyboard->W.ended_down - keyboard->S.ended_down;
+		
+		actions->join |= pressed( keyboard->enter );
 	}
 
 	if ( controller->mouse )
@@ -408,6 +404,7 @@ s32 get_entity( hh::GameState* gs )
 		hh::Entity* entity = & gs->entities[ id ];
 		if ( ! entity->exists )
 		{
+			* entity = {};
 			entity->exists = true;
 			return id + 1;
 		}
@@ -429,6 +426,8 @@ void player_init( hh::Player* player, hh::GameState* gs )
 	
 	hh::Entity* entity = get_entity( gs, entity_id );
 	
+	entity->kind = hh::EntityKind_Hero;
+	
 	entity->position.tile_x    = 4;
 	entity->position.tile_y    = 4;
 	entity->position.rel_pos.x = 0.f;
@@ -442,18 +441,17 @@ void player_init( hh::Player* player, hh::GameState* gs )
 	entity->height = 1.4f;
 	entity->width  = entity->height * 0.7f;
 	
-	state->hero_direction = hh::HeroBitmaps_Front;
+	entity->facing_direction = hh::FacingDirection_Front;
 	
 	player->entity_id = entity_id; 
 }
 
-// Update mouse & keyboard states for player 1
+// TODO(Ed) : Make a menu down the line to allow the player to assign an input device to a player.
 void update_player_controllers( hh::GameState* gs, InputState* input )
 {	
 	gs->player_1.controller.keyboard = input->keyboard;
 	gs->player_1.controller.mouse    = input->mouse;
 
-	// Update controller states for the players
 	for ( s32 id = 1; id <= Max_Controllers; ++ id )
 	{
 		XInputPadState*    xpad   = input->xpads  [ id - 1 ];
@@ -493,9 +491,6 @@ void update_player_controllers( hh::GameState* gs, InputState* input )
 			{
 				gs->player_2.controller.xpad_id = id;
 				gs->player_2.controller.xpad    = xpad;
-				do_once() {
-					player_init( & gs->player_2, gs );
-				}
 			}
 		}
 		
@@ -512,9 +507,6 @@ void update_player_controllers( hh::GameState* gs, InputState* input )
 			{
 				gs->player_2.controller.ds_pad_id = id;
 				gs->player_2.controller.ds_pad    = ds_pad;
-				do_once() {
-					player_init( & gs->player_2, gs );
-				}
 			}
 		}
 	#undef can_assign
@@ -525,9 +517,17 @@ void update_player_controllers( hh::GameState* gs, InputState* input )
 internal
 void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameState* gs )
 {
-	hh::PlayerState*   state   = & player->state;
-	hh::Entity*        entity  = get_entity( gs, player->entity_id );
 	hh::PlayerActions* actions = & player->actions;
+	if ( actions->join && ! player->entity_id ) { 
+		player_init( player, gs );
+		gs->camera_assigned_entity_id = player->entity_id;
+	}
+	
+	if ( ! player->entity_id )
+		return;
+	
+	hh::PlayerState* state  = & player->state;
+	hh::Entity*      entity = get_entity( gs, player->entity_id );
 
 	TileMap* tile_map = world->tile_map;
 
@@ -715,27 +715,37 @@ void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameSt
 		}
 	}
 	
-	using hh::EHeroBitmapsDirection;
-	using hh::HeroBitmaps_Front;
-	using hh::HeroBitmaps_Back;
-	using hh::HeroBitmaps_Left;
-	using hh::HeroBitmaps_Right;
-
-	if ( actions->player_y_move_digital > 0 || actions->player_y_move_analog > 0 )
+	using hh::EFacingDirection;
+	using hh::FacingDirection_Front;
+	using hh::FacingDirection_Back;
+	using hh::FacingDirection_Left;
+	using hh::FacingDirection_Right;
+	
+	if ( is_nearly_zero( entity->move_velocity.x ) && is_nearly_zero( entity->move_velocity.y ) )
 	{
-		state->hero_direction = HeroBitmaps_Back;
+		// Note(Ed): Leave facing directiona alone
 	}
-	if ( actions->player_y_move_digital < 0 || actions->player_y_move_analog < 0 )
+	else if ( abs( entity->move_velocity.x ) > abs( entity->move_velocity.y ) )
 	{
-		state->hero_direction = HeroBitmaps_Front;
+		if ( entity->move_velocity.x > 0 )
+		{
+			entity->facing_direction = FacingDirection_Right;
+		}
+		else
+		{
+			entity->facing_direction = FacingDirection_Left;
+		}
 	}
-	if ( actions->player_x_move_digital > 0 || actions->player_x_move_analog > 0 )
+	else if ( abs( entity->move_velocity.x ) < abs( entity->move_velocity.y ) )
 	{
-		state->hero_direction = HeroBitmaps_Right;
-	}
-	if ( actions->player_x_move_digital < 0 || actions->player_x_move_analog < 0 )
-	{
-		state->hero_direction = HeroBitmaps_Left;
+		if ( entity->move_velocity.y >= 0 )
+		{
+			entity->facing_direction = FacingDirection_Back;
+		}
+		else
+		{
+			entity->facing_direction = FacingDirection_Front;
+		}
 	}
 
 	if ( state->jump_time > 0.f )
@@ -755,13 +765,10 @@ void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameSt
 	}
 }
 
-void render_player( hh::Player* player, World* world, hh::GameState* gs, OffscreenBuffer* back_buffer )
+void render_player( hh::Entity* entity, World* world, hh::GameState* gs, OffscreenBuffer* back_buffer )
 {
 	Vec2 screen_center = get_screen_center( back_buffer );
 	
-	hh::Entity*      entity = get_entity( gs, player->entity_id );
-	hh::PlayerState* state  = & player->state;
-
 	f32 player_red   = 0.7f;
 	f32 player_green = 0.7f;
 	f32 player_blue  = 0.3f;
@@ -779,7 +786,7 @@ void render_player( hh::Player* player, World* world, hh::GameState* gs, Offscre
 	};
 	Pos2 player_ground_pos = cast( Pos2, screen_center + player_to_screenspace * world->tile_meters_to_pixels );
 
-	hh::HeroBitmaps* hero_bitmaps = & gs->hero_bitmaps[state->hero_direction];
+	hh::HeroBitmaps* hero_bitmaps = & gs->hero_bitmaps[entity->facing_direction];
 
 #if 1
 	Vec2 player_collision_min {
@@ -802,15 +809,19 @@ void render_player( hh::Player* player, World* world, hh::GameState* gs, Offscre
 	draw_bitmap( back_buffer
 		, { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
 		, & hero_bitmaps->cape );
-#if 1
-	draw_bitmap( back_buffer
-		, { player_ground_pos.x, player_ground_pos.y - 125.f }
-		, & gs->mojito_head );
-#else
-	draw_bitmap( back_buffer
-		, { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
-		, & hero_bitmaps->head );
-#endif
+
+	if ( entity == get_entity( gs, gs->player_1.entity_id ) )
+	{
+		draw_bitmap( back_buffer
+			, { player_ground_pos.x, player_ground_pos.y - 125.f }
+			, & gs->mojito_head );
+	}
+	else
+	{
+		draw_bitmap( back_buffer
+			, { player_ground_pos.x, player_ground_pos.y - scast(f32, hero_bitmaps->align_y) }
+			, & hero_bitmaps->head );
+	}
 }
 
 Engine_API
@@ -1097,36 +1108,36 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 			container = load_bmp( platform_api, path );                       \
 		}
 
-		using hh::HeroBitmaps_Front;
-		using hh::HeroBitmaps_Back;
-		using hh::HeroBitmaps_Left;
-		using hh::HeroBitmaps_Right;
+		using hh::FacingDirection_Front;
+		using hh::FacingDirection_Back;
+		using hh::FacingDirection_Left;
+		using hh::FacingDirection_Right;
 
-		load_bmp_asset( subpath_hero_front_head, gs->hero_bitmaps[HeroBitmaps_Front].head );
-		load_bmp_asset( subpath_hero_back_head,  gs->hero_bitmaps[HeroBitmaps_Back ].head );
-		load_bmp_asset( subpath_hero_left_head,  gs->hero_bitmaps[HeroBitmaps_Left ].head );
-		load_bmp_asset( subpath_hero_right_head, gs->hero_bitmaps[HeroBitmaps_Right].head );
+		load_bmp_asset( subpath_hero_front_head, gs->hero_bitmaps[FacingDirection_Front].head );
+		load_bmp_asset( subpath_hero_back_head,  gs->hero_bitmaps[FacingDirection_Back ].head );
+		load_bmp_asset( subpath_hero_left_head,  gs->hero_bitmaps[FacingDirection_Left ].head );
+		load_bmp_asset( subpath_hero_right_head, gs->hero_bitmaps[FacingDirection_Right].head );
 
-		load_bmp_asset( subpath_hero_front_cape, gs->hero_bitmaps[HeroBitmaps_Front].cape );
-		load_bmp_asset( subpath_hero_back_cape,  gs->hero_bitmaps[HeroBitmaps_Back ].cape );
-		load_bmp_asset( subpath_hero_left_cape,  gs->hero_bitmaps[HeroBitmaps_Left ].cape );
-		load_bmp_asset( subpath_hero_right_cape, gs->hero_bitmaps[HeroBitmaps_Right].cape );
+		load_bmp_asset( subpath_hero_front_cape, gs->hero_bitmaps[FacingDirection_Front].cape );
+		load_bmp_asset( subpath_hero_back_cape,  gs->hero_bitmaps[FacingDirection_Back ].cape );
+		load_bmp_asset( subpath_hero_left_cape,  gs->hero_bitmaps[FacingDirection_Left ].cape );
+		load_bmp_asset( subpath_hero_right_cape, gs->hero_bitmaps[FacingDirection_Right].cape );
 
-		load_bmp_asset( subpath_hero_front_torso, gs->hero_bitmaps[HeroBitmaps_Front].torso );
-		load_bmp_asset( subpath_hero_back_torso,  gs->hero_bitmaps[HeroBitmaps_Back ].torso );
-		load_bmp_asset( subpath_hero_left_torso,  gs->hero_bitmaps[HeroBitmaps_Left ].torso );
-		load_bmp_asset( subpath_hero_right_torso, gs->hero_bitmaps[HeroBitmaps_Right].torso );
+		load_bmp_asset( subpath_hero_front_torso, gs->hero_bitmaps[FacingDirection_Front].torso );
+		load_bmp_asset( subpath_hero_back_torso,  gs->hero_bitmaps[FacingDirection_Back ].torso );
+		load_bmp_asset( subpath_hero_left_torso,  gs->hero_bitmaps[FacingDirection_Left ].torso );
+		load_bmp_asset( subpath_hero_right_torso, gs->hero_bitmaps[FacingDirection_Right].torso );
 
 		s32 align_x = 0;
 		s32 align_y = 76;
-		gs->hero_bitmaps[HeroBitmaps_Front].align_x = align_x;
-		gs->hero_bitmaps[HeroBitmaps_Back ].align_x = align_x;
-		gs->hero_bitmaps[HeroBitmaps_Left ].align_x = align_x;
-		gs->hero_bitmaps[HeroBitmaps_Right].align_x = align_x;
-		gs->hero_bitmaps[HeroBitmaps_Front].align_y = align_y;
-		gs->hero_bitmaps[HeroBitmaps_Back ].align_y = align_y;
-		gs->hero_bitmaps[HeroBitmaps_Left ].align_y = align_y;
-		gs->hero_bitmaps[HeroBitmaps_Right].align_y = align_y;
+		gs->hero_bitmaps[FacingDirection_Front].align_x = align_x;
+		gs->hero_bitmaps[FacingDirection_Back ].align_x = align_x;
+		gs->hero_bitmaps[FacingDirection_Left ].align_x = align_x;
+		gs->hero_bitmaps[FacingDirection_Right].align_x = align_x;
+		gs->hero_bitmaps[FacingDirection_Front].align_y = align_y;
+		gs->hero_bitmaps[FacingDirection_Back ].align_y = align_y;
+		gs->hero_bitmaps[FacingDirection_Left ].align_y = align_y;
+		gs->hero_bitmaps[FacingDirection_Right].align_y = align_y;
 
 	#undef load_bmp_asset
 	}
@@ -1134,11 +1145,10 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 	gs->camera_pos.tile_x = world->tiles_per_screen_x / 2;
 	gs->camera_pos.tile_y = world->tiles_per_screen_y / 2;
 	
-	using hh::HeroBitmaps_Front;
+	using hh::FacingDirection_Front;
 
-	player_init( & gs->player_1, gs );
-//	player_init( & gs->player_2, gs );
-	gs->player_2 = {};
+//	gs->player_1 = {};
+//	gs->player_2 = {};
 
 	gs->camera_assigned_entity_id = gs->player_1.entity_id;
 }
@@ -1298,21 +1308,17 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	update_player_controllers( gs, input );
 	
 	input_poll_player_actions( & gs->player_1, 0 );
-	
-	if ( gs->player_2.controller.xpad || gs->player_2.controller.ds_pad )
-		input_poll_player_actions( & gs->player_2, 1 );
+	input_poll_player_actions( & gs->player_2, 1 );
 
 	World*   world    = state->context.world;
 	TileMap* tile_map = world->tile_map;
 
 	update_player( & gs->player_1, delta_time, world, gs );
-	
-	if ( gs->player_2.entity_id )
-		update_player( & gs->player_2, delta_time, world, gs );
+	update_player( & gs->player_2, delta_time, world, gs );
 	
 	// TODO(Ed) : Move to handmade module?
 	// Camera Update
-	// void update_camera( ... )
+	if ( gs->camera_assigned_entity_id )
 	{
 		hh::Entity* entity_followed = get_entity( gs, gs->camera_assigned_entity_id );
 		TileMapPos player_to_camera = subtract( entity_followed->position, gs->camera_pos );
@@ -1339,11 +1345,11 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	
 	Vec2 screen_center = get_screen_center( back_buffer );
 	
-	// Background & Tile Render relative to player 1's camera
+	// Background & Tile Render relative to assigned entity
 	// void render_bg_and_level( ... )
 	{
 		hh::Entity* entity_followed = get_entity( gs, gs->camera_assigned_entity_id );
-		
+			
 		draw_rectangle( back_buffer
 			, Zero(Vec2)
 			, { scast(f32, back_buffer->width), scast(f32, back_buffer->height) }
@@ -1363,7 +1369,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 				s32 tile_id  = TileMap_get_tile_value( tile_map, col, row, gs->camera_pos.tile_z );
 				f32 color[3] = { 0.15f, 0.15f, 0.15f };
 	
-				if ( tile_id > 1 || (row == entity_followed->position.tile_y && col == entity_followed->position.tile_x) )
+				if ( tile_id > 1 || (entity_followed && row == entity_followed->position.tile_y && col == entity_followed->position.tile_x) )
 //				if ( tile_id > 1 )
 				{
 					if ( tile_id == 2 )
@@ -1385,7 +1391,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 						color[2] = 0.42f;
 					}
 	
-					if ( row == entity_followed->position.tile_y && col == entity_followed->position.tile_x )
+					if ( entity_followed && row == entity_followed->position.tile_y && col == entity_followed->position.tile_x )
 					{
 						color[0] = 0.44f;
 						color[1] = 0.3f;
@@ -1427,11 +1433,22 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	}
 	#endif
 
-	// Player Rendering
-	render_player( & gs->player_1, world, gs, back_buffer );
-	
-	if ( gs->player_2.entity_id )
-		render_player( & gs->player_2, world, gs, back_buffer );
+	// Render Entities
+	{	
+		s32         id     = array_count(gs->entities); 
+		hh::Entity* entity = gs->entities; 
+		for (; id; -- id, ++ entity )
+		{
+			if ( ! entity->exists )
+				continue;
+			
+			switch ( entity->kind )
+			{
+				case hh::EntityKind_Hero:
+					render_player( entity, world, gs, back_buffer );
+			}
+		}
+	}
 	
 	// Snapshot Visual Aid
 	#if Build_Development

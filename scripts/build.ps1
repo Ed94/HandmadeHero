@@ -100,12 +100,13 @@ $stack_size = 1024 * 1024 * 4
 
 $compiler_args = @(
 	($flag_define + 'UNICODE'),
-	($flag_define + '_UNICODE')
+	($flag_define + '_UNICODE'),
 	( $flag_define + 'INTELLISENSE_DIRECTIVES=0'),
 	# ($flag_set_stack_size + $stack_size)
-	$flag_wall
-	$flag_warnings_as_errors
+	$flag_wall,
+	$flag_warnings_as_errors,
 	$flag_optimize_intrinsics
+	#( $flag_language_standard + 'c++17' )
 )
 
 if ( $dev ) {

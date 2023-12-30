@@ -72,12 +72,17 @@ struct ControllerState
 	engine::DualsensePadState* ds_pad;
 };
 
-enum EHeroBitmapsDirection : u32
+enum EFacingDirection : u32
 {
-	HeroBitmaps_Front,
-	HeroBitmaps_Back,
-	HeroBitmaps_Left,
-	HeroBitmaps_Right
+	FacingDirection_Front,
+	FacingDirection_Back,
+	FacingDirection_Left,
+	FacingDirection_Right
+};
+
+enum EEntityKind : u32
+{
+	EntityKind_Hero,
 };
 
 struct HeroBitmaps
@@ -94,10 +99,14 @@ struct HeroBitmaps
 
 struct Entity
 {
+	EEntityKind kind;
+
 	b32 exists;
 	
 	f32 width;
 	f32 height;
+	
+	EFacingDirection facing_direction;
 	
 	engine::TileMapPos position;
 	Vel2               move_velocity;
@@ -107,8 +116,6 @@ struct PlayerState
 {
 	b32 mid_jump;
 	f32 jump_time;
-	
-	EHeroBitmapsDirection hero_direction;
 };
 
 struct PlayerActions
@@ -129,9 +136,8 @@ struct Player
 	// So far just has an assigned controller.
 	ControllerState controller;
 	
-	s32             entity_id;
-	//Entity          entity;
-	PlayerState     state;
+	s32         entity_id;
+	PlayerState state;
 	
 	// TODO(Ed) : If the player ever gets different actions depending on a context, change it here.
 	PlayerActions actions;

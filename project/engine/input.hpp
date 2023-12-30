@@ -52,6 +52,7 @@ union KeyboardState
 		DigitalBtn L;
 		DigitalBtn escape;
 		DigitalBtn backspace;
+		DigitalBtn enter;
 		DigitalBtn up;
 		DigitalBtn down;
 		DigitalBtn left;

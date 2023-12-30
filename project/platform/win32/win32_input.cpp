@@ -86,6 +86,7 @@ poll_input( HWND window_handle, engine::InputState* input, u32 jsl_num_devices, 
 		input_process_digital_btn( & old_keyboard->L,           & new_keyboard->L,           GetAsyncKeyState( 'L' ),       is_down );
 		input_process_digital_btn( & old_keyboard->escape,      & new_keyboard->escape,      GetAsyncKeyState( VK_ESCAPE ), is_down );
 		input_process_digital_btn( & old_keyboard->backspace,   & new_keyboard->backspace,   GetAsyncKeyState( VK_BACK ),   is_down );
+		input_process_digital_btn( & old_keyboard->enter,       & new_keyboard->enter,       GetAsyncKeyState( VK_RETURN ), is_down );
 		input_process_digital_btn( & old_keyboard->up,          & new_keyboard->up,          GetAsyncKeyState( VK_UP ),     is_down );
 		input_process_digital_btn( & old_keyboard->down,        & new_keyboard->down,        GetAsyncKeyState( VK_DOWN ),   is_down );
 		input_process_digital_btn( & old_keyboard->left,        & new_keyboard->left,        GetAsyncKeyState( VK_LEFT ),   is_down );

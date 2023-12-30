@@ -30,7 +30,6 @@
 	}                      \
 	while(0);
 
-
 #define array_count( array ) ( sizeof( array ) / sizeof( ( array )[0] ) )
 
 // TODO(Ed) : Move to memory header eventually
