@@ -35,7 +35,7 @@ The final build order should have an additional game module: `handmade`, that wi
 
 ## Milestone
 
-Day 46 : Basic Multiplayer Support
+Day 48 : Line Segment Intersection Collisions
 
 Features Done so far:
 

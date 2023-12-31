@@ -26,9 +26,10 @@ void cannonicalize_coord( TileMap* tile_map, s32* tile_coord, f32* pos_coord )
 	assert( tile_map   != nullptr );
 	assert( tile_coord != nullptr );
 
-	f32 tile_size = scast(f32, tile_map->tile_size_in_meters);
+	f32 tile_size = scast(f32, tile_map->tile_side_in_meters);
 
 	// Note(Ed) : World is assumed to be a "torodial topology"
+	// Note(Ed) : Above note is for Casey's setup, mine uses signed coorindates for the tiles... so not sure.
 	s32 offset         = round( (* pos_coord) / tile_size );
 	s32 new_tile_coord = (* tile_coord) + offset;
 	f32 new_pos_coord  = (* pos_coord)  - scast(f32, offset) * tile_size;

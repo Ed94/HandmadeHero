@@ -40,7 +40,7 @@ struct TileMap
 	s32 tile_chunks_num_y;
 	s32 tile_chunks_num_z;
 
-	f32 tile_size_in_meters;
+	f32 tile_side_in_meters;
 
 	// TODO(Ed) : Real sparseness ? (not use the giant pointer array)
 	s32 chunk_shift;

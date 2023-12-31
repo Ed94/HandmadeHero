@@ -732,7 +732,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 		ReleaseDC( window_handle, refresh_dc );
 
-		Engine_Refresh_Hz      = monitor_refresh_hz;
+		Engine_Refresh_Hz      = 30;
 		Engine_Frame_Target_MS = 1000.f / scast(f32, Engine_Refresh_Hz);
 	}
 
