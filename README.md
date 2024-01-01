@@ -35,7 +35,7 @@ The final build order should have an additional game module: `handmade`, that wi
 
 ## Milestone
 
-Day 48 : Line Segment Intersection Collisions
+Day 49 : Debugging Canonical Coordinatescl
 
 Features Done so far:
 

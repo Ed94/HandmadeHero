@@ -149,6 +149,8 @@ struct GameState
 
 	Player player_1;
 	Player player_2;
+	
+	engine::TileMapPos spawn_pos;
 
 //	PlayerState player_state;
 //	PlayerState player_state_2;

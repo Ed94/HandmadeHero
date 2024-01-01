@@ -15,6 +15,13 @@ f32 abs( f32 value )
 }
 
 inline
+s32 sign( s32 value )
+{
+	s32 result = value >= 0 ? 1 : -1;
+	return result;
+}
+
+inline
 f32 sqrt( f32 value )
 {
 	f32 result = sqrtf(value);

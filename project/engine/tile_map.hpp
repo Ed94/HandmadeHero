@@ -23,9 +23,9 @@ struct TileChunk
 */
 struct TileChunkPosition
 {
-	s32 tile_chunk_x;
-	s32 tile_chunk_y;
-	s32 tile_chunk_z;
+	s32 x;
+	s32 y;
+	s32 z;
 
 	// "Chunk-relative (x, y)
 

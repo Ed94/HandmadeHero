@@ -441,10 +441,7 @@ void player_init( hh::Player* player, hh::GameState* gs )
 	
 	entity->kind = hh::EntityKind_Hero;
 	
-	entity->position.tile_x    = 4;
-	entity->position.tile_y    = 4;
-	entity->position.rel_pos.x = 0.f;
-	entity->position.rel_pos.y = 0.f;
+	entity->position = gs->spawn_pos;
 
 	entity->velocity = {};
 
@@ -569,7 +566,9 @@ void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameSt
 	f32 player_half_width     = entity->width  / 2.f;
 	f32 player_quarter_height = entity->height / 4.f;
 
-	f32 move_accel = 36.f;
+//	f32 move_accel = 36.f;
+	f32 move_accel = 200.f;
+	
 	if ( actions->sprint )
 	{
 		move_accel = 94.f;
@@ -702,52 +701,91 @@ void update_player( hh::Player* player, f32 delta_time, World* world, hh::GameSt
 	}
 	else
 	{
-		TileMapPos new_pos = {
+		TileMapPos new_pos = recannonicalize_position( tile_map, {
 			new_player_pos.x, new_player_pos.y,
 			old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
-		};
-		new_pos = recannonicalize_position( tile_map, new_pos );
-		
-		s32 min_tile_x = min( old_pos.tile_x, new_pos.tile_x );
-		s32 min_tile_y = min( old_pos.tile_y, new_pos.tile_y );
-		
-		s32 max_tile_x = max( old_pos.tile_x, new_pos.tile_x );
-		s32 max_tile_y = max( old_pos.tile_y, new_pos.tile_y );
-		
-		TileMapPos best_position  = old_pos;
-		
-		f32  min_intersection_delta = 1.0f;
-		for ( s32 tile_y = min_tile_y; tile_y <= max_tile_y; ++ tile_y )
-		for ( s32 tile_x = min_tile_x; tile_x <= max_tile_x; ++ tile_x )
+		});
+		TileMapPos best_position          = old_pos;
+		f32        min_intersection_delta = 1.0f;
+			
+		if (0) 
 		{
-			TileMapPos test_tile_pos = centered_tile_point( tile_x, tile_y, old_pos.tile_z );
-			s32        tile_value    = TileMap_get_tile_value( tile_map, test_tile_pos );
-			if ( ! TileMap_is_tile_value_empty( tile_value ) )
+			s32 min_tile_x = min( old_pos.tile_x, new_pos.tile_x );
+			s32 min_tile_y = min( old_pos.tile_y, new_pos.tile_y );
+			
+			s32 max_tile_x = max( old_pos.tile_x, new_pos.tile_x );
+			s32 max_tile_y = max( old_pos.tile_y, new_pos.tile_y );
+			
+			for ( s32 tile_y = min_tile_y; tile_y <= max_tile_y; ++ tile_y )
+			for ( s32 tile_x = min_tile_x; tile_x <= max_tile_x; ++ tile_x )
 			{
-				Vec2 tile_xy_in_meters = Vec2 { tile_map->tile_side_in_meters, tile_map->tile_side_in_meters };
+				TileMapPos test_tile_pos = centered_tile_point( tile_x, tile_y, old_pos.tile_z );
+				s32        tile_value    = TileMap_get_tile_value( tile_map, test_tile_pos );
+				if ( ! TileMap_is_tile_value_empty( tile_value ) )
+				{
+					Vec2 tile_xy_in_meters = Vec2 { tile_map->tile_side_in_meters, tile_map->tile_side_in_meters };
+					
+					Vec2 min_corner = -0.5f * tile_xy_in_meters;
+					Vec2 max_corner =  0.5f * tile_xy_in_meters;
+					
+					Vec2 rel_old_pos     = subtract( old_pos, test_tile_pos ).rel_pos;
+					Vec2 rel_old_pos_inv = { rel_old_pos.y,      rel_old_pos.x      };
+					Vec2 vel_inv         = { entity->velocity.y, entity->velocity.x };
+					
+					test_wall( min_corner.x, rel_old_pos,     min_corner.y, max_corner.y, entity->velocity, & min_intersection_delta );
+					test_wall( max_corner.x, rel_old_pos,     min_corner.y, max_corner.y, entity->velocity, & min_intersection_delta );
+					test_wall( min_corner.y, rel_old_pos_inv, min_corner.x, max_corner.x, vel_inv,          & min_intersection_delta );
+					test_wall( max_corner.y, rel_old_pos_inv, min_corner.x, max_corner.x, vel_inv,          & min_intersection_delta );
+				}
+			}
+		}
+		else
+		{
+			s32 tile_delta_x = sign( new_pos.tile_x - old_pos.tile_x );
+			s32 tile_delta_y = sign( new_pos.tile_y - old_pos.tile_y );
+						
+			for ( s32 tile_y = old_pos.tile_y; ; tile_y += tile_delta_y )
+			{
+				for ( s32 tile_x = old_pos.tile_x; ; tile_x += tile_delta_x )
+				{
+					TileMapPos test_tile_pos = centered_tile_point( tile_x, tile_y, old_pos.tile_z );
+					s32        tile_value    = TileMap_get_tile_value( tile_map, test_tile_pos );
+					
+					local_persist TileChunkPosition last_chunk = {};
+					TileChunkPosition curr_chunk = get_tile_chunk_position_for(tile_map, old_pos.tile_x, old_pos.tile_y, old_pos.tile_z );
+						
+					if ( ! TileMap_is_tile_value_empty( tile_value ) )
+					{
+						Vec2 tile_xy_in_meters = Vec2 { tile_map->tile_side_in_meters, tile_map->tile_side_in_meters };
+						
+						Vec2 min_corner = -0.5f * tile_xy_in_meters;
+						Vec2 max_corner =  0.5f * tile_xy_in_meters;
+						
+						Vec2 rel_old_pos     = subtract( old_pos, test_tile_pos ).rel_pos;
+						Vec2 rel_old_pos_inv = { rel_old_pos.y,      rel_old_pos.x      };
+						Vec2 vel_inv         = { entity->velocity.y, entity->velocity.x };
+						
+						test_wall( min_corner.x, rel_old_pos,     min_corner.y, max_corner.y, entity->velocity, & min_intersection_delta );
+						test_wall( max_corner.x, rel_old_pos,     min_corner.y, max_corner.y, entity->velocity, & min_intersection_delta );
+						test_wall( min_corner.y, rel_old_pos_inv, min_corner.x, max_corner.x, vel_inv,          & min_intersection_delta );
+						test_wall( max_corner.y, rel_old_pos_inv, min_corner.x, max_corner.x, vel_inv,          & min_intersection_delta );
+					}
+					
+					if ( tile_x == new_pos.tile_x )
+						break;
+				}
 				
-				Vec2 min_corner = -0.5f * tile_xy_in_meters;
-				Vec2 max_corner =  0.5f * tile_xy_in_meters;
-				
-				Vec2 rel_old_pos     = subtract( old_pos, test_tile_pos ).rel_pos;
-				Vec2 rel_old_pos_inv = { rel_old_pos.y,      rel_old_pos.x      };
-				Vec2 vel_inv         = { entity->velocity.y, entity->velocity.x };
-				 
-				test_wall( min_corner.x, rel_old_pos,     min_corner.y, max_corner.y, entity->velocity, & min_intersection_delta );
-				test_wall( max_corner.x, rel_old_pos,     min_corner.y, max_corner.y, entity->velocity, & min_intersection_delta );
-				test_wall( min_corner.y, rel_old_pos_inv, min_corner.x, max_corner.x, vel_inv,          & min_intersection_delta );
-				test_wall( max_corner.y, rel_old_pos_inv, min_corner.x, max_corner.x, vel_inv,          & min_intersection_delta );
+				if ( tile_y == new_pos.tile_y )
+					break;
 			}
 		}
 		
 		new_player_pos  = { old_pos.rel_pos.x, old_pos.rel_pos.y };
 		new_player_pos += entity->velocity * min_intersection_delta;
-	
-		new_pos = {
+		new_pos = recannonicalize_position( tile_map, {
 			new_player_pos.x, new_player_pos.y,
 			old_pos.tile_x, old_pos.tile_y, old_pos.tile_z
-		};
-		new_pos = recannonicalize_position( tile_map, new_pos );
+		});
 		entity->position = new_pos;
 	}
 	
@@ -922,7 +960,10 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 	state->game_memory.persistent      = rcast(Byte*, memory->persistent) + state->game_memory.persistent_size;
 	state->game_memory.transient_size  = memory->transient_size / Memory::game_memory_factor;
 	state->game_memory.transient       = rcast(Byte*, memory->transient) + state->game_memory.transient_size;
-
+		
+	hh::GameState* gs = rcast( hh::GameState*, state->game_memory.persistent );
+	assert( sizeof(hh::GameState) <= state->game_memory.persistent_size );
+	
 	World* world;
 
 	// World setup
@@ -965,10 +1006,10 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 		world->tiles_per_screen_x = 17;
 		world->tiles_per_screen_y = 9;
 
-		u32 screen_x  = 0;
-		u32 screen_y  = 0;
+		s32 screen_x  = -10;
+		s32 screen_y  = -10;
 		u32 rng_index = 0;
-
+		
 		b32 door_left   = false;
 		b32 door_right  = false;
 		b32 door_top    = false;
@@ -978,7 +1019,7 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 
 		u32 abs_tile_z = 0;
 
-		for ( u32 screen_index = 0; screen_index < 100; ++ screen_index )
+		for ( u32 screen_index = 0; screen_index <= 100; ++ screen_index )
 		{
 			// TODO(Ed) : We need a proper RNG.
 			assert( rng_index < array_count(RNG_Table) )
@@ -1014,6 +1055,9 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 			{
 				door_top = true;
 			}
+			
+			local_persist TileChunkPosition last_chunk = {};
+			s32 chunk_index = 0;
 
 			for (s32 tile_y = 0; tile_y < world->tiles_per_screen_y; ++ tile_y )
 			{
@@ -1021,6 +1065,12 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 				{
 					s32 abs_tile_x = screen_x * world->tiles_per_screen_x + tile_x;
 					s32 abs_tile_y = screen_y * world->tiles_per_screen_y + tile_y;
+					
+					do_once()
+					{
+						gs->spawn_pos.tile_x = abs_tile_x + 4;
+						gs->spawn_pos.tile_y = abs_tile_y + 4;
+					}
 
 					s32 tile_value = 1;
 
@@ -1063,8 +1113,21 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 						}
 					}
 
+					last_chunk = get_tile_chunk_position_for( tile_map, abs_tile_x, abs_tile_y, abs_tile_z );
+					chunk_index =  
+						last_chunk.z * tile_map->tile_chunks_num_y * tile_map->tile_chunks_num_x
+		        	+ 	last_chunk.y * tile_map->tile_chunks_num_x 
+		        	+ 	last_chunk.x;
+					
 					// u32 tile_value = tile_x == tile_y && tile_y % 2 ? 1 : 0;
 					TileMap_set_tile_value( & state->world_arena, world->tile_map, abs_tile_x, abs_tile_y, abs_tile_z, tile_value );
+				}
+				
+				s32 something = false;
+				something++;
+				if ( something )
+				{
+					something--;
 				}
 			}
 
@@ -1106,9 +1169,6 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 			}
 		}
 	}
-
-	hh::GameState* gs = rcast( hh::GameState*, state->game_memory.persistent );
-	assert( sizeof(hh::GameState) <= state->game_memory.persistent_size );
 
 	// Personally made assets
 	{
@@ -1197,9 +1257,6 @@ void startup( OffscreenBuffer* back_buffer, Memory* memory, platform::ModuleAPI*
 	gs->camera_pos.tile_y = world->tiles_per_screen_y / 2;
 	
 	using hh::FacingDirection_Front;
-
-//	gs->player_1 = {};
-//	gs->player_2 = {};
 
 	gs->camera_assigned_entity_id = gs->player_1.entity_id;
 }
@@ -1419,10 +1476,17 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 	
 				s32 tile_id  = TileMap_get_tile_value( tile_map, col, row, gs->camera_pos.tile_z );
 				f32 color[3] = { 0.15f, 0.15f, 0.15f };
-	
-				if ( tile_id > 1 || (entity_followed && row == entity_followed->position.tile_y && col == entity_followed->position.tile_x) )
+				
+				if ( tile_id > 1 || tile_id == 0 || (entity_followed && row == entity_followed->position.tile_y && col == entity_followed->position.tile_x) )
 //				if ( tile_id > 1 )
 				{
+					if ( tile_id == 0 )
+					{
+						color[0] = 0.88f;
+						color[1] = 0.22f;
+						color[2] = 0.77f;
+					}
+				
 					if ( tile_id == 2 )
 					{
 						color[0] = 0.42f;
@@ -1448,9 +1512,9 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 						color[1] = 0.3f;
 						color[2] = 0.3f;
 					}
-					
+									
 					f32 tile_size_in_pixels   = scast(f32, world->tile_size_in_pixels);
-	
+		
 					Vec2 tile_pixel_size = Vec2 { tile_size_in_pixels * 0.5f, tile_size_in_pixels * 0.5f } * 0.9f;
 					Pos2 center {
 						screen_center.x + scast(f32, relative_col) * tile_size_in_pixels - gs->camera_pos.rel_pos.x * world->tile_meters_to_pixels,
@@ -1458,7 +1522,7 @@ void update_and_render( f32 delta_time, InputState* input, OffscreenBuffer* back
 					};
 					Pos2 min = center - cast( Pos2, tile_pixel_size );
 					Pos2 max = center + cast( Pos2, tile_pixel_size );
-	
+		
 					draw_rectangle( back_buffer
 					, min, max
 					, color[0], color[1], color[2] );

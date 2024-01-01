@@ -7,7 +7,7 @@ NS_ENGINE_BEGIN
 inline
 TileMapPos subtract( TileMapPos pos_a, TileMapPos pos_b )
 {
-	TileMapPos result {
+	TileMapPos result = {
 		pos_a.rel_pos - pos_b.rel_pos,
 
 		pos_a.tile_x - pos_b.tile_x,
@@ -16,6 +16,7 @@ TileMapPos subtract( TileMapPos pos_a, TileMapPos pos_b )
 		// TODO(Ed) : Think about how to handle z...
 		pos_a.tile_z - pos_b.tile_z
 	};
+	
 	return result;
 }
 
@@ -52,6 +53,13 @@ TileMapPos recannonicalize_position( TileMap* tile_map, TileMapPos pos )
 	cannonicalize_coord( tile_map, & result.tile_y, & result.rel_pos.y );
 	return result;
 }
+
+inline
+void offset( TileMap* tile_map, TileMapPos& map_pos, Vec2 rel_offset )
+{
+	map_pos.rel_pos += rel_offset;
+	map_pos          = recannonicalize_position( tile_map, map_pos);
+}
                                                                     
 inline
 u32 TileChunk_get_tile_value( TileChunk* tile_chunk, TileMap* tile_map, s32 x, s32 y )
@@ -77,18 +85,20 @@ void TileChunk_set_tile_value( TileChunk* tile_chunk, TileMap* tile_map, s32 x, 
 }
 
 inline
-TileChunk* TileMap_get_chunk( TileMap* tile_map, s32 tile_chunk_x, s32 tile_chunk_y, s32 tile_chunk_z )
+TileChunk* TileMap_get_chunk( TileMap* tile_map, TileChunkPosition chunk_pos )
 {
 	TileChunk* chunk = nullptr;                     
 	
-	if (	tile_chunk_x >= 0 && tile_chunk_x < scast(s32, tile_map->tile_chunks_num_x)
-	    &&	tile_chunk_y >= 0 && tile_chunk_y < scast(s32, tile_map->tile_chunks_num_y)
-	    &&	tile_chunk_z >= 0 && tile_chunk_z < scast(s32, tile_map->tile_chunks_num_z) )
+	if (	chunk_pos.x >= 0 && chunk_pos.x < tile_map->tile_chunks_num_x
+	    &&	chunk_pos.y >= 0 && chunk_pos.y < tile_map->tile_chunks_num_y
+	    &&	chunk_pos.z >= 0 && chunk_pos.z < tile_map->tile_chunks_num_z )
 	{
 		chunk = & tile_map->chunks[ 
-		          tile_chunk_z * tile_map->tile_chunks_num_y * tile_map->tile_chunks_num_x
-		        + tile_chunk_y * tile_map->tile_chunks_num_x 
-		        + tile_chunk_x ];
+		          chunk_pos.z * tile_map->tile_chunks_num_y * tile_map->tile_chunks_num_x
+		        + chunk_pos.y * tile_map->tile_chunks_num_x 
+		        + chunk_pos.x ];
+		
+		return chunk;
 	}                         
 
 	return chunk;
@@ -100,11 +110,24 @@ TileChunkPosition get_tile_chunk_position_for( TileMap* tile_map, s32 abs_tile_x
 	assert( tile_map != nullptr );
 
 	TileChunkPosition chunk_pos {};
-	chunk_pos.tile_chunk_x = abs_tile_x >> tile_map->chunk_shift;
-	chunk_pos.tile_chunk_y = abs_tile_y >> tile_map->chunk_shift;
-	chunk_pos.tile_chunk_z = abs_tile_z;
-	chunk_pos.tile_x       = abs_tile_x &  tile_map->chunk_mask;
-	chunk_pos.tile_y       = abs_tile_y &  tile_map->chunk_mask;
+	chunk_pos.x = abs_tile_x >> tile_map->chunk_shift;
+	chunk_pos.y = abs_tile_y >> tile_map->chunk_shift;
+	chunk_pos.z = abs_tile_z;
+	
+	// Correct negative values
+	s32 neg_mask = (1 << (sizeof(s32) * 8 - 1));
+	s32 is_neg_x = (chunk_pos.x & neg_mask) < 0;
+	s32 is_neg_y = (chunk_pos.y & neg_mask) < 0;
+	s32 offset_x = is_neg_x * tile_map->tile_chunks_num_x;
+	s32 offset_y = is_neg_y * tile_map->tile_chunks_num_y;
+	chunk_pos.x = offset_x + chunk_pos.x;
+	chunk_pos.y = offset_y + chunk_pos.y;
+	
+//	chunk_pos.tile_x  = (abs_tile_x * (-1 * is_neg_x)) & tile_map->chunk_mask;
+//	chunk_pos.tile_y  = (abs_tile_y * (-1 * is_neg_y)) & tile_map->chunk_mask;
+
+	chunk_pos.tile_x  = abs_tile_x & tile_map->chunk_mask;
+	chunk_pos.tile_y  = abs_tile_y & tile_map->chunk_mask;
 
 	return chunk_pos;
 }
@@ -117,7 +140,7 @@ u32 TileMap_get_tile_value( TileMap* tile_map, s32 tile_x, s32 tile_y, s32 tile_
 	s32 value = 0;
 
 	TileChunkPosition chunk_pos = get_tile_chunk_position_for( tile_map, tile_x, tile_y, tile_z );
-	TileChunk*        chunk     = TileMap_get_chunk( tile_map, chunk_pos.tile_chunk_x, chunk_pos.tile_chunk_y, chunk_pos.tile_chunk_z );
+	TileChunk*        chunk     = TileMap_get_chunk( tile_map, chunk_pos );
 
 	if ( chunk && chunk->tiles )
 		value = TileChunk_get_tile_value( chunk, tile_map, chunk_pos.tile_x, chunk_pos.tile_y );
@@ -155,7 +178,7 @@ internal
 void TileMap_set_tile_value( MemoryArena* arena, TileMap* tile_map, s32 abs_tile_x, s32 abs_tile_y, s32 abs_tile_z, s32 value )
 {
 	TileChunkPosition chunk_pos = get_tile_chunk_position_for( tile_map, abs_tile_x, abs_tile_y, abs_tile_z );
-	TileChunk*        chunk     = TileMap_get_chunk( tile_map, chunk_pos.tile_chunk_x, chunk_pos.tile_chunk_y, chunk_pos.tile_chunk_z );
+	TileChunk*        chunk     = TileMap_get_chunk( tile_map, chunk_pos );
 
 	assert( chunk != nullptr );
 	
