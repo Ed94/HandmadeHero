@@ -14,7 +14,7 @@
 #undef do_once
 #undef do_once_start
 #undef do_once_end
-using namespace gen;
+#undef cast
 
 #include "platform/platform_module.hpp"
 #include "platform/grime.hpp"
@@ -23,7 +23,10 @@ using namespace gen;
 #include "platform/strings.hpp"
 #include "platform/platform.hpp"
 
-constexpr StrC fname_vec_header = txt("vectors.hpp");
+using namespace gen;
+using GStr = gen::Str;
+
+constexpr GStr fname_vec_header = txt("vectors.hpp");
 
 #pragma push_macro("scast")
 #pragma push_macro("Zero")
@@ -264,7 +267,7 @@ constexpr char const* vec2i_ops = stringize(
 #pragma pop_macro("Zero")
 
 #define gen_vec2f( vec_name, type ) gen__vec2f( txt( stringize(vec_name) ), txt( stringize(type) ) )
-CodeBody gen__vec2f( StrC vec_name, StrC type )
+CodeBody gen__vec2f( GStr vec_name, GStr type )
 {
 	CodeStruct vec_struct = parse_struct( token_fmt( "type", vec_name, "unit_type", type, stringize(
 		struct <type>
@@ -290,7 +293,7 @@ CodeBody gen__vec2f( StrC vec_name, StrC type )
 }
 
 #define gen_vec2i( vec_name, type ) gen__vec2i( txt( stringize(vec_name) ), txt( stringize(type) ) )
-CodeBody gen__vec2i( StrC vec_name, StrC type )
+CodeBody gen__vec2i( GStr vec_name, GStr type )
 {
 	CodeStruct vec_struct = parse_struct( token_fmt( "type", vec_name, "unit_type", type, stringize(
 		struct <type>
@@ -316,14 +319,14 @@ CodeBody gen__vec2i( StrC vec_name, StrC type )
 }
 
 #define gen_phys2( type ) gen__phys2( txt( stringize(type) ) )
-Code gen__phys2( StrC type )
+Code gen__phys2( GStr type )
 {
-	String sym_vec   = String::fmt_buf( GlobalAllocator, "Vec2_%s",   type.Ptr );
-	String sym_pos   = String::fmt_buf( GlobalAllocator, "Pos2_%s",   type.Ptr );
-	String sym_dir   = String::fmt_buf( GlobalAllocator, "Dir2_%s",   type.Ptr);
-	String sym_dist  = String::fmt_buf( GlobalAllocator, "Dist_%s",   type.Ptr );
-	String sym_vel   = String::fmt_buf( GlobalAllocator, "Vel2_%s",   type.Ptr );
-	String sym_accel = String::fmt_buf( GlobalAllocator, "Accel2_%s", type.Ptr );
+	StrBuilder sym_vec   = StrBuilder::fmt_buf( _ctx->Allocator_Temp, "Vec2_%s",   type.Ptr );
+	StrBuilder sym_pos   = StrBuilder::fmt_buf( _ctx->Allocator_Temp, "Pos2_%s",   type.Ptr );
+	StrBuilder sym_dir   = StrBuilder::fmt_buf( _ctx->Allocator_Temp, "Dir2_%s",   type.Ptr);
+	StrBuilder sym_dist  = StrBuilder::fmt_buf( _ctx->Allocator_Temp, "Dist_%s",   type.Ptr );
+	StrBuilder sym_vel   = StrBuilder::fmt_buf( _ctx->Allocator_Temp, "Vel2_%s",   type.Ptr );
+	StrBuilder sym_accel = StrBuilder::fmt_buf( _ctx->Allocator_Temp, "Accel2_%s", type.Ptr );
 
 #pragma push_macro("pcast")
 #pragma push_macro("rcast")
@@ -351,15 +354,15 @@ Code gen__phys2( StrC type )
 			return pcast( <type>, vec );
 		}
 	);
-	CodeBody pos_struct = parse_global_body( token_fmt( "type", (StrC)sym_pos, "unit_type", type, "vec_type", (StrC)sym_vec, tmpl_struct ));
-	CodeBody pos_ops    = parse_global_body( token_fmt( "type", (StrC)sym_pos, "unit_type", type, vec2f_ops ));
+	CodeBody pos_struct = parse_global_body( token_fmt( "type", (GStr)sym_pos, "unit_type", type, "vec_type", (GStr)sym_vec, tmpl_struct ));
+	CodeBody pos_ops    = parse_global_body( token_fmt( "type", (GStr)sym_pos, "unit_type", type, vec2f_ops ));
 
 	CodeBody dir_struct = parse_global_body( token_fmt(
-		"type", (StrC)sym_dir,
+		"type", (GStr)sym_dir,
 		"unit_type", type,
-		"vec_type", (StrC)sym_vec,
-		"vel_type", (StrC)sym_vel,
-		"accel_type", (StrC)sym_accel,
+		"vec_type", (GStr)sym_vec,
+		"vel_type", (GStr)sym_vel,
+		"accel_type", (GStr)sym_accel,
 	stringize(
 		struct <type>
 		{
@@ -396,10 +399,10 @@ Code gen__phys2( StrC type )
 	)));
 
 	CodeBody dist_def = parse_global_body( token_fmt(
-		"type",      (StrC)sym_dist,
+		"type",      (GStr)sym_dist,
 		"unit_type", type,
-		"dist_type", (StrC)sym_dist,
-		"pos_type",  (StrC)sym_pos,
+		"dist_type", (GStr)sym_dist,
+		"pos_type",  (GStr)sym_pos,
 	stringize(
 		using <dist_type> = <unit_type>;
 
@@ -413,20 +416,20 @@ Code gen__phys2( StrC type )
 		}
 	)));
 
-	CodeBody vel_struct = parse_global_body( token_fmt( "type", (StrC)sym_vel, "unit_type", type, "vec_type", (StrC)sym_vec, tmpl_struct ));
-	CodeBody vel_ops    = parse_global_body( token_fmt( "type", (StrC)sym_vel, "unit_type", type, vec2f_ops ));
+	CodeBody vel_struct = parse_global_body( token_fmt( "type", (GStr)sym_vel, "unit_type", type, "vec_type", (GStr)sym_vec, tmpl_struct ));
+	CodeBody vel_ops    = parse_global_body( token_fmt( "type", (GStr)sym_vel, "unit_type", type, vec2f_ops ));
 
-	CodeBody accel_struct = parse_global_body( token_fmt( "type", (StrC)sym_accel, "unit_type", type, "vec_type", (StrC)sym_vec, tmpl_struct ));
-	CodeBody accel_ops    = parse_global_body( token_fmt( "type", (StrC)sym_accel, "unit_type", type, vec2f_ops ));
+	CodeBody accel_struct = parse_global_body( token_fmt( "type", (GStr)sym_accel, "unit_type", type, "vec_type", (GStr)sym_vec, tmpl_struct ));
+	CodeBody accel_ops    = parse_global_body( token_fmt( "type", (GStr)sym_accel, "unit_type", type, vec2f_ops ));
 
 	// TODO(Ed): Is there a better name for this?
 	Code ops = parse_global_body( token_fmt(
-		"unit_type",  (StrC)type,
-		"vec_type",   (StrC)sym_vec,
-		"pos_type",   (StrC)sym_pos,
-		"dir_type",   (StrC)sym_dir,
-		"vel_type",   (StrC)sym_vel,
-		"accel_type", (StrC)sym_accel,
+		"unit_type",  (GStr)type,
+		"vec_type",   (GStr)sym_vec,
+		"pos_type",   (GStr)sym_pos,
+		"dir_type",   (GStr)sym_dir,
+		"vel_type",   (GStr)sym_vel,
+		"accel_type", (GStr)sym_accel,
 	stringize(
 		inline
 		<vel_type> velocity( <pos_type> a, <pos_type> b ) {
@@ -508,7 +511,8 @@ Code gen__phys2( StrC type )
 
 int gen_main()
 {
-	gen::init();
+	gen::Context ctx {};
+	gen::init( & ctx);
 	log_fmt("Generating code for Handmade Hero: Engine Module\n");
 
 	CodeComment cmt_gen_notice = def_comment( txt("This was generated by project/codegen/engine_gen.cpp") );

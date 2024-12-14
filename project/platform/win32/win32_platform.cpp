@@ -732,7 +732,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 		}
 		ReleaseDC( window_handle, refresh_dc );
 
-		Engine_Refresh_Hz      = 30;
+		Engine_Refresh_Hz      = 165;
 		Engine_Frame_Target_MS = 1000.f / scast(f32, Engine_Refresh_Hz);
 	}
 
@@ -974,7 +974,7 @@ WinMain( HINSTANCE instance, HINSTANCE prev_instance, LPSTR commandline, int sho
 
 		process_pending_window_messages( window_handle, new_keyboard, new_mouse );
 
-		// f32 delta_time = timing_get_seconds_elapsed( last_frame_clock, timing_get_wall_clock() );
+//		f32 delta_time = timing_get_ms_elapsed( last_frame_clock, timing_get_wall_clock() );
 
 		// Engine's logical iteration and rendering process
 		engine_api.update_and_render( delta_time, & input, rcast(engine::OffscreenBuffer*, & Surface_Back_Buffer.memory )

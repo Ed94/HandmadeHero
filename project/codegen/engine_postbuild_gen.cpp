@@ -15,7 +15,7 @@
 #undef do_once_end
 #undef min
 #undef max
-using namespace gen;
+#undef cast
 
 #include <math.h>
 
@@ -37,9 +37,13 @@ using namespace gen;
 #include "engine/engine_to_platform_api.hpp"
 #include "engine/gen/physics.hpp"
 
-constexpr StrC fname_handmade_engine_symbols = txt("handmade_engine.symbols");
+using namespace gen;
 
-void get_symbols_from_module_table( FileContents symbol_table, Array<String> symbols )
+using GStr = gen::Str;
+
+constexpr GStr fname_handmade_engine_symbols = txt("handmade_engine.symbols");
+
+void get_symbols_from_module_table( FileContents symbol_table, Array<StrBuilder> symbols )
 {
 	struct Token
 	{
@@ -66,17 +70,18 @@ void get_symbols_from_module_table( FileContents symbol_table, Array<String> sym
 				++ scanner;
 				++ token.Len;
 			}
-			symbols.append( String::make_length( GlobalAllocator, token.Ptr, token.Len ) );
+			symbols.append( StrBuilder::make_length( _ctx->Allocator_Temp, token.Ptr, token.Len ) );
 		}
 	}
 }
 
 int gen_main()
 {
-	gen::init();
+	gen::Context ctx {};
+	gen::init( & ctx);
 	log_fmt("Generating code for Handmade Hero: Engine Module (Post-Build)\n");
 
-	FileContents symbol_table = file_read_contents( GlobalAllocator, true, fname_handmade_engine_symbols );
+	FileContents symbol_table = file_read_contents( ctx.Allocator_Temp, true, fname_handmade_engine_symbols );
 
 #pragma push_macro("str_ascii")
 #undef str_ascii
@@ -86,24 +91,24 @@ int gen_main()
 	builder.print( fmt_newline );
 	builder.print_fmt( "NS_ENGINE_BEGIN\n\n" );
 
-	Array<String> symbols = Array<String>::init_reserve( GlobalAllocator, kilobytes(1) );
+	Array<StrBuilder> symbols = Array<StrBuilder>::init_reserve( ctx.Allocator_Temp, kilobytes(1) );
 	get_symbols_from_module_table( symbol_table, symbols );
 
 	using ModuleAPI = engine::ModuleAPI;
 
-	builder.print( parse_variable( token_fmt( "symbol", (StrC)symbols[ModuleAPI::Sym_OnModuleReload], stringize(
+	builder.print( parse_variable( token_fmt( "symbol", (GStr)symbols[ModuleAPI::Sym_OnModuleReload], stringize(
 		constexpr const Str symbol_on_module_load = str_ascii("<symbol>");
 	))));
-	builder.print( parse_variable( token_fmt( "symbol", (StrC)symbols[ModuleAPI::Sym_Startup], stringize(
+	builder.print( parse_variable( token_fmt( "symbol", (GStr)symbols[ModuleAPI::Sym_Startup], stringize(
 		constexpr const Str symbol_startup = str_ascii("<symbol>");
 	))));
-	builder.print( parse_variable( token_fmt( "symbol", (StrC)symbols[ModuleAPI::Sym_Shutdown], stringize(
+	builder.print( parse_variable( token_fmt( "symbol", (GStr)symbols[ModuleAPI::Sym_Shutdown], stringize(
 		constexpr const Str symbol_shutdown = str_ascii("<symbol>");
 	))));
-	builder.print( parse_variable( token_fmt( "symbol", (StrC)symbols[ModuleAPI::Sym_UpdateAndRender], stringize(
+	builder.print( parse_variable( token_fmt( "symbol", (GStr)symbols[ModuleAPI::Sym_UpdateAndRender], stringize(
 		constexpr const Str symbol_update_and_render = str_ascii("<symbol>");
 	))));
-	builder.print( parse_variable( token_fmt( "symbol", (StrC)symbols[ModuleAPI::Sym_UpdateAudio], stringize(
+	builder.print( parse_variable( token_fmt( "symbol", (GStr)symbols[ModuleAPI::Sym_UpdateAudio], stringize(
 		constexpr const Str symbol_update_audio = str_ascii("<symbol>");
 	))));
 
