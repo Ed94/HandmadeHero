@@ -70,7 +70,8 @@ int gen_main()
 			}
 			content.append( context_data_members[ context_data_members.num() - 1 ].to_strbuilder() );
 		}
-		using_context = def_define( txt("using_context()"), using_context_content );
+
+		using_context = def_define( txt("using_context()"), MT_Statement, { {}, using_context_content } );
 	}
 
 	builder.print( using_context );
