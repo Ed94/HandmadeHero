@@ -242,8 +242,8 @@ GEN_NS_BEGIN
 #endif
 
 #ifndef bit
-#define bit( Value )                             ( 1 << Value )
-#define bitfield_is_equal( Type, Field, Mask ) ( (scast(Type, Mask) & scast(Type, Field)) == scast(Type, Mask) )
+#define bit( Value )                         ( 1 << Value )
+#define bitfield_is_set( Type, Field, Mask ) ( (scast(Type, Mask) & scast(Type, Field)) == scast(Type, Mask) )
 #endif
 
 // Mainly intended for forcing the base library to utilize only C-valid constructs or type coercion
@@ -456,9 +456,9 @@ GEN_NS_BEGIN
 #	if ! GEN_COMPILER_C
 #		define typeof decltype
 #	elif defined(_MSC_VER)
-#		define typeof(x) __typeof__(x)
+#		define typeof __typeof__
 #	elif defined(__GNUC__) || defined(__clang__)
-#		define typeof(x) __typeof__(x)
+#		define typeof __typeof__
 #	else
 #		error "Compiler not supported"
 #	endif
@@ -945,7 +945,7 @@ forceinline ssize         size_remaining(Arena& arena, ssize alignment) { return
 // This id is defined by Unreal for asserts
 #pragma push_macro("check")
 #undef check
-forceinline void check(Arena& arena) { return arena_check(& arena); };
+forceinline void check(Arena& arena) { return arena_check(& arena); }
 #pragma pop_macro("check")
 #endif
 
@@ -1859,7 +1859,7 @@ usize array_grow_formula(ssize value) {
 
 template<class Type> inline
 bool array_append_array(Array<Type>* array, Array<Type> other) {
-	return array_append_items(array, (Type*)other, num(other));
+	return array_append_items(array, (Type*)other, array_num(other));
 }
 
 template<class Type> inline
@@ -1889,13 +1889,13 @@ bool array_append_items(Array<Type>* array, Type* items, usize item_num)
 	GEN_ASSERT(* array != nullptr);
 	GEN_ASSERT(items != nullptr);
 	GEN_ASSERT(item_num > 0);
-	ArrayHeader* header = array_get_header(array);
+	ArrayHeader* header = array_get_header(* array);
 
 	if (header->Num + item_num > header->Capacity)
 	{
-		if ( ! grow(array, header->Capacity + item_num))
+		if ( ! array_grow(array, header->Capacity + item_num))
 			return false;
-		header = array_get_header(array);
+		header = array_get_header(* array);
 	}
 
 	mem_copy((Type*)array + header->Num, items, item_num * sizeof(Type));
@@ -4261,6 +4261,7 @@ enum CodeType : u32
 	CT_Operator_Cast,
 	CT_Operator_Cast_Fwd,
 	CT_Parameters,
+	CT_Parameters_Define,
 	CT_Preprocess_Define,
 	CT_Preprocess_Include,
 	CT_Preprocess_If,
@@ -4289,7 +4290,7 @@ enum CodeType : u32
 
 inline Str codetype_to_str( CodeType type )
 {
-	local_persist Str lookup[61] = {
+	local_persist Str lookup[] = {
 		{ "Invalid",             sizeof( "Invalid" ) - 1             },
 		{ "Untyped",             sizeof( "Untyped" ) - 1             },
 		{ "NewLine",             sizeof( "NewLine" ) - 1             },
@@ -4329,6 +4330,7 @@ inline Str codetype_to_str( CodeType type )
 		{ "Operator_Cast",       sizeof( "Operator_Cast" ) - 1       },
 		{ "Operator_Cast_Fwd",   sizeof( "Operator_Cast_Fwd" ) - 1   },
 		{ "Parameters",          sizeof( "Parameters" ) - 1          },
+		{ "Parameters_Define",   sizeof( "Parameters_Define" ) - 1   },
 		{ "Preprocess_Define",   sizeof( "Preprocess_Define" ) - 1   },
 		{ "Preprocess_Include",  sizeof( "Preprocess_Include" ) - 1  },
 		{ "Preprocess_If",       sizeof( "Preprocess_If" ) - 1       },
@@ -4357,7 +4359,7 @@ inline Str codetype_to_str( CodeType type )
 
 inline Str codetype_to_keyword_str( CodeType type )
 {
-	local_persist Str lookup[61] = {
+	local_persist Str lookup[] = {
 		{ "__NA__",          sizeof( "__NA__" ) - 1          },
 		{ "__NA__",          sizeof( "__NA__" ) - 1          },
 		{ "__NA__",          sizeof( "__NA__" ) - 1          },
@@ -4396,6 +4398,7 @@ inline Str codetype_to_keyword_str( CodeType type )
 		{ "operator",        sizeof( "operator" ) - 1        },
 		{ "operator",        sizeof( "operator" ) - 1        },
 		{ "operator",        sizeof( "operator" ) - 1        },
+		{ "__NA__",          sizeof( "__NA__" ) - 1          },
 		{ "__NA__",          sizeof( "__NA__" ) - 1          },
 		{ "define",          sizeof( "define" ) - 1          },
 		{ "include",         sizeof( "include" ) - 1         },
@@ -4488,7 +4491,7 @@ enum Operator : u32
 
 inline Str operator_to_str( Operator op )
 {
-	local_persist Str lookup[47] = {
+	local_persist Str lookup[] = {
 		{ "INVALID",  sizeof( "INVALID" ) - 1  },
 		{ "=",        sizeof( "=" ) - 1        },
 		{ "+=",       sizeof( "+=" ) - 1       },
@@ -4579,7 +4582,7 @@ enum Specifier : u32
 
 inline Str spec_to_str( Specifier type )
 {
-	local_persist Str lookup[26] = {
+	local_persist Str lookup[] = {
 		{ "INVALID",       sizeof( "INVALID" ) - 1       },
 		{ "consteval",     sizeof( "consteval" ) - 1     },
 		{ "constexpr",     sizeof( "constexpr" ) - 1     },
@@ -4695,6 +4698,7 @@ enum TokType : u32
 	Tok_Operator,
 	Tok_Preprocess_Hash,
 	Tok_Preprocess_Define,
+	Tok_Preprocess_Define_Param,
 	Tok_Preprocess_If,
 	Tok_Preprocess_IfDef,
 	Tok_Preprocess_IfNotDef,
@@ -4704,7 +4708,9 @@ enum TokType : u32
 	Tok_Preprocess_Include,
 	Tok_Preprocess_Pragma,
 	Tok_Preprocess_Content,
-	Tok_Preprocess_Macro,
+	Tok_Preprocess_Macro_Expr,
+	Tok_Preprocess_Macro_Stmt,
+	Tok_Preprocess_Macro_Typename,
 	Tok_Preprocess_Unsupported,
 	Tok_Spec_Alignas,
 	Tok_Spec_Const,
@@ -4753,102 +4759,105 @@ enum TokType : u32
 inline Str toktype_to_str( TokType type )
 {
 	local_persist Str lookup[] = {
-		{ "__invalid__",       sizeof( "__invalid__" ) - 1       },
-		{ "private",           sizeof( "private" ) - 1           },
-		{ "protected",         sizeof( "protected" ) - 1         },
-		{ "public",            sizeof( "public" ) - 1            },
-		{ ".",		         sizeof( "." ) - 1                 },
-		{ "::",		        sizeof( "::" ) - 1                },
-		{ "&",		         sizeof( "&" ) - 1                 },
-		{ "&&",		        sizeof( "&&" ) - 1                },
-		{ ":",		         sizeof( ":" ) - 1                 },
-		{ "[[",		        sizeof( "[[" ) - 1                },
-		{ "]]",		        sizeof( "]]" ) - 1                },
-		{ "{",		         sizeof( "{" ) - 1                 },
-		{ "}",		         sizeof( "}" ) - 1                 },
-		{ "[",		         sizeof( "[" ) - 1                 },
-		{ "]",		         sizeof( "]" ) - 1                 },
-		{ "(",		         sizeof( "(" ) - 1                 },
-		{ ")",		         sizeof( ")" ) - 1                 },
-		{ "__comment__",       sizeof( "__comment__" ) - 1       },
-		{ "__comment_end__",   sizeof( "__comment_end__" ) - 1   },
-		{ "__comment_start__", sizeof( "__comment_start__" ) - 1 },
-		{ "__character__",     sizeof( "__character__" ) - 1     },
-		{ ",",		         sizeof( "," ) - 1                 },
-		{ "class",             sizeof( "class" ) - 1             },
-		{ "__attribute__",     sizeof( "__attribute__" ) - 1     },
-		{ "__declspec",        sizeof( "__declspec" ) - 1        },
-		{ "enum",              sizeof( "enum" ) - 1              },
-		{ "extern",            sizeof( "extern" ) - 1            },
-		{ "friend",            sizeof( "friend" ) - 1            },
-		{ "module",            sizeof( "module" ) - 1            },
-		{ "namespace",         sizeof( "namespace" ) - 1         },
-		{ "operator",          sizeof( "operator" ) - 1          },
-		{ "struct",            sizeof( "struct" ) - 1            },
-		{ "template",          sizeof( "template" ) - 1          },
-		{ "typedef",           sizeof( "typedef" ) - 1           },
-		{ "using",             sizeof( "using" ) - 1             },
-		{ "union",             sizeof( "union" ) - 1             },
-		{ "__identifier__",    sizeof( "__identifier__" ) - 1    },
-		{ "import",            sizeof( "import" ) - 1            },
-		{ "export",            sizeof( "export" ) - 1            },
-		{ "__new_line__",      sizeof( "__new_line__" ) - 1      },
-		{ "__number__",        sizeof( "__number__" ) - 1        },
-		{ "__operator__",      sizeof( "__operator__" ) - 1      },
-		{ "#",		         sizeof( "#" ) - 1                 },
-		{ "define",            sizeof( "define" ) - 1            },
-		{ "if",		        sizeof( "if" ) - 1                },
-		{ "ifdef",             sizeof( "ifdef" ) - 1             },
-		{ "ifndef",            sizeof( "ifndef" ) - 1            },
-		{ "elif",              sizeof( "elif" ) - 1              },
-		{ "else",              sizeof( "else" ) - 1              },
-		{ "endif",             sizeof( "endif" ) - 1             },
-		{ "include",           sizeof( "include" ) - 1           },
-		{ "pragma",            sizeof( "pragma" ) - 1            },
-		{ "__macro_content__", sizeof( "__macro_content__" ) - 1 },
-		{ "__macro__",         sizeof( "__macro__" ) - 1         },
-		{ "__unsupported__",   sizeof( "__unsupported__" ) - 1   },
-		{ "alignas",           sizeof( "alignas" ) - 1           },
-		{ "const",             sizeof( "const" ) - 1             },
-		{ "consteval",         sizeof( "consteval" ) - 1         },
-		{ "constexpr",         sizeof( "constexpr" ) - 1         },
-		{ "constinit",         sizeof( "constinit" ) - 1         },
-		{ "explicit",          sizeof( "explicit" ) - 1          },
-		{ "extern",            sizeof( "extern" ) - 1            },
-		{ "final",             sizeof( "final" ) - 1             },
-		{ "forceinline",       sizeof( "forceinline" ) - 1       },
-		{ "global",            sizeof( "global" ) - 1            },
-		{ "inline",            sizeof( "inline" ) - 1            },
-		{ "internal",          sizeof( "internal" ) - 1          },
-		{ "local_persist",     sizeof( "local_persist" ) - 1     },
-		{ "mutable",           sizeof( "mutable" ) - 1           },
-		{ "neverinline",       sizeof( "neverinline" ) - 1       },
-		{ "override",          sizeof( "override" ) - 1          },
-		{ "static",            sizeof( "static" ) - 1            },
-		{ "thread_local",      sizeof( "thread_local" ) - 1      },
-		{ "volatile",          sizeof( "volatile" ) - 1          },
-		{ "virtual",           sizeof( "virtual" ) - 1           },
-		{ "*",		         sizeof( "*" ) - 1                 },
-		{ ";",		         sizeof( ";" ) - 1                 },
-		{ "static_assert",     sizeof( "static_assert" ) - 1     },
-		{ "__string__",        sizeof( "__string__" ) - 1        },
-		{ "typename",          sizeof( "typename" ) - 1          },
-		{ "unsigned",          sizeof( "unsigned" ) - 1          },
-		{ "signed",            sizeof( "signed" ) - 1            },
-		{ "short",             sizeof( "short" ) - 1             },
-		{ "long",              sizeof( "long" ) - 1              },
-		{ "bool",              sizeof( "bool" ) - 1              },
-		{ "char",              sizeof( "char" ) - 1              },
-		{ "int",               sizeof( "int" ) - 1               },
-		{ "double",            sizeof( "double" ) - 1            },
-		{ "__int8",            sizeof( "__int8" ) - 1            },
-		{ "__int16",           sizeof( "__int16" ) - 1           },
-		{ "__int32",           sizeof( "__int32" ) - 1           },
-		{ "__int64",           sizeof( "__int64" ) - 1           },
-		{ "_W64",              sizeof( "_W64" ) - 1              },
-		{ "...",               sizeof( "..." ) - 1               },
-		{ "__attrib_start__",  sizeof( "__attrib_start__" ) - 1  },
-		{ "GEN_API",           sizeof( "GEN_API" ) - 1           },
+		{ "__invalid__",          sizeof( "__invalid__" ) - 1          },
+		{ "private",              sizeof( "private" ) - 1              },
+		{ "protected",            sizeof( "protected" ) - 1            },
+		{ "public",               sizeof( "public" ) - 1               },
+		{ ".",		            sizeof( "." ) - 1                    },
+		{ "::",		           sizeof( "::" ) - 1                   },
+		{ "&",		            sizeof( "&" ) - 1                    },
+		{ "&&",		           sizeof( "&&" ) - 1                   },
+		{ ":",		            sizeof( ":" ) - 1                    },
+		{ "[[",		           sizeof( "[[" ) - 1                   },
+		{ "]]",		           sizeof( "]]" ) - 1                   },
+		{ "{",		            sizeof( "{" ) - 1                    },
+		{ "}",		            sizeof( "}" ) - 1                    },
+		{ "[",		            sizeof( "[" ) - 1                    },
+		{ "]",		            sizeof( "]" ) - 1                    },
+		{ "(",		            sizeof( "(" ) - 1                    },
+		{ ")",		            sizeof( ")" ) - 1                    },
+		{ "__comment__",          sizeof( "__comment__" ) - 1          },
+		{ "__comment_end__",      sizeof( "__comment_end__" ) - 1      },
+		{ "__comment_start__",    sizeof( "__comment_start__" ) - 1    },
+		{ "__character__",        sizeof( "__character__" ) - 1        },
+		{ ",",		            sizeof( "," ) - 1                    },
+		{ "class",                sizeof( "class" ) - 1                },
+		{ "__attribute__",        sizeof( "__attribute__" ) - 1        },
+		{ "__declspec",           sizeof( "__declspec" ) - 1           },
+		{ "enum",                 sizeof( "enum" ) - 1                 },
+		{ "extern",               sizeof( "extern" ) - 1               },
+		{ "friend",               sizeof( "friend" ) - 1               },
+		{ "module",               sizeof( "module" ) - 1               },
+		{ "namespace",            sizeof( "namespace" ) - 1            },
+		{ "operator",             sizeof( "operator" ) - 1             },
+		{ "struct",               sizeof( "struct" ) - 1               },
+		{ "template",             sizeof( "template" ) - 1             },
+		{ "typedef",              sizeof( "typedef" ) - 1              },
+		{ "using",                sizeof( "using" ) - 1                },
+		{ "union",                sizeof( "union" ) - 1                },
+		{ "__identifier__",       sizeof( "__identifier__" ) - 1       },
+		{ "import",               sizeof( "import" ) - 1               },
+		{ "export",               sizeof( "export" ) - 1               },
+		{ "__new_line__",         sizeof( "__new_line__" ) - 1         },
+		{ "__number__",           sizeof( "__number__" ) - 1           },
+		{ "__operator__",         sizeof( "__operator__" ) - 1         },
+		{ "#",		            sizeof( "#" ) - 1                    },
+		{ "define",               sizeof( "define" ) - 1               },
+		{ "__define_param__",     sizeof( "__define_param__" ) - 1     },
+		{ "if",		           sizeof( "if" ) - 1                   },
+		{ "ifdef",                sizeof( "ifdef" ) - 1                },
+		{ "ifndef",               sizeof( "ifndef" ) - 1               },
+		{ "elif",                 sizeof( "elif" ) - 1                 },
+		{ "else",                 sizeof( "else" ) - 1                 },
+		{ "endif",                sizeof( "endif" ) - 1                },
+		{ "include",              sizeof( "include" ) - 1              },
+		{ "pragma",               sizeof( "pragma" ) - 1               },
+		{ "__macro_content__",    sizeof( "__macro_content__" ) - 1    },
+		{ "__macro_expression__", sizeof( "__macro_expression__" ) - 1 },
+		{ "__macro_statment__",   sizeof( "__macro_statment__" ) - 1   },
+		{ "__macro_typename__",   sizeof( "__macro_typename__" ) - 1   },
+		{ "__unsupported__",      sizeof( "__unsupported__" ) - 1      },
+		{ "alignas",              sizeof( "alignas" ) - 1              },
+		{ "const",                sizeof( "const" ) - 1                },
+		{ "consteval",            sizeof( "consteval" ) - 1            },
+		{ "constexpr",            sizeof( "constexpr" ) - 1            },
+		{ "constinit",            sizeof( "constinit" ) - 1            },
+		{ "explicit",             sizeof( "explicit" ) - 1             },
+		{ "extern",               sizeof( "extern" ) - 1               },
+		{ "final",                sizeof( "final" ) - 1                },
+		{ "forceinline",          sizeof( "forceinline" ) - 1          },
+		{ "global",               sizeof( "global" ) - 1               },
+		{ "inline",               sizeof( "inline" ) - 1               },
+		{ "internal",             sizeof( "internal" ) - 1             },
+		{ "local_persist",        sizeof( "local_persist" ) - 1        },
+		{ "mutable",              sizeof( "mutable" ) - 1              },
+		{ "neverinline",          sizeof( "neverinline" ) - 1          },
+		{ "override",             sizeof( "override" ) - 1             },
+		{ "static",               sizeof( "static" ) - 1               },
+		{ "thread_local",         sizeof( "thread_local" ) - 1         },
+		{ "volatile",             sizeof( "volatile" ) - 1             },
+		{ "virtual",              sizeof( "virtual" ) - 1              },
+		{ "*",		            sizeof( "*" ) - 1                    },
+		{ ";",		            sizeof( ";" ) - 1                    },
+		{ "static_assert",        sizeof( "static_assert" ) - 1        },
+		{ "__string__",           sizeof( "__string__" ) - 1           },
+		{ "typename",             sizeof( "typename" ) - 1             },
+		{ "unsigned",             sizeof( "unsigned" ) - 1             },
+		{ "signed",               sizeof( "signed" ) - 1               },
+		{ "short",                sizeof( "short" ) - 1                },
+		{ "long",                 sizeof( "long" ) - 1                 },
+		{ "bool",                 sizeof( "bool" ) - 1                 },
+		{ "char",                 sizeof( "char" ) - 1                 },
+		{ "int",		          sizeof( "int" ) - 1                  },
+		{ "double",               sizeof( "double" ) - 1               },
+		{ "__int8",               sizeof( "__int8" ) - 1               },
+		{ "__int16",              sizeof( "__int16" ) - 1              },
+		{ "__int32",              sizeof( "__int32" ) - 1              },
+		{ "__int64",              sizeof( "__int64" ) - 1              },
+		{ "_W64",                 sizeof( "_W64" ) - 1                 },
+		{ "...",		          sizeof( "..." ) - 1                  },
+		{ "__attrib_start__",     sizeof( "__attrib_start__" ) - 1     },
+		{ "GEN_API",              sizeof( "GEN_API" ) - 1              },
 	};
 	return lookup[type];
 }
@@ -4872,17 +4881,19 @@ inline TokType str_to_toktype( Str str )
 
 enum TokFlags : u32
 {
-	TF_Operator		   = bit(0),
-	TF_Assign          = bit(1),
-	TF_Preprocess      = bit(2),
-	TF_Preprocess_Cond = bit(3),
-	TF_Attribute       = bit(6),
-	TF_AccessOperator  = bit( 7 ),
-	TF_AccessSpecifier = bit( 8 ),
-	TF_Specifier       = bit( 9 ),
-	TF_EndDefinition   = bit( 10 ),    // Either ; or }
-	TF_Formatting      = bit( 11 ),
-	TF_Literal         = bit( 12 ),
+	TF_Operator		         = bit(0),
+	TF_Assign                = bit(1),
+	TF_Preprocess            = bit(2),
+	TF_Preprocess_Cond       = bit(3),
+	TF_Attribute             = bit(6),
+	TF_AccessOperator        = bit(7),
+	TF_AccessSpecifier       = bit(8),
+	TF_Specifier             = bit(9),
+	TF_EndDefinition         = bit(10),    // Either ; or }
+	TF_Formatting            = bit(11),
+	TF_Literal               = bit(12),
+	TF_Macro_Functional      = bit(13),
+	TF_Macro_Expects_Body    = bit(14),
 
 	TF_Null = 0,
 	TF_UnderlyingType = GEN_U32_MAX,
@@ -4916,42 +4927,42 @@ bool tok_is_valid( Token tok ) {
 
 forceinline
 bool tok_is_access_operator(Token tok) {
-	return bitfield_is_equal( u32, tok.Flags, TF_AccessOperator );
+	return bitfield_is_set( u32, tok.Flags, TF_AccessOperator );
 }
 
 forceinline
 bool tok_is_access_specifier(Token tok) {
-	return bitfield_is_equal( u32, tok.Flags, TF_AccessSpecifier );
+	return bitfield_is_set( u32, tok.Flags, TF_AccessSpecifier );
 }
 
 forceinline
 bool tok_is_attribute(Token tok) {
-	return bitfield_is_equal( u32, tok.Flags, TF_Attribute );
+	return bitfield_is_set( u32, tok.Flags, TF_Attribute );
 }
 
 forceinline
 bool tok_is_operator(Token tok) {
-	return bitfield_is_equal( u32, tok.Flags, TF_Operator );
+	return bitfield_is_set( u32, tok.Flags, TF_Operator );
 }
 
 forceinline
 bool tok_is_preprocessor(Token tok) {
-	return bitfield_is_equal( u32, tok.Flags, TF_Preprocess );
+	return bitfield_is_set( u32, tok.Flags, TF_Preprocess );
 }
 
 forceinline
 bool tok_is_preprocess_cond(Token tok) {
-	return bitfield_is_equal( u32, tok.Flags, TF_Preprocess_Cond );
+	return bitfield_is_set( u32, tok.Flags, TF_Preprocess_Cond );
 }
 
 forceinline
 bool tok_is_specifier(Token tok) {
-	return bitfield_is_equal( u32, tok.Flags, TF_Specifier );
+	return bitfield_is_set( u32, tok.Flags, TF_Specifier );
 }
 
 forceinline
 bool tok_is_end_definition(Token tok) {
-	return bitfield_is_equal( u32, tok.Flags, TF_EndDefinition );
+	return bitfield_is_set( u32, tok.Flags, TF_EndDefinition );
 }
 
 StrBuilder tok_to_strbuilder(Token tok);
@@ -4969,7 +4980,7 @@ struct LexContext
 	char const*     scanner;
 	s32             line;
 	s32             column;
-	StringTable     defines;
+	// StringTable     defines;
 	Token           token;
 };
 
@@ -4987,6 +4998,83 @@ struct ParseContext
 	TokArray   Tokens;
 	StackNode* Scope;
 };
+
+enum MacroType : u16
+{
+	MT_Expression,     // A macro is assumed to be a expression if not resolved.
+	MT_Statement,      
+	MT_Typename,
+	MT_Attribute,      // More of a note to the parser than anythign else (attributes should be defined in the user attribues def).
+	MT_Specifier,      // More of a note to the parser than anythign else (specifiers should be defined in the user attribues def).
+	MT_Block_Start,    // Not Supported yet
+	MT_Block_End,      // Not Supported yet
+	MT_Case_Statement, // Not Supported yet
+
+	MT_UnderlyingType = GEN_U16_MAX,
+};
+
+forceinline
+TokType macrotype_to_toktype( MacroType type ) {
+	switch ( type ) {
+		case MT_Statement  : return Tok_Preprocess_Macro_Stmt;
+		case MT_Expression : return Tok_Preprocess_Macro_Expr;
+		case MT_Typename   : return Tok_Preprocess_Macro_Typename;
+	}
+	// All others unsupported for now.
+	return Tok_Invalid;
+}
+
+Str macrotype_to_str( MacroType type )
+{
+	local_persist
+	Str lookup[] = {
+		{ "Statement",        sizeof("Statement")        - 1 },
+		{ "Expression",       sizeof("Expression")       - 1 },
+		{ "Typename",         sizeof("Typename")         - 1 },
+		{ "Attribute(Macro)", sizeof("Attribute(Macro)") - 1 },
+		{ "Specifier(Macro)", sizeof("Specifier(Macro)") - 1 },
+		{ "Block_Start",      sizeof("Block_Start")      - 1 },
+		{ "Block_End",        sizeof("Block_End")        - 1 },
+		{ "Case_Statement",   sizeof("Case_Statement")   - 1 },
+	};
+	local_persist
+	Str invalid = { "Invalid", sizeof("Invalid") };
+	if ( type > MT_Case_Statement )
+		return invalid;
+
+	return lookup[ type ];
+}
+
+enum EMacroFlags : u16
+{
+	MF_Functional          = bit(0), // Macro has parameters (args expected to be passed)
+	MF_Expects_Body        = bit(1), // Expects to assign a braced scope to its body.
+	MF_Allow_As_Identifier = bit(2), // lex__eat wil treat this macro as an identifier if the parser attempts to consume it as one.
+                                     //  ^^^ This is a sort of kludge because we don't support push/pop macro programs rn. ^^^
+
+	MF_Null           = 0,
+	MF_UnderlyingType = GEN_U16_MAX,
+};
+typedef u16 MacroFlags;
+
+struct Macro
+{
+	StrCached  Name;
+	MacroType  Type;
+	MacroFlags Flags;
+};
+
+forceinline
+b32 macro_is_functional( Macro macro ) {
+	return bitfield_is_set( b16, macro.Flags, MF_Functional );
+}
+
+forceinline
+b32 macro_expects_body( Macro macro ) {
+	return bitfield_is_set( b16, macro.Flags, MF_Expects_Body );
+}
+
+typedef HashTable(Macro) MacroTable;
 
 #pragma endregion Types
 
@@ -5012,6 +5100,7 @@ struct AST_Constructor;
 // struct AST_BaseClass;
 struct AST_Class;
 struct AST_Define;
+struct AST_DefineParams;
 struct AST_Destructor;
 struct AST_Enum;
 struct AST_Exec;
@@ -5084,6 +5173,7 @@ typedef AST_Comment*        CodeComment;
 typedef AST_Class*          CodeClass;
 typedef AST_Constructor*    CodeConstructor;
 typedef AST_Define*         CodeDefine;
+typedef AST_DefineParams*   CodeDefineParams;
 typedef AST_Destructor*     CodeDestructor;
 typedef AST_Enum*           CodeEnum;
 typedef AST_Exec*           CodeExec;
@@ -5106,6 +5196,7 @@ struct CodeComment;
 struct CodeClass;
 struct CodeConstructor;
 struct CodeDefine;
+struct CodeDefineParams;
 struct CodeDestructor;
 struct CodeEnum;
 struct CodeExec;
@@ -5291,6 +5382,7 @@ struct Code
 	operator CodeClass() const;
 	operator CodeConstructor() const;
 	operator CodeDefine() const;
+	operator CodeDefineParams() const;
 	operator CodeDestructor() const;
 	operator CodeExec() const;
 	operator CodeEnum() const;
@@ -5351,6 +5443,7 @@ int AST_ArrSpecs_Cap =
 
 /*
 	Simple AST POD with functionality to seralize into C++ syntax.
+	TODO(Ed): Eventually haven't a transparent AST like this will longer be viable once statements & expressions are in (most likely....)
 */
 struct AST
 {
@@ -5358,7 +5451,7 @@ struct AST
 		struct
 		{
 			Code      InlineCmt;       // Class, Constructor, Destructor, Enum, Friend, Functon, Operator, OpCast, Struct, Typedef, Using, Variable
-			Code      Attributes;      // Class, Enum, Function, Struct, Typedef, Union, Using, Variable
+			Code      Attributes;      // Class, Enum, Function, Struct, Typedef, Union, Using, Variable // TODO(Ed): Parameters can have attributes
 			Code      Specs;           // Destructor, Function, Operator, Typename, Variable
 			union {
 				Code  InitializerList; // Constructor
@@ -5370,12 +5463,12 @@ struct AST
 			union {
 				Code  Macro;               // Parameter
 				Code  BitfieldSize;        // Variable (Class/Struct Data Member)
-				Code  Params;              // Constructor, Function, Operator, Template, Typename
+				Code  Params;              // Constructor, Define, Function, Operator, Template, Typename
 				Code  UnderlyingTypeMacro; // Enum
 			};
 			union {
 				Code  ArrExpr;          // Typename
-				Code  Body;             // Class, Constructor, Destructor, Enum, Friend, Function, Namespace, Struct, Union
+				Code  Body;             // Class, Constructor, Define, Destructor, Enum, Friend, Function, Namespace, Struct, Union
 				Code  Declaration;      // Friend, Template
 				Code  Value;            // Parameter, Variable
 			};
@@ -5466,7 +5559,17 @@ GEN_API StrBuilder class_to_strbuilder    ( CodeClass self );
 GEN_API void       class_to_strbuilder_def( CodeClass self, StrBuilder* result );
 GEN_API void       class_to_strbuilder_fwd( CodeClass self, StrBuilder* result );
 
-GEN_API void       params_append           (CodeParams params, CodeParams param );
+GEN_API void             define_params_append           (CodeDefineParams appendee, CodeDefineParams other );
+GEN_API CodeDefineParams define_params_get              (CodeDefineParams params, s32 idx);
+GEN_API bool             define_params_has_entries      (CodeDefineParams params );
+GEN_API StrBuilder       define_params_to_strbuilder    (CodeDefineParams params );
+GEN_API void             define_params_to_strbuilder_ref(CodeDefineParams params, StrBuilder* result );
+
+GEN_API CodeDefineParams begin_CodeDefineParams(CodeDefineParams params);
+GEN_API CodeDefineParams end_CodeDefineParams  (CodeDefineParams params);
+GEN_API CodeDefineParams next_CodeDefineParams (CodeDefineParams params, CodeDefineParams entry_iter);
+
+GEN_API void       params_append           (CodeParams appendee, CodeParams other );
 GEN_API CodeParams params_get              (CodeParams params, s32 idx);
 GEN_API bool       params_has_entries      (CodeParams params );
 GEN_API StrBuilder params_to_strbuilder    (CodeParams params );
@@ -5626,12 +5729,11 @@ struct CodeParams
 {
 #if ! GEN_C_LIKE_CPP
 	Using_Code( CodeParams );
-	forceinline void          append( CodeParams other );
-	forceinline CodeParams    get( s32 idx );
-	forceinline bool          has_entries();
-	forceinline StrBuilder    to_strbuilder();
-	forceinline void          to_strbuilder( StrBuilder& result );
-
+	forceinline void          append( CodeParams other )          { return params_append(* this, other); }
+	forceinline CodeParams    get( s32 idx )                      { return params_get( * this, idx); }
+	forceinline bool          has_entries()                       { return params_has_entries(* this); }
+	forceinline StrBuilder    to_strbuilder()                     { return params_to_strbuilder(* this); }
+	forceinline void          to_strbuilder( StrBuilder& result ) { return params_to_strbuilder_ref(*this, & result); }
 #endif
 	Using_CodeOps( CodeParams );
 	forceinline CodeParams begin() { return begin_CodeParams(* this); }
@@ -5644,6 +5746,29 @@ struct CodeParams
 	}
 	CodeParams& operator++();
 	AST_Params* ast;
+};
+
+struct CodeDefineParams
+{
+#if ! GEN_C_LIKE_CPP
+	Using_Code( CodeDefineParams );
+	forceinline void             append( CodeDefineParams other )    { return params_append( cast(CodeParams, * this), cast(CodeParams, other)); }
+	forceinline CodeDefineParams get( s32 idx )                      { return (CodeDefineParams) (Code) params_get( cast(CodeParams, * this), idx); }
+	forceinline bool             has_entries()                       { return params_has_entries( cast(CodeParams, * this)); }
+	forceinline StrBuilder       to_strbuilder()                     { return define_params_to_strbuilder(* this); }
+	forceinline void             to_strbuilder( StrBuilder& result ) { return define_params_to_strbuilder_ref(* this, & result); }
+#endif
+	Using_CodeOps( CodeDefineParams );
+	forceinline CodeDefineParams begin() { return (CodeDefineParams) (Code) begin_CodeParams( cast(CodeParams, * this)); }
+	forceinline CodeDefineParams end()   { return (CodeDefineParams) (Code) end_CodeParams( cast(CodeParams, * this)); }
+	forceinline operator Code() { return { (AST*)ast }; }
+	forceinline CodeDefineParams  operator *() { return * this; } // Required to support for-range iteration.
+	forceinline AST_DefineParams* operator->() {
+		GEN_ASSERT(ast);
+		return ast;
+	}
+	forceinline CodeDefineParams& operator++();
+	AST_DefineParams* ast;
 };
 
 struct CodeSpecifiers
@@ -6375,6 +6500,7 @@ struct InvalidCode_ImplictCaster
     operator CodeClass         () const { return cast(CodeClass,          Code_Invalid); }
     operator CodeConstructor   () const { return cast(CodeConstructor,    Code_Invalid); }
     operator CodeDefine        () const { return cast(CodeDefine,         Code_Invalid); }
+    operator CodeDefineParams  () const { return cast(CodeDefineParams,   Code_Invalid); }
     operator CodeDestructor    () const { return cast(CodeDestructor,     Code_Invalid); }
     operator CodeExec          () const { return cast(CodeExec,           Code_Invalid); }
     operator CodeEnum          () const { return cast(CodeEnum,           Code_Invalid); }
@@ -6408,6 +6534,7 @@ struct NullCode_ImplicitCaster
     operator CodeClass         () const { return {nullptr}; }
     operator CodeConstructor   () const { return {nullptr}; }
     operator CodeDefine        () const { return {nullptr}; }
+    operator CodeDefineParams  () const { return {nullptr}; }
     operator CodeDestructor    () const { return {nullptr}; }
     operator CodeExec          () const { return {nullptr}; }
     operator CodeEnum          () const { return {nullptr}; }
@@ -6458,17 +6585,23 @@ forceinline StrBuilder to_strbuilder    ( CodeClass self )                      
 forceinline void       to_strbuilder_def( CodeClass self, StrBuilder& result )     { return class_to_strbuilder_def(self, & result); }
 forceinline void       to_strbuilder_fwd( CodeClass self, StrBuilder& result )     { return class_to_strbuilder_fwd(self, & result); }
 
-forceinline void       append       (CodeParams params, CodeParams param )   { return params_append(params, param); }
-forceinline CodeParams get          (CodeParams params, s32 idx)             { return params_get(params, idx); }
-forceinline bool       has_entries  (CodeParams params )                     { return params_has_entries(params); }
-forceinline StrBuilder to_strbuilder(CodeParams params )                     { return params_to_strbuilder(params); }
-forceinline void       to_strbuilder(CodeParams params, StrBuilder& result ) { return params_to_strbuilder_ref(params, & result); }
+forceinline void             append       (CodeDefineParams appendee, CodeDefineParams other ) {        params_append(cast(CodeParams, appendee), cast(CodeParams, other)); }
+forceinline CodeDefineParams get          (CodeDefineParams params, s32 idx)                   { return (CodeDefineParams) (Code) params_get(cast(CodeParams, params), idx); }
+forceinline bool             has_entries  (CodeDefineParams params )                           { return params_has_entries(cast(CodeParams, params)); }
+forceinline StrBuilder       to_strbuilder(CodeDefineParams params )                           { return define_params_to_strbuilder(params); }
+forceinline void             to_strbuilder(CodeDefineParams params, StrBuilder& result )       { return define_params_to_strbuilder_ref(params, & result); }
+
+forceinline void       append       (CodeParams appendee, CodeParams other )   { return params_append(appendee, other); }
+forceinline CodeParams get          (CodeParams params, s32 idx)               { return params_get(params, idx); }
+forceinline bool       has_entries  (CodeParams params )                       { return params_has_entries(params); }
+forceinline StrBuilder to_strbuilder(CodeParams params )                       { return params_to_strbuilder(params); }
+forceinline void       to_strbuilder(CodeParams params, StrBuilder& result )   { return params_to_strbuilder_ref(params, & result); }
   
 forceinline bool       append       (CodeSpecifiers specifiers, Specifier spec)       { return specifiers_append(specifiers, spec); }
 forceinline s32        has          (CodeSpecifiers specifiers, Specifier spec)       { return specifiers_has(specifiers, spec); }
 forceinline s32        remove       (CodeSpecifiers specifiers, Specifier to_remove ) { return specifiers_remove(specifiers, to_remove); }
 forceinline StrBuilder to_strbuilder(CodeSpecifiers specifiers)                       { return specifiers_to_strbuilder(specifiers); }
-forceinline void       to_strbuilder(CodeSpecifiers specifiers, StrBuilder& result)       { return specifiers_to_strbuilder_ref(specifiers, & result);  }
+forceinline void       to_strbuilder(CodeSpecifiers specifiers, StrBuilder& result)   { return specifiers_to_strbuilder_ref(specifiers, & result);  }
 
 forceinline void       add_interface    (CodeStruct self, CodeTypename interface) { return struct_add_interface(self, interface); }
 forceinline StrBuilder to_strbuilder    (CodeStruct self)                         { return struct_to_strbuilder(self); }
@@ -6707,9 +6840,15 @@ struct AST_Define
 {
 	union {
 		char          _PAD_[ sizeof(Specifier) * AST_ArrSpecs_Cap + sizeof(AST*) ];
-		StrCached  Content;
+		struct
+		{
+			char              _PAD_PROPERTIES_ [ sizeof(AST*) * 4 ];
+			CodeDefineParams  Params;
+			Code              Body; // Should be completely serialized for now to a: StrCached Content.
+			char              _PAD_PROPERTIES_2_ [ sizeof(AST*) * 1 ];
+		};
 	};
-	StrCached      Name;
+	StrCached         Name;
 	Code              Prev;
 	Code              Next;
 	Token*            Tok;
@@ -6718,6 +6857,22 @@ struct AST_Define
 	char 			  _PAD_UNUSED_[ sizeof(ModuleFlag) + sizeof(u32) ];
 };
 static_assert( sizeof(AST_Define) == sizeof(AST), "ERROR: AST_Define is not the same size as AST");
+
+struct AST_DefineParams
+{
+	union {
+		char          _PAD_[ sizeof(Specifier) * AST_ArrSpecs_Cap + sizeof(AST*) ];
+	};
+	StrCached         Name;
+	CodeDefineParams  Last;
+	CodeDefineParams  Next;
+	Token*            Tok;
+	Code              Parent;
+	CodeType          Type;
+	char 			  _PAD_UNUSED_[ sizeof(ModuleFlag) ];
+	s32               NumEntries;
+};
+static_assert( sizeof(AST_DefineParams) == sizeof(AST), "ERROR: AST_DefineParams is not the same size as AST");
 
 struct AST_Destructor
 {
@@ -7221,6 +7376,7 @@ struct AST_Params
 		char          _PAD_[ sizeof(Specifier) * AST_ArrSpecs_Cap + sizeof(AST*) ];
 		struct
 		{
+			// TODO(Ed): Support attributes for parameters (Some prefix macros can be converted to that...)
 			char 	     _PAD_PROPERTIES_2_[ sizeof(AST*) * 3 ];
 			CodeTypename ValueType;
 			Code         Macro;
@@ -7229,7 +7385,7 @@ struct AST_Params
 			// char     _PAD_PROPERTIES_3_[sizeof( AST* )];
 		};
 	};
-	StrCached      Name;
+	StrCached         Name;
 	CodeParams        Last;
 	CodeParams        Next;
 	Token*            Tok;
@@ -7765,7 +7921,7 @@ struct Context
 	u32 CodePool_NumBlocks;
 
 	// TODO(Ed): Review these... (No longer needed if using the proper allocation strategy)
-	u32 InitSize_LexArena;
+	u32 InitSize_LexerTokens;
 	u32 SizePer_StringArena;
 
 // TODO(Ed): Symbol Table
@@ -7776,7 +7932,7 @@ struct Context
 	// Used by the lexer to persistently treat all these identifiers as preprocessor defines.
 	// Populate with strings via gen::cache_str.
 	// Functional defines must have format: id( ;at minimum to indicate that the define is only valid with arguments.
-	Array(StrCached) PreprocessorDefines;
+	MacroTable Macros;
 
 // Backend
 
@@ -7792,9 +7948,6 @@ struct Context
 	StringTable StrCache;
 
 	// TODO(Ed): This needs to be just handled by a parser context
-
-	Arena LexArena;
-	StringTable  Lexer_defines;
 	Array(Token) Lexer_Tokens;
 
 	// TODO(Ed): Active parse context vs a parse result need to be separated conceptually
@@ -7814,9 +7967,17 @@ GEN_API void reset(Context* ctx);
 
 GEN_API void set_context(Context* ctx);
 
+// Mostly intended for the parser
+GEN_API Macro* lookup_macro( Str Name );
+
 // Alternative way to add a preprocess define entry for the lexer & parser to utilize 
 // if the user doesn't want to use def_define
-GEN_API void set_preprocess_define( Str id, b32 is_functional );
+// Macros are tracked by name so if the name already exists the entry will be overwritten.
+GEN_API void register_macro( Macro macro );
+
+// Ease of use batch registration
+GEN_API void register_macros( s32 num, ... );
+GEN_API void register_macros( s32 num,  Macro* macros );
 
 // Used internally to retrive or make string allocations.
 // Strings are stored in a series of string arenas of fixed size (SizePer_StringArena)
@@ -7855,9 +8016,12 @@ struct Opts_def_constructor {
 GEN_API CodeConstructor def_constructor( Opts_def_constructor opts GEN_PARAM_DEFAULT );
 
 struct Opts_def_define {
-	b32 dont_append_preprocess_defines;
+	CodeDefineParams params;
+	Str              content;
+	MacroFlags       flags;
+	b32              dont_register_to_preprocess_macros;
 };
-GEN_API CodeDefine def_define( Str name, Str content, Opts_def_define opts GEN_PARAM_DEFAULT );
+GEN_API CodeDefine def_define( Str name, MacroType type, Opts_def_define opts GEN_PARAM_DEFAULT );
 
 struct Opts_def_destructor {
 	Code           body;
@@ -7968,28 +8132,30 @@ GEN_API CodeBody def_body( CodeType type );
 // There are two options for defining a struct body, either varadically provided with the args macro to auto-deduce the arg num,
 /// or provide as an array of Code objects.
 
-GEN_API CodeBody       def_class_body      ( s32 num, ... );
-GEN_API CodeBody       def_class_body      ( s32 num, Code* codes );
-GEN_API CodeBody       def_enum_body       ( s32 num, ... );
-GEN_API CodeBody       def_enum_body       ( s32 num, Code* codes );
-GEN_API CodeBody       def_export_body     ( s32 num, ... );
-GEN_API CodeBody       def_export_body     ( s32 num, Code* codes);
-GEN_API CodeBody       def_extern_link_body( s32 num, ... );
-GEN_API CodeBody       def_extern_link_body( s32 num, Code* codes );
-GEN_API CodeBody       def_function_body   ( s32 num, ... );
-GEN_API CodeBody       def_function_body   ( s32 num, Code* codes );
-GEN_API CodeBody       def_global_body     ( s32 num, ... );
-GEN_API CodeBody       def_global_body     ( s32 num, Code* codes );
-GEN_API CodeBody       def_namespace_body  ( s32 num, ... );
-GEN_API CodeBody       def_namespace_body  ( s32 num, Code* codes );
-GEN_API CodeParams     def_params          ( s32 num, ... );
-GEN_API CodeParams     def_params          ( s32 num, CodeParams* params );
-GEN_API CodeSpecifiers def_specifiers      ( s32 num, ... );
-GEN_API CodeSpecifiers def_specifiers      ( s32 num, Specifier* specs );
-GEN_API CodeBody       def_struct_body     ( s32 num, ... );
-GEN_API CodeBody       def_struct_body     ( s32 num, Code* codes );
-GEN_API CodeBody       def_union_body      ( s32 num, ... );
-GEN_API CodeBody       def_union_body      ( s32 num, Code* codes );
+GEN_API CodeBody         def_class_body      ( s32 num, ... );
+GEN_API CodeBody         def_class_body      ( s32 num, Code* codes );
+GEN_API CodeDefineParams def_define_params   ( s32 num, ... );
+GEN_API CodeDefineParams def_define_params   ( s32 num, CodeDefineParams* codes );
+GEN_API CodeBody         def_enum_body       ( s32 num, ... );
+GEN_API CodeBody         def_enum_body       ( s32 num, Code* codes );
+GEN_API CodeBody         def_export_body     ( s32 num, ... );
+GEN_API CodeBody         def_export_body     ( s32 num, Code* codes);
+GEN_API CodeBody         def_extern_link_body( s32 num, ... );
+GEN_API CodeBody         def_extern_link_body( s32 num, Code* codes );
+GEN_API CodeBody         def_function_body   ( s32 num, ... );
+GEN_API CodeBody         def_function_body   ( s32 num, Code* codes );
+GEN_API CodeBody         def_global_body     ( s32 num, ... );
+GEN_API CodeBody         def_global_body     ( s32 num, Code* codes );
+GEN_API CodeBody         def_namespace_body  ( s32 num, ... );
+GEN_API CodeBody         def_namespace_body  ( s32 num, Code* codes );
+GEN_API CodeParams       def_params          ( s32 num, ... );
+GEN_API CodeParams       def_params          ( s32 num, CodeParams* params );
+GEN_API CodeSpecifiers   def_specifiers      ( s32 num, ... );
+GEN_API CodeSpecifiers   def_specifiers      ( s32 num, Specifier* specs );
+GEN_API CodeBody         def_struct_body     ( s32 num, ... );
+GEN_API CodeBody         def_struct_body     ( s32 num, Code* codes );
+GEN_API CodeBody         def_union_body      ( s32 num, ... );
+GEN_API CodeBody         def_union_body      ( s32 num, Code* codes );
 
 #pragma endregion Upfront
 
@@ -8031,6 +8197,7 @@ CodeBody parse_file( Str path );
 
 GEN_API CodeClass       parse_class        ( Str class_def       );
 GEN_API CodeConstructor parse_constructor  ( Str constructor_def );
+GEN_API CodeDefine      parse_define       ( Str define_def      );
 GEN_API CodeDestructor  parse_destructor   ( Str destructor_def  );
 GEN_API CodeEnum        parse_enum         ( Str enum_def        );
 GEN_API CodeBody        parse_export_body  ( Str export_def      );
@@ -8385,6 +8552,25 @@ CodeParams next_CodeParams(CodeParams params, CodeParams param_iter)
 }
 #pragma endregion CodeParams
 
+#pragma region CodeDefineParams
+forceinline void             define_params_append     (CodeDefineParams appendee, CodeDefineParams other ) { params_append( cast(CodeParams, appendee), cast(CodeParams, other) ); }
+forceinline CodeDefineParams define_params_get        (CodeDefineParams self, s32 idx )                    { return (CodeDefineParams) (Code) params_get( cast(CodeParams, self), idx); }
+forceinline bool             define_params_has_entries(CodeDefineParams self)                              { return params_has_entries( cast(CodeParams, self)); }
+
+CodeDefineParams begin_CodeDefineParams(CodeDefineParams params)                              { return (CodeDefineParams) (Code) begin_CodeParams( cast(CodeParams, (Code)params)); }
+CodeDefineParams end_CodeDefineParams  (CodeDefineParams params)                              { return (CodeDefineParams) (Code) end_CodeParams  ( cast(CodeParams, (Code)params)); }
+CodeDefineParams next_CodeDefineParams (CodeDefineParams params, CodeDefineParams entry_iter) { return (CodeDefineParams) (Code) next_CodeParams ( cast(CodeParams, (Code)params), cast(CodeParams, (Code)entry_iter)); }
+
+#if GEN_COMPILER_CPP
+forceinline
+CodeDefineParams& CodeDefineParams::operator ++()
+{
+	* this = ast->Next;
+	return * this;
+}
+#endif
+#pragma endregion CodeDefineParams
+
 #pragma region CodeSpecifiers
 inline
 bool specifiers_append(CodeSpecifiers self, Specifier spec )
@@ -8712,6 +8898,22 @@ inline AST_Define* CodeDefine::operator->()
 		return nullptr;
 	}
 	return ast;
+}
+
+inline CodeDefineParams& CodeDefineParams::operator=( Code other )
+{
+	if ( other.ast != nullptr && other->Parent != nullptr )
+	{
+		ast         = rcast( decltype( ast ), code_duplicate( other ).ast );
+		ast->Parent = { nullptr };
+	}
+	ast = rcast( decltype( ast ), other.ast );
+	return *this;
+}
+
+inline CodeDefineParams::operator bool()
+{
+	return ast != nullptr;
 }
 
 inline CodeDestructor& CodeDestructor::operator=( Code other )
@@ -9386,6 +9588,11 @@ forceinline Code::operator CodeDefine() const
 	return { (AST_Define*)ast };
 }
 
+forceinline Code::operator CodeDefineParams() const
+{
+	return { (AST_DefineParams*)ast };
+}
+
 forceinline Code::operator CodeDestructor() const
 {
 	return { (AST_Destructor*)ast };
@@ -9503,7 +9710,7 @@ GEN_OPITMIZE_MAPPINGS_END
 
 #pragma region Constants
 
-extern Str enum_underlying_sig;
+extern Macro enum_underlying_macro;
 
 extern Code access_public;
 extern Code access_protected;
@@ -13216,7 +13423,7 @@ global Context* _ctx;
 #pragma region Constants
 global u32 context_counter;
 
-global Str enum_underlying_sig;
+global Macro enum_underlying_macro;
 
 global Code Code_Global;
 global Code Code_Invalid;
@@ -13301,9 +13508,9 @@ global CodeTypename t_f64;
 
 #pragma region AST
 
-// These macros are used in the swtich cases are used within ast.cpp, inteface.upfront.cpp, parser.cpp
+// These macros are used in the swtich cases within ast.cpp, inteface.upfront.cpp, parser.cpp
 
-#	define GEN_AST_BODY_CLASS_UNALLOWED_TYPES    \
+#	define GEN_AST_BODY_CLASS_UNALLOWED_TYPES_CASES    \
 	case CT_PlatformAttributes:                  \
 	case CT_Class_Body:                          \
 	case CT_Enum_Body:                           \
@@ -13319,9 +13526,9 @@ global CodeTypename t_f64;
 	case CT_Specifiers:                          \
 	case CT_Struct_Body:                         \
 	case CT_Typename
-#	define GEN_AST_BODY_STRUCT_UNALLOWED_TYPES GEN_AST_BODY_CLASS_UNALLOWED_TYPES
+#	define GEN_AST_BODY_STRUCT_UNALLOWED_TYPES_CASES GEN_AST_BODY_CLASS_UNALLOWED_TYPES_CASES
 
-#	define GEN_AST_BODY_FUNCTION_UNALLOWED_TYPES \
+#	define GEN_AST_BODY_FUNCTION_UNALLOWED_TYPES_CASES \
 	case CT_Access_Public:                          \
 	case CT_Access_Protected:                       \
 	case CT_Access_Private:                         \
@@ -13344,7 +13551,7 @@ global CodeTypename t_f64;
 	case CT_Struct_Body:                            \
 	case CT_Typename
 
-#	define GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES     \
+#	define GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES_CASES     \
 	case CT_Access_Public:                         \
 	case CT_Access_Protected:                      \
 	case CT_Access_Private:                        \
@@ -13361,10 +13568,10 @@ global CodeTypename t_f64;
 	case CT_Specifiers:                            \
 	case CT_Struct_Body:                           \
 	case CT_Typename
-#	define GEN_AST_BODY_EXPORT_UNALLOWED_TYPES         GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES
-#	define GEN_AST_BODY_EXTERN_LINKAGE_UNALLOWED_TYPES GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES
+#	define GEN_AST_BODY_EXPORT_UNALLOWED_TYPES_CASES         GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES_CASES
+#	define GEN_AST_BODY_EXTERN_LINKAGE_UNALLOWED_TYPES_CASES GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES_CASES
 
-#	define GEN_AST_BODY_NAMESPACE_UNALLOWED_TYPES \
+#	define GEN_AST_BODY_NAMESPACE_UNALLOWED_TYPES_CASES \
 	case CT_Access_Public:                        \
 	case CT_Access_Protected:                     \
 	case CT_Access_Private:                       \
@@ -13415,7 +13622,6 @@ Str code_debug_str(Code self)
 		case CT_Execution:
 		case CT_Comment:
 		case CT_PlatformAttributes:
-		case CT_Preprocess_Define:
 		case CT_Preprocess_Include:
 		case CT_Preprocess_Pragma:
 		case CT_Preprocess_If:
@@ -13429,6 +13635,11 @@ Str code_debug_str(Code self)
 				strbuilder_append_fmt( result, "\n\tNext: %S %S", code_type_str(self->Prev), self->Prev->Name.Len ? self->Prev->Name : txt("Null") );
 
 			strbuilder_append_fmt( result, "\n\tContent: %S", self->Content );
+		break;
+
+		case CT_Preprocess_Define:
+			// TODO(ED): Needs implementaton
+			log_failure("code_debug_str: NOT IMPLEMENTED for CT_Preprocess_Define");
 		break;
 
 		case CT_Class:
@@ -13636,6 +13847,11 @@ Str code_debug_str(Code self)
 			strbuilder_append_fmt( result, "\n\tNext      : %S", self->Next->Name );
 			strbuilder_append_fmt( result, "\n\tValueType : %S", self->ValueType ? strbuilder_to_str( code_to_strbuilder(self->ValueType)) : txt("Null") );
 			strbuilder_append_fmt( result, "\n\tValue     : %S", self->Value     ? strbuilder_to_str( code_to_strbuilder(self->Value))     : txt("Null") );
+		break;
+
+		case CT_Parameters_Define:
+			// TODO(ED): Needs implementaton
+			log_failure("code_debug_str: NOT IMPLEMENTED for CT_Parameters_Define");
 		break;
 
 		case CT_Specifiers:
@@ -13874,6 +14090,10 @@ void code_to_strbuilder_ptr( Code self, StrBuilder* result )
 
 		case CT_Parameters:
 			params_to_strbuilder_ref(cast(CodeParams, self), result );
+		break;
+
+		case CT_Parameters_Define:
+			define_params_to_strbuilder_ref(cast(CodeDefineParams, self), result);
 		break;
 
 		case CT_Preprocess_Define:
@@ -14366,11 +14586,17 @@ bool code_is_equal( Code self, Code other )
 			return true;
 		}
 
+		case CT_Parameters_Define:
+		{
+			// TODO(ED): Needs implementaton
+			log_failure("code_is_equal: NOT IMPLEMENTED for CT_Parameters_Define");
+			return false;
+		}
+
 		case CT_Preprocess_Define:
 		{
 			check_member_str( Name );
-			check_member_content( Content );
-
+			check_member_content( Body->Content );
 			return true;
 		}
 
@@ -14544,7 +14770,7 @@ bool code_validate_body(Code self)
 			CodeBody body = cast(CodeBody, self);
 			for (Code code_entry = begin_CodeBody(body); code_entry != end_CodeBody(body); next_CodeBody(body, code_entry)) switch (code_entry->Type)
 			{
-				GEN_AST_BODY_CLASS_UNALLOWED_TYPES:
+				GEN_AST_BODY_CLASS_UNALLOWED_TYPES_CASES:
 					log_failure("AST::validate_body: Invalid entry in body %S", code_debug_str(code_entry));
 				return false;
 
@@ -14571,7 +14797,7 @@ bool code_validate_body(Code self)
 			CodeBody body = cast(CodeBody, self);
 			for (Code code_entry = begin_CodeBody(body); code_entry != end_CodeBody(body); next_CodeBody(body, code_entry)) switch (code_entry->Type)
 			{
-				GEN_AST_BODY_EXPORT_UNALLOWED_TYPES:
+				GEN_AST_BODY_EXPORT_UNALLOWED_TYPES_CASES:
 					log_failure("AST::validate_body: Invalid entry in body %S", code_debug_str(code_entry));
 				return false;
 
@@ -14585,7 +14811,7 @@ bool code_validate_body(Code self)
 			CodeBody body = cast(CodeBody, self);
 			for (Code code_entry = begin_CodeBody(body); code_entry != end_CodeBody(body); next_CodeBody(body, code_entry)) switch (code_entry->Type)
 			{
-				GEN_AST_BODY_EXTERN_LINKAGE_UNALLOWED_TYPES:
+				GEN_AST_BODY_EXTERN_LINKAGE_UNALLOWED_TYPES_CASES:
 					log_failure("AST::validate_body: Invalid entry in body %S", code_debug_str(code_entry));
 				return false;
 
@@ -14599,7 +14825,7 @@ bool code_validate_body(Code self)
 			CodeBody body = cast(CodeBody, self);
 			for (Code code_entry = begin_CodeBody(body); code_entry != end_CodeBody(body); next_CodeBody(body, code_entry)) switch (code_entry->Type)
 			{
-				GEN_AST_BODY_FUNCTION_UNALLOWED_TYPES:
+				GEN_AST_BODY_FUNCTION_UNALLOWED_TYPES_CASES:
 					log_failure("AST::validate_body: Invalid entry in body %S", code_debug_str(code_entry));
 				return false;
 
@@ -14613,7 +14839,7 @@ bool code_validate_body(Code self)
 			CodeBody body = cast(CodeBody, self);
 			for ( Code entry = begin_CodeBody(body); entry != end_CodeBody(body); next_CodeBody(body, entry) )switch (entry->Type)
 			{
-				GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES:
+				GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES_CASES:
 					log_failure("AST::validate_body: Invalid entry in body %S", code_debug_str(entry));
 				return false;
 			}
@@ -14624,7 +14850,7 @@ bool code_validate_body(Code self)
 			CodeBody body = cast(CodeBody, self);
 			for ( Code entry = begin_CodeBody(body); entry != end_CodeBody(body); next_CodeBody(body, entry) ) switch (entry->Type)
 			{
-				GEN_AST_BODY_NAMESPACE_UNALLOWED_TYPES:
+				GEN_AST_BODY_NAMESPACE_UNALLOWED_TYPES_CASES:
 					log_failure("AST::validate_body: Invalid entry in body %S", code_debug_str(entry));
 				return false;
 			}
@@ -14635,7 +14861,7 @@ bool code_validate_body(Code self)
 			CodeBody body = cast(CodeBody, self);
 			for ( Code entry = begin_CodeBody(body); entry != end_CodeBody(body); next_CodeBody(body, entry) ) switch (entry->Type)
 			{
-				GEN_AST_BODY_STRUCT_UNALLOWED_TYPES:
+				GEN_AST_BODY_STRUCT_UNALLOWED_TYPES_CASES:
 					log_failure("AST::validate_body: Invalid entry in body %S", code_debug_str(entry));
 				return false;
 			}
@@ -14835,7 +15061,7 @@ void class_to_strbuilder_def( CodeClass self, StrBuilder* result )
 {
 	GEN_ASSERT(self);
 
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	strbuilder_append_str( result, txt("class ") );
@@ -14880,7 +15106,7 @@ void class_to_strbuilder_fwd( CodeClass self, StrBuilder* result )
 {
 	GEN_ASSERT(self);
 
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Attributes )
@@ -14900,12 +15126,48 @@ void class_to_strbuilder_fwd( CodeClass self, StrBuilder* result )
 
 StrBuilder define_to_strbuilder(CodeDefine define)
 {
-	return strbuilder_fmt_buf( _ctx->Allocator_Temp, "#define %S %S", define->Name, define->Content );
+	StrBuilder result = strbuilder_make_reserve( _ctx->Allocator_Temp, 512 );
+	define_to_strbuilder_ref(define, & result);
+	return result;
 }
 
 void define_to_strbuilder_ref(CodeDefine define, StrBuilder* result )
 {
-	strbuilder_append_fmt( result, "#define %S %S", define->Name, define->Content );
+	GEN_ASSERT(define);
+	GEN_ASSERT(define->Body);
+	GEN_ASSERT(define->Body->Content.Ptr && define->Body->Content.Len > 0);
+	if (define->Params) {
+		StrBuilder params_builder = define_params_to_strbuilder(define->Params);
+		strbuilder_append_fmt( result, "#define %S(%S) %S", define->Name, strbuilder_to_str(params_builder), define->Body->Content );
+	}
+	else {
+		strbuilder_append_fmt( result, "#define %S %S", define->Name, define->Body->Content );
+	}
+}
+
+StrBuilder define_params_to_strbuilder(CodeDefineParams params)
+{
+	GEN_ASSERT(params);
+	StrBuilder result = strbuilder_make_reserve( _ctx->Allocator_Temp, 128 );
+	define_params_to_strbuilder_ref( params, & result );
+	return result;
+}
+
+void define_params_to_strbuilder_ref(CodeDefineParams self, StrBuilder* result)
+{
+	GEN_ASSERT(self);
+	GEN_ASSERT(result);
+	if ( self->Name.Ptr && self->Name.Len )
+	{
+		strbuilder_append_fmt( result, " %S", self->Name );
+	}
+	if ( self->NumEntries - 1 > 0 )
+	{
+		for ( CodeDefineParams param = begin_CodeDefineParams(self->Next); param != end_CodeDefineParams(self->Next); param = next_CodeDefineParams(self->Next, param) )
+		{
+			strbuilder_append_fmt( result, ", %SB", define_params_to_strbuilder(param) );
+		}
+	}
 }
 
 StrBuilder destructor_to_strbuilder(CodeDestructor self)
@@ -14988,7 +15250,7 @@ StrBuilder enum_to_strbuilder(CodeEnum self)
 
 void enum_to_strbuilder_def(CodeEnum self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Attributes || self->UnderlyingType || self->UnderlyingTypeMacro )
@@ -15021,7 +15283,7 @@ void enum_to_strbuilder_def(CodeEnum self, StrBuilder* result )
 
 void enum_to_strbuilder_fwd(CodeEnum self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Attributes )
@@ -15048,7 +15310,7 @@ void enum_to_strbuilder_fwd(CodeEnum self, StrBuilder* result )
 
 void enum_to_strbuilder_class_def(CodeEnum self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Attributes || self->UnderlyingType )
@@ -15080,7 +15342,7 @@ void enum_to_strbuilder_class_def(CodeEnum self, StrBuilder* result )
 
 void enum_to_strbuilder_class_fwd(CodeEnum self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	strbuilder_append_str( result, txt("enum class ") );
@@ -15164,7 +15426,7 @@ StrBuilder fn_to_strbuilder(CodeFn self)
 
 void fn_to_strbuilder_def(CodeFn self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export") );
 
 	if ( self->Attributes )
@@ -15217,7 +15479,7 @@ void fn_to_strbuilder_def(CodeFn self, StrBuilder* result )
 
 void fn_to_strbuilder_fwd(CodeFn self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Attributes )
@@ -15305,7 +15567,7 @@ StrBuilder namespace_to_strbuilder(CodeNS self)
 
 void namespace_to_strbuilder_ref(CodeNS self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	strbuilder_append_fmt( result, "namespace %S\n{\n%SB\n}\n", self->Name, body_to_strbuilder(self->Body) );
@@ -15330,7 +15592,7 @@ StrBuilder code_op_to_strbuilder(CodeOperator self)
 
 void code_op_to_strbuilder_def(CodeOperator self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Attributes )
@@ -15384,7 +15646,7 @@ void code_op_to_strbuilder_def(CodeOperator self, StrBuilder* result )
 
 void code_op_to_strbuilder_fwd(CodeOperator self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Attributes )
@@ -15524,7 +15786,6 @@ void opcast_to_strbuilder_fwd(CodeOpCast self, StrBuilder* result )
 
 StrBuilder params_to_strbuilder(CodeParams self)
 {
-	GEN_ASSERT(self);
 	GEN_ASSERT(self);
 	StrBuilder result = strbuilder_make_reserve( _ctx->Allocator_Temp, 128 );
 	params_to_strbuilder_ref( self, & result );
@@ -15689,7 +15950,7 @@ void struct_to_strbuilder_def( CodeStruct self, StrBuilder* result )
 {
 	GEN_ASSERT(self);
 	GEN_ASSERT(result);
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	strbuilder_append_str( result, txt("struct ") );
@@ -15735,7 +15996,7 @@ void struct_to_strbuilder_fwd( CodeStruct self, StrBuilder* result )
 {
 	GEN_ASSERT(self);
 	GEN_ASSERT(result);
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Attributes )
@@ -15764,7 +16025,7 @@ void template_to_strbuilder_ref(CodeTemplate self, StrBuilder* result )
 {
 	GEN_ASSERT(self);
 	GEN_ASSERT(result);
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Params )
@@ -15782,7 +16043,7 @@ StrBuilder typedef_to_strbuilder(CodeTypedef self)
 
 void typedef_to_strbuilder_ref(CodeTypedef self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	strbuilder_append_str( result, txt("typedef "));
@@ -15895,7 +16156,7 @@ StrBuilder union_to_strbuilder(CodeUnion self)
 
 void union_to_strbuilder_def(CodeUnion self, StrBuilder* result )
 {
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	strbuilder_append_str( result, txt("union ") );
@@ -15926,7 +16187,7 @@ void union_to_strbuilder_fwd(CodeUnion self, StrBuilder* result )
 {
 	GEN_ASSERT(self);
 	GEN_ASSERT(result);
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	strbuilder_append_str( result, txt("union ") );
@@ -15963,7 +16224,7 @@ void using_to_strbuilder_ref(CodeUsing self, StrBuilder* result )
 {
 	GEN_ASSERT(self);
 	GEN_ASSERT(result);
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Attributes )
@@ -16060,7 +16321,7 @@ void var_to_strbuilder_ref(CodeVar self, StrBuilder* result )
 		return;
 	}
 
-	if ( bitfield_is_equal( u32, self->ModuleFlags, ModuleFlag_Export ))
+	if ( bitfield_is_set( u32, self->ModuleFlags, ModuleFlag_Export ))
 		strbuilder_append_str( result, txt("export ") );
 
 	if ( self->Attributes || self->Specs )
@@ -16329,37 +16590,39 @@ void define_constants()
 #endif
 
 	spec_const            = def_specifier( Spec_Const);            code_set_global( cast(Code, spec_const ));
-	spec_consteval        = def_specifier( Spec_Consteval);        code_set_global( cast(Code, spec_consteval ));;
-	spec_constexpr        = def_specifier( Spec_Constexpr);        code_set_global( cast(Code, spec_constexpr ));;
-	spec_constinit        = def_specifier( Spec_Constinit);        code_set_global( cast(Code, spec_constinit ));;
-	spec_extern_linkage   = def_specifier( Spec_External_Linkage); code_set_global( cast(Code, spec_extern_linkage ));;
-	spec_final            = def_specifier( Spec_Final);            code_set_global( cast(Code, spec_final ));;
-	spec_forceinline      = def_specifier( Spec_ForceInline);      code_set_global( cast(Code, spec_forceinline ));;
-	spec_global           = def_specifier( Spec_Global);           code_set_global( cast(Code, spec_global ));;
-	spec_inline           = def_specifier( Spec_Inline);           code_set_global( cast(Code, spec_inline ));;
-	spec_internal_linkage = def_specifier( Spec_Internal_Linkage); code_set_global( cast(Code, spec_internal_linkage ));;
-	spec_local_persist    = def_specifier( Spec_Local_Persist);    code_set_global( cast(Code, spec_local_persist ));;
-	spec_mutable          = def_specifier( Spec_Mutable);          code_set_global( cast(Code, spec_mutable ));;
-	spec_neverinline      = def_specifier( Spec_NeverInline);      code_set_global( cast(Code, spec_neverinline ));;
-	spec_noexcept         = def_specifier( Spec_NoExceptions);     code_set_global( cast(Code, spec_noexcept ));;
-	spec_override         = def_specifier( Spec_Override);         code_set_global( cast(Code, spec_override ));;
-	spec_ptr              = def_specifier( Spec_Ptr);              code_set_global( cast(Code, spec_ptr ));;
+	spec_consteval        = def_specifier( Spec_Consteval);        code_set_global( cast(Code, spec_consteval ));
+	spec_constexpr        = def_specifier( Spec_Constexpr);        code_set_global( cast(Code, spec_constexpr ));
+	spec_constinit        = def_specifier( Spec_Constinit);        code_set_global( cast(Code, spec_constinit ));
+	spec_extern_linkage   = def_specifier( Spec_External_Linkage); code_set_global( cast(Code, spec_extern_linkage ));
+	spec_final            = def_specifier( Spec_Final);            code_set_global( cast(Code, spec_final ));
+	spec_forceinline      = def_specifier( Spec_ForceInline);      code_set_global( cast(Code, spec_forceinline ));
+	spec_global           = def_specifier( Spec_Global);           code_set_global( cast(Code, spec_global ));
+	spec_inline           = def_specifier( Spec_Inline);           code_set_global( cast(Code, spec_inline ));
+	spec_internal_linkage = def_specifier( Spec_Internal_Linkage); code_set_global( cast(Code, spec_internal_linkage ));
+	spec_local_persist    = def_specifier( Spec_Local_Persist);    code_set_global( cast(Code, spec_local_persist ));
+	spec_mutable          = def_specifier( Spec_Mutable);          code_set_global( cast(Code, spec_mutable ));
+	spec_neverinline      = def_specifier( Spec_NeverInline);      code_set_global( cast(Code, spec_neverinline ));
+	spec_noexcept         = def_specifier( Spec_NoExceptions);     code_set_global( cast(Code, spec_noexcept ));
+	spec_override         = def_specifier( Spec_Override);         code_set_global( cast(Code, spec_override ));
+	spec_ptr              = def_specifier( Spec_Ptr);              code_set_global( cast(Code, spec_ptr ));
 	spec_pure             = def_specifier( Spec_Pure);             code_set_global( cast(Code, spec_pure ));
-	spec_ref              = def_specifier( Spec_Ref);              code_set_global( cast(Code, spec_ref ));;
-	spec_register         = def_specifier( Spec_Register);         code_set_global( cast(Code, spec_register ));;
-	spec_rvalue           = def_specifier( Spec_RValue);           code_set_global( cast(Code, spec_rvalue ));;
-	spec_static_member    = def_specifier( Spec_Static);           code_set_global( cast(Code, spec_static_member ));;
-	spec_thread_local     = def_specifier( Spec_Thread_Local);     code_set_global( cast(Code, spec_thread_local ));;
-	spec_virtual          = def_specifier( Spec_Virtual);          code_set_global( cast(Code, spec_virtual ));;
+	spec_ref              = def_specifier( Spec_Ref);              code_set_global( cast(Code, spec_ref ));
+	spec_register         = def_specifier( Spec_Register);         code_set_global( cast(Code, spec_register ));
+	spec_rvalue           = def_specifier( Spec_RValue);           code_set_global( cast(Code, spec_rvalue ));
+	spec_static_member    = def_specifier( Spec_Static);           code_set_global( cast(Code, spec_static_member ));
+	spec_thread_local     = def_specifier( Spec_Thread_Local);     code_set_global( cast(Code, spec_thread_local ));
+	spec_virtual          = def_specifier( Spec_Virtual);          code_set_global( cast(Code, spec_virtual ));
 	spec_volatile         = def_specifier( Spec_Volatile);         code_set_global( cast(Code, spec_volatile ));
 
 	spec_local_persist = def_specifiers( 1, Spec_Local_Persist );
 	code_set_global(cast(Code, spec_local_persist));
 
-	if (enum_underlying_sig.Len == 0) {
-		enum_underlying_sig = txt("enum_underlying(");
+	if (enum_underlying_macro.Name.Len == 0) {
+		enum_underlying_macro.Name  = txt("enum_underlying");
+		enum_underlying_macro.Type  = MT_Expression;
+		enum_underlying_macro.Flags = MF_Functional;
 	}
-	array_append( _ctx->PreprocessorDefines, enum_underlying_sig);
+	register_macro(enum_underlying_macro);
 }
 
 void init(Context* ctx)
@@ -16420,8 +16683,8 @@ void init(Context* ctx)
 		ctx->CodePool_NumBlocks = kilobytes(16);
 	}
 
-	if (ctx->InitSize_LexArena == 0 ) {
-		ctx->InitSize_LexArena = megabytes(4);
+	if (ctx->InitSize_LexerTokens == 0 ) {
+		ctx->InitSize_LexerTokens = kilobytes(64);
 	}
 	if (ctx->SizePer_StringArena == 0) {
 		ctx->SizePer_StringArena = megabytes(1);
@@ -16451,9 +16714,6 @@ void init(Context* ctx)
 			GEN_FATAL( "gen::init: Failed to initialize the code pool" );
 		array_append( ctx->CodePools, code_pool );
 
-		// TODO(Ed): This is going to be phased out most likely.
-		ctx->LexArena = arena_init_from_allocator( ctx->Allocator_DyanmicContainers, ctx->InitSize_LexArena );
-
 		// TODO(Ed): Eventually the string arenas needs to be phased out for a dedicated string slab allocator
 		Arena strbuilder_arena = arena_init_from_allocator( ctx->Allocator_StrCache, ctx->SizePer_StringArena );
 		if ( strbuilder_arena.PhysicalStart == nullptr )
@@ -16465,9 +16725,12 @@ void init(Context* ctx)
 		ctx->StrCache = hashtable_init(StrCached, ctx->Allocator_DyanmicContainers);
 		if ( ctx->StrCache.Entries == nullptr )
 			GEN_FATAL( "gen::init: Failed to initialize the StringCache");
+
+		ctx->Macros = hashtable_init(Macro, ctx->Allocator_DyanmicContainers);
+		if (ctx->Macros.Hashes == nullptr || ctx->Macros.Entries == nullptr) {
+			GEN_FATAL( "gen::init: Failed to initialize the PreprocessMacros table" );
+		}
 	}
-	// Preprocessor Defines
-	ctx->PreprocessorDefines = array_init_reserve(StrCached, ctx->Allocator_DyanmicContainers, kilobytes(1) );
 
 	define_constants();
 	parser_init();
@@ -16504,9 +16767,7 @@ void deinit(Context* ctx)
 	array_free( ctx->CodePools);
 	array_free( ctx->StringArenas);
 
-	arena_free(& ctx->LexArena);
-
-	array_free(ctx->PreprocessorDefines);
+	hashtable_destroy(ctx->Macros);
 
 	left  = array_num( ctx->Fallback_AllocatorBuckets);
 	if (left)
@@ -16551,6 +16812,7 @@ void reset(Context* ctx)
 	while ( left--, left );
 
 	hashtable_clear(ctx->StrCache);
+	hashtable_clear(ctx->Macros);
 	define_constants();
 }
 
@@ -16613,12 +16875,50 @@ Code make_code()
 	return result;
 }
 
-void set_preprocess_define( Str id, b32 is_functional ) {
-	StrBuilder builder = strbuilder_make_str( _ctx->Allocator_Temp, id );
-	if (is_functional) {
-		strbuilder_append_char( & builder, '(' );
+Macro* lookup_macro( Str name ) {
+	u32 key = crc32( name.Ptr, name.Len );
+	return hashtable_get( _ctx->Macros, key );
+}
+
+void register_macro( Macro macro ) {
+	GEN_ASSERT_NOT_NULL(macro.Name.Ptr);
+	GEN_ASSERT(macro.Name.Len > 0);
+	u32 key = crc32( macro.Name.Ptr, macro.Name.Len );
+	hashtable_set( _ctx->Macros, key, macro );
+}
+
+void register_macros( s32 num, ... )
+{
+	GEN_ASSERT(num > 0);
+	va_list va;
+	va_start(va, num);
+	do
+	{
+		Macro macro = va_arg(va, Macro);
+		GEN_ASSERT_NOT_NULL(macro.Name.Ptr);
+		GEN_ASSERT(macro.Name.Len > 0);
+
+		u32 key = crc32( macro.Name.Ptr, macro.Name.Len );
+		hashtable_set( _ctx->Macros, key, macro );
 	}
-	array_append( _ctx->PreprocessorDefines, cache_str( strbuilder_to_str(builder)) ); 
+	while (num--, num > 0);
+	va_end(va);
+}
+
+void register_macros( s32 num,  Macro* macros )
+{
+	GEN_ASSERT(num > 0);
+	do
+	{
+		Macro macro = * macros;
+		GEN_ASSERT_NOT_NULL(macro.Name.Ptr);
+		GEN_ASSERT(macro.Name.Len > 0);
+
+		u32 key = crc32( macro.Name.Ptr, macro.Name.Len );
+		hashtable_set( _ctx->Macros, key, macro );
+		++ macros;
+	}
+	while (num--, num > 0);
 }
 
 #pragma region Upfront
@@ -16643,7 +16943,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 #	define check_params()                                                                                                   \
 	if ( ! params_code )                                                                                                    \
 	{                                                                                                                       \
-		log_failure("gen::def_operator: params is null and operator%S requires it", operator_to_str(op));                   \
+		log_failure("gen::def_operator: params is null and operator %S requires it", operator_to_str(op));                  \
 		return OpValResult_Fail;                                                                                            \
 	}                                                                                                                       \
 	if ( params_code->Type != CT_Parameters )                                                                               \
@@ -16655,10 +16955,10 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 #	define check_param_eq_ret()                                                                            \
 	if ( ! is_member_symbol && ! code_is_equal(cast(Code, params_code->ValueType), cast(Code, ret_type)) ) \
 	{                                                                                                      \
-		log_failure("gen::def_operator: operator%S requires first parameter to equal return type\n"        \
+		log_failure("gen::def_operator: operator %S requires first parameter to equal return type\n"       \
 			"param types: %S\n"                                                                            \
 			"return type: %S",                                                                             \
-			operator_to_str(op).Ptr,                                                                       \
+			operator_to_str(op),                                                                           \
 			code_debug_str(cast(Code, params_code)),                                                       \
 			code_debug_str(cast(Code, ret_type))                                                           \
 		);                                                                                                 \
@@ -16668,12 +16968,15 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 
 	if ( ! ret_type )
 	{
-		log_failure("gen::def_operator: ret_type is null but is required by operator%S", operator_to_str(op));
+		log_failure("gen::def_operator: ret_type is null but is required by operator %S", operator_to_str(op));
 	}
 
 	if ( ret_type->Type != CT_Typename )
 	{
-		log_failure("gen::def_operator: ret_type is not of typename type - %S", code_debug_str(cast(Code, ret_type)));
+		log_failure("gen::def_operator: operator %S - ret_type is not of typename type - %S",
+			operator_to_str(op),
+			code_debug_str(cast(Code, ret_type))
+		);
 		return OpValResult_Fail;
 	}
 
@@ -16688,7 +16991,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 			if ( params_code->NumEntries > 1 )
 			{
 				log_failure("gen::def_operator: "
-					"operator%S does not support non-member definition (more than one parameter provided) - %S",
+					"operator %S does not support non-member definition (more than one parameter provided) - %S",
 					operator_to_str(op),
 					code_debug_str(cast(Code, params_code))
 				);
@@ -16718,7 +17021,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 
 			if (params_code->NumEntries > 2 )
 			{
-				log_failure("gen::def_operator: operator%S may not be defined with more than two parametes - param count; %d\n%S"
+				log_failure("gen::def_operator: operator %S may not be defined with more than two parametes - param count; %d\n%S"
 					, operator_to_str(op)
 					, params_code->NumEntries
 					, code_debug_str(cast(Code, params_code))
@@ -16734,7 +17037,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 			{
 				if ( params_code->Type != CT_Parameters )
 				{
-					log_failure("gen::def_operator: operator%S params code provided is not of Parameters type - %S"
+					log_failure("gen::def_operator: operator %S params code provided is not of Parameters type - %S"
 						, operator_to_str(op)
 						, code_debug_str(cast(Code, params_code))
 					);
@@ -16757,7 +17060,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 						if ( ! code_is_equal((Code)params_get(params_code, 1), (Code)t_int ) )
 						{
 							log_failure("gen::def_operator: "
-								"operator%S requires second parameter of non-member definition to be int for post-decrement",
+								"operator %S requires second parameter of non-member definition to be int for post-decrement",
 								operator_to_str(op)
 							);
 							return OpValResult_Fail;
@@ -16765,7 +17068,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 						break;
 
 					default:
-						log_failure("gen::def_operator: operator%S recieved unexpected number of parameters recived %d instead of 0-2"
+						log_failure("gen::def_operator: operator %S recieved unexpected number of parameters recived %d instead of 0-2"
 							, operator_to_str(op)
 							, params_code->NumEntries
 						);
@@ -16790,10 +17093,9 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 				if ( code_is_equal((Code)params_code->ValueType, (Code)ret_type ) )
 				{
 					log_failure("gen::def_operator: "
-						"operator%S is non-member symbol yet first paramter does not equal return type\n"
+						"operator %S is non-member symbol yet first paramter does not equal return type\n"
 						"param type: %S\n"
 						"return type: %S\n"
-						, operator_to_str(op)
 						, code_debug_str((Code)params_code)
 						, code_debug_str((Code)ret_type)
 					);
@@ -16802,7 +17104,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 
 				if ( params_code->NumEntries > 1 )
 				{
-					log_failure("gen::def_operator: operator%S may not have more than one parameter - param count: %d"
+					log_failure("gen::def_operator: operator %S may not have more than one parameter - param count: %d"
 						, operator_to_str(op)
 						, params_code->NumEntries
 					);
@@ -16817,7 +17119,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 		#if 0
 			if ( ! ret_type.is_equal( t_bool) )
 			{
-				log_failure( "gen::def_operator: return type is not a boolean - %S", code_debug_str(params_code) );
+				log_failure( "gen::def_operator: operator %S return type is not a boolean - %S", operator_to_str(op) code_debug_str(params_code) );
 				return OpValidateResult::Fail;
 			}
 		#endif
@@ -16829,14 +17131,14 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 			{
 				if ( params_code->Type != CT_Parameters )
 				{
-					log_failure( "gen::def_operator: params is not of Parameters type - %S", code_debug_str((Code)params_code) );
+					log_failure( "gen::def_operator: operator %S - params is not of Parameters type - %S", operator_to_str(op), code_debug_str((Code)params_code) );
 					return OpValResult_Fail;
 				}
 
 				if ( params_code->NumEntries > 1 )
 				{
 					log_failure(
-						"gen::def_operator: operator%S may not have more than one parameter - param count: %d",
+						"gen::def_operator: operator %S may not have more than one parameter - param count: %d",
 						operator_to_str( op ),
 						params_code->NumEntries
 					);
@@ -16865,14 +17167,13 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 					break;
 
 				case 2:
-					// This is allowed.
+					// This is allowed for arithemtic operators
 					// if ( ! code_is_equal((Code)params_code->ValueType, (Code)ret_type ) )
 					// {
 					// 	log_failure("gen::def_operator: "
-					// 		"operator%S is non-member symbol yet first paramter does not equal return type\n"
+					// 		"operator %S is non-member symbol yet first paramter does not equal return type\n"
 					// 		"param type: %S\n"
 					// 		"return type: %S\n"
-					// 		, operator_to_str(op)
 					// 		, code_debug_str((Code)params_code)
 					// 		, code_debug_str((Code)ret_type)
 					// 	);
@@ -16881,7 +17182,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 					break;
 
 				default:
-					log_failure("gen::def_operator: operator%S recieved unexpected number of paramters recived %d instead of 0-2"
+					log_failure("gen::def_operator: operator %S recieved unexpected number of paramters recived %d instead of 0-2"
 						, operator_to_str(op)
 						, params_code->NumEntries
 					);
@@ -16897,13 +17198,13 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 			{
 				if ( params_code->Type != CT_Parameters )
 				{
-					log_failure("gen::def_operator: params is not of Parameters type - %S", code_debug_str((Code)params_code));
+					log_failure("gen::def_operator: operator %S - params is not of Parameters type - %S", operator_to_str(op), code_debug_str((Code)params_code));
 					return OpValResult_Fail;
 				}
 
 				if ( params_code->NumEntries != 1 )
 				{
-					log_failure("gen::def_operator: operator%S recieved unexpected number of paramters recived %d instead of 0-1"
+					log_failure("gen::def_operator: operator %S recieved unexpected number of paramters recived %d instead of 0-1"
 						, operator_to_str(op)
 						, params_code->NumEntries
 					);
@@ -16913,7 +17214,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 
 			if ( ! code_is_equal((Code)ret_type, (Code)t_bool ))
 			{
-				log_failure("gen::def_operator: operator%S return type must be of type bool - %S"
+				log_failure("gen::def_operator: operator %S return type must be of type bool - %S"
 					, operator_to_str(op)
 					, code_debug_str((Code)ret_type)
 				);
@@ -16941,7 +17242,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 					break;
 
 				default:
-					log_failure("gen::def_operator: operator%S recieved unexpected number of paramters recived %d instead of 1-2"
+					log_failure("gen::def_operator: operator %S recieved unexpected number of paramters recived %d instead of 1-2"
 						, operator_to_str(op)
 						, params_code->NumEntries
 					);
@@ -16954,7 +17255,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 		case Op_MemberOfPointer:
 			if ( params_code && params_code->NumEntries > 1)
 			{
-				log_failure("gen::def_operator: operator%S recieved unexpected number of paramters recived %d instead of 0-1"
+				log_failure("gen::def_operator: operator %S recieved unexpected number of paramters recived %d instead of 0-1"
 					, operator_to_str(op)
 					, params_code->NumEntries
 				);
@@ -16969,7 +17270,7 @@ OpValidateResult operator__validate( Operator op, CodeParams params_code, CodeTy
 		case Op_PtrToMemOfPtr:
 			if ( params_code )
 			{
-				log_failure("gen::def_operator: operator%S expects no paramters - %S", operator_to_str(op), code_debug_str((Code)params_code));
+				log_failure("gen::def_operator: operator %S expects no paramters - %S", operator_to_str(op), code_debug_str((Code)params_code));
 				return OpValResult_Fail;
 			}
 			break;
@@ -17133,7 +17434,6 @@ CodeClass def_class( Str name, Opts_def_struct p )
 		GEN_DEBUG_TRAP();
 		return InvalidCode;
 	}
-
 	if ( p.attributes && p.attributes->Type != CT_PlatformAttributes ) {
 		log_failure( "gen::def_class: attributes was not a 'PlatformAttributes' type: %s", code_debug_str(p.attributes) );
 		GEN_DEBUG_TRAP();
@@ -17146,9 +17446,12 @@ CodeClass def_class( Str name, Opts_def_struct p )
 	}
 
 	CodeClass
-	result              = (CodeClass) make_code();
-	result->Name        = cache_str( name );
-	result->ModuleFlags = p.mflags;
+	result               = (CodeClass) make_code();
+	result->Name         = cache_str( name );
+	result->ModuleFlags  = p.mflags;
+	result->Attributes   = p.attributes;
+	result->ParentAccess = p.parent_access;
+	result->ParentType   = p.parent;
 	if ( p.body )
 	{
 		switch ( p.body->Type )
@@ -17169,44 +17472,32 @@ CodeClass def_class( Str name, Opts_def_struct p )
 	else {
 		result->Type = CT_Class_Fwd;
 	}
-
-	result->Attributes   = p.attributes;
-	result->ParentAccess = p.parent_access;
-	result->ParentType   = p.parent;
-
 	for (s32 idx = 0; idx < p.num_interfaces; idx++ ) {
 		class_add_interface(result, p.interfaces[idx] );
 	}
 	return result;
 }
 
-CodeDefine def_define( Str name, Str content, Opts_def_define p )
+CodeDefine def_define( Str name, MacroType type, Opts_def_define p )
 {
 	if ( ! name_check( def_define, name ) ) {
 		GEN_DEBUG_TRAP();
 		return InvalidCode;
 	}
-
 	CodeDefine
 	result          = (CodeDefine) make_code();
 	result->Type    = CT_Preprocess_Define;
 	result->Name    = cache_str( name );
-
-	if ( content.Len <= 0 || content.Ptr == nullptr )
-		result->Content = cache_str( txt("") );
+	result->Params  = p.params;
+	if ( p.content.Len <= 0 || p.content.Ptr == nullptr )
+		result->Body = untyped_str( txt("\n") );
 	else
-		result->Content = cache_str( strbuilder_to_str(strbuilder_fmt_buf(_ctx->Allocator_Temp, "%S\n", content)) );
+		result->Body = untyped_str( strbuilder_to_str(strbuilder_fmt_buf(_ctx->Allocator_Temp, "%S\n", p.content)) );
 
-	b32  append_preprocess_defines = ! p.dont_append_preprocess_defines;
-	if ( append_preprocess_defines ) {
-		// Add the define to PreprocessorDefines for usage in parsing
-		s32 lex_id_len = 0;
-		for (; lex_id_len < result->Name.Len; ++ lex_id_len ) {
-			if ( result->Name.Ptr[lex_id_len] == '(' )
-				break;
-		}
-		Str lex_id = { result->Name.Ptr,  lex_id_len };
-		array_append(_ctx->PreprocessorDefines, cache_str(lex_id) );
+	b32  register_define = ! p.dont_register_to_preprocess_macros;
+	if ( register_define ) {
+		Macro macro_entry = { result->Name, type, p.flags };
+		register_macro(macro_entry);
 	}
 	return result;
 }
@@ -17981,7 +18272,7 @@ CodeBody def_class_body( s32 num, ... )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_CLASS_UNALLOWED_TYPES:
+			GEN_AST_BODY_CLASS_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_class_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18013,7 +18304,7 @@ CodeBody def_class_body( s32 num, Code* codes )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_CLASS_UNALLOWED_TYPES:
+			GEN_AST_BODY_CLASS_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_class_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18023,6 +18314,67 @@ CodeBody def_class_body( s32 num, Code* codes )
 		body_append(result, entry);
 	}
 	while (num--, num > 0);
+
+	return result;
+}
+
+CodeDefineParams def_define_params( s32 num, ... )
+{
+	def_body_start( def_define_params );
+
+	va_list va;
+	va_start(va, num);
+
+	Code_POD         pod   = va_arg(va, Code_POD);
+	CodeDefineParams param = pcast( CodeDefineParams, pod );
+
+	null_check( def_define_params, param );
+	if ( param->Type != CT_Parameters_Define ) {
+		log_failure( "gen::def_define_params: param %d is not a parameter for a preprocessor define", num - num + 1 );
+		return InvalidCode;
+	}
+
+	CodeDefineParams result = (CodeDefineParams) code_duplicate(param);
+	while ( -- num )
+	{
+		pod   = va_arg(va, Code_POD);
+		param = pcast( CodeDefineParams, pod );
+		if ( param->Type != CT_Parameters_Define ) {
+			log_failure( "gen::def_define_params: param %d is not a parameter for a preprocessor define", num - num + 1 );
+			return InvalidCode;
+		}
+		define_params_append(result, param );
+	}
+	va_end(va);
+
+	return result;
+}
+
+CodeDefineParams def_define_params( s32 num, CodeDefineParams* codes )
+{
+	def_body_code_array_start( def_define_params );
+
+#	define check_current(current)                                                                                                                 \
+	if ( current == nullptr ) {                                                                                                                   \
+		log_failure("gen::def_define_params: Provide a null code in codes array");                                                                \
+		return InvalidCode;                                                                                                                       \
+	}                                                                                                                                             \
+	if (current->Type != CT_Parameters_Define ) {                                                                                                 \
+		log_failure("gen::def_define_params: Code in coes array is not of paramter for preprocessor define type - %s", code_debug_str(current) ); \
+		return InvalidCode;                                                                                                                       \
+	}
+	CodeDefineParams current = (CodeDefineParams)code_duplicate(* codes);
+	check_current(current);
+
+	CodeDefineParams
+	result            = (CodeDefineParams) make_code();
+	result->Name      = current->Name;
+	result->Type      = current->Type;
+	while( codes++, current = * codes, num--, num > 0 ) {
+		check_current(current);
+		define_params_append(result, current );
+	}
+#	undef check_current
 
 	return result;
 }
@@ -18103,7 +18455,7 @@ CodeBody def_export_body( s32 num, ... )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_EXPORT_UNALLOWED_TYPES:
+			GEN_AST_BODY_EXPORT_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_export_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18135,7 +18487,7 @@ CodeBody def_export_body( s32 num, Code* codes )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_EXPORT_UNALLOWED_TYPES:
+			GEN_AST_BODY_EXPORT_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_export_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18169,7 +18521,7 @@ CodeBody def_extern_link_body( s32 num, ... )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_EXTERN_LINKAGE_UNALLOWED_TYPES:
+			GEN_AST_BODY_EXTERN_LINKAGE_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_extern_linkage_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18202,7 +18554,7 @@ CodeBody def_extern_link_body( s32 num, Code* codes )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_EXTERN_LINKAGE_UNALLOWED_TYPES:
+			GEN_AST_BODY_EXTERN_LINKAGE_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_extern_linkage_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18236,7 +18588,7 @@ CodeBody def_function_body( s32 num, ... )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_FUNCTION_UNALLOWED_TYPES:
+			GEN_AST_BODY_FUNCTION_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" stringize(def_function_body) ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18268,7 +18620,7 @@ CodeBody def_function_body( s32 num, Code* codes )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_FUNCTION_UNALLOWED_TYPES:
+			GEN_AST_BODY_FUNCTION_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_function_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18307,7 +18659,7 @@ CodeBody def_global_body( s32 num, ... )
 				body_append_body( result, cast(CodeBody, entry) );
 				continue;
 
-			GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES:
+			GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_global_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18343,7 +18695,7 @@ CodeBody def_global_body( s32 num, Code* codes )
 				body_append_body(result, cast(CodeBody, entry) );
 				continue;
 
-			GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES:
+			GEN_AST_BODY_GLOBAL_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_global_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18378,7 +18730,7 @@ CodeBody def_namespace_body( s32 num, ... )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_NAMESPACE_UNALLOWED_TYPES:
+			GEN_AST_BODY_NAMESPACE_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_namespace_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18410,7 +18762,7 @@ CodeBody def_namespace_body( s32 num, Code* codes )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_NAMESPACE_UNALLOWED_TYPES:
+			GEN_AST_BODY_NAMESPACE_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_namespace_body" ": Entry type is not allowed: %s", code_debug_str(entry) );
 				return InvalidCode;
 
@@ -18555,7 +18907,7 @@ CodeBody def_struct_body( s32 num, ... )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_STRUCT_UNALLOWED_TYPES:
+			GEN_AST_BODY_STRUCT_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_struct_body" ": Entry type is not allowed: %s", code_debug_str(entry));
 				return InvalidCode;
 
@@ -18587,7 +18939,7 @@ CodeBody def_struct_body( s32 num, Code* codes )
 		}
 		switch (entry->Type)
 		{
-			GEN_AST_BODY_STRUCT_UNALLOWED_TYPES:
+			GEN_AST_BODY_STRUCT_UNALLOWED_TYPES_CASES:
 				log_failure("gen::" "def_struct_body" ": Entry type is not allowed: %s", code_debug_str(entry) );
 				return InvalidCode;
 
@@ -18774,6 +19126,158 @@ void lexer_end_line( LexContext* ctx )
 }
 #define end_line() lexer_end_line(ctx)
 
+// TODO(Ed): We need to to attempt to recover from a lex failure?
+s32 lex_preprocessor_define( LexContext* ctx )
+{
+	Token name = { { ctx->scanner, 1 }, Tok_Identifier, ctx->line, ctx->column, TF_Preprocess };
+	move_forward();
+
+	while ( ctx->left && ( char_is_alphanumeric((* ctx->scanner)) || (* ctx->scanner) == '_' ) ) {
+		move_forward();
+		name.Text.Len++;
+	}
+
+	Specifier spec    = str_to_specifier( name.Text );
+	TokType   attrib  = str_to_toktype( name.Text );
+	b32 not_specifier = spec   == Spec_Invalid;
+	b32 not_attribute = attrib <= Tok___Attributes_Start;
+
+	Macro  macro            = { name.Text, MT_Expression, (MacroFlags)0 };
+	Macro* registered_macro = lookup_macro(name.Text);
+
+	if ( registered_macro == nullptr && not_specifier && not_attribute ) {
+		log_fmt("Warning: '%S' was not registered before the lexer processed its #define directive, it will be registered as a expression macro\n"
+			, name.Text 
+		);
+		// GEN_DEBUG_TRAP();
+	}
+	array_append( _ctx->Lexer_Tokens, name );
+
+	if ( ctx->left && (* ctx->scanner) == '(' )
+	{
+		if (registered_macro && ! macro_is_functional(* registered_macro)) {
+			log_fmt("Warning: %S registered macro is not flagged as functional yet the definition detects opening parenthesis '(' for arguments\n"
+				, name.Text
+			);
+			// GEN_DEBUG_TRAP();
+		}
+		else {
+			macro.Flags |= MF_Functional;
+		}
+
+		Token opening_paren = { { ctx->scanner, 1 }, Tok_Capture_Start, ctx->line, ctx->column, TF_Preprocess };
+		array_append( _ctx->Lexer_Tokens, opening_paren );
+		move_forward();
+
+		Token last_parameter;
+		// We need to tokenize the define's arguments now:
+		while( ctx->left && * ctx->scanner != ')')
+		{
+			skip_whitespace();
+			
+			Str possible_varadic = { ctx->scanner, 3 };
+			if ( ctx->left > 3 && str_are_equal( txt("..."), possible_varadic ) ) {
+				Token parameter = { { ctx->scanner, 3 }, Tok_Preprocess_Define_Param, ctx->line, ctx->column, TF_Preprocess };
+				move_forward();
+				move_forward();
+				move_forward();
+
+				array_append(_ctx->Lexer_Tokens, parameter);
+				skip_whitespace();
+				last_parameter = parameter;
+
+				while ( (* ctx->scanner) == '\\' ) {
+					move_forward();
+					skip_whitespace();
+				}
+				if (* ctx->scanner != ')' )
+				{
+					log_failure("lex_preprocessor_define(%d, %d): Expected a ')' after '...' (varaidc macro param) %S\n"
+						, ctx->line
+						, ctx->column
+						, name.Text
+					);
+					return Lex_ReturnNull;
+				}
+				break;
+			}
+			else if ( (* ctx->scanner) == '\\' ) {
+				move_forward();
+				skip_whitespace();
+				continue;
+			}
+			else if ( char_is_alpha( (* ctx->scanner) ) || (* ctx->scanner) == '_' )
+			{
+				Token parameter = { { ctx->scanner, 1 }, Tok_Preprocess_Define_Param, ctx->line, ctx->column, TF_Preprocess };
+				move_forward();
+
+				while ( ctx->left && ( char_is_alphanumeric((* ctx->scanner)) || (* ctx->scanner) == '_' ) )
+				{
+					move_forward();
+					parameter.Text.Len++;
+				}
+				array_append(_ctx->Lexer_Tokens, parameter);
+				skip_whitespace();
+				last_parameter = parameter;
+			}
+			else {
+				log_failure("lex_preprocessor_define(%d, %d): Expected a '_' or alpha character for a parameter name for %S\n"
+					, ctx->line
+					, ctx->column
+					, name.Text
+				);
+				return Lex_ReturnNull;
+			}
+
+			if (* ctx->scanner == ')' )
+				break;
+
+			// There should be a comma
+			if ( * ctx->scanner != ',' ) {
+				log_failure("lex_preprocessor_define(%d, %d): Expected a comma after parameter %S for %S\n"
+					, ctx->line
+					, ctx->column
+					, last_parameter.Text
+					, name.Text
+				);
+				return Lex_ReturnNull;
+			}
+			Token comma = { { ctx->scanner, 1 }, Tok_Comma, ctx->line, ctx->column, TF_Preprocess };
+			array_append(_ctx->Lexer_Tokens, comma);
+			move_forward();
+		}
+		
+		if ( * ctx->scanner != ')' ) {
+			log_failure("lex_preprocessor_define(%d, %d): Expected a ')' after last_parameter %S for %S (ran out of characters...)\n"
+				, ctx->line
+				, ctx->column
+				, last_parameter.Text
+				, name.Text
+			);
+			return Lex_ReturnNull;
+		}
+		Token closing_paren = { { ctx->scanner, 1 }, Tok_Capture_End, ctx->line, ctx->column, TF_Preprocess };
+		array_append(_ctx->Lexer_Tokens, closing_paren);
+		move_forward();
+	}
+	else if ( registered_macro && macro_is_functional( * registered_macro) ) {
+		if (registered_macro && ! macro_is_functional(* registered_macro)) {
+			log_fmt("Warning: %S registered macro is flagged as functional yet the definition detects no opening parenthesis '(' for arguments\n"
+				, name.Text
+			);
+			GEN_DEBUG_TRAP();
+		}
+	}
+
+	if ( registered_macro == nullptr ) {
+		register_macro(macro);
+	}
+
+	// Define's content handled by lex_preprocessor_directive (the original caller of this)
+	return Lex_Continue;
+}
+
+// TODO(Ed): We need to to attempt to recover from a lex failure?
 forceinline
 s32 lex_preprocessor_directive( LexContext* ctx )
 {
@@ -18877,28 +19381,9 @@ s32 lex_preprocessor_directive( LexContext* ctx )
 
 	if ( ctx->token.Type == Tok_Preprocess_Define )
 	{
-		Token name = { { ctx->scanner, 0 }, Tok_Identifier, ctx->line, ctx->column, TF_Preprocess };
-
-		name.Text.Ptr = ctx->scanner;
-		name.Text.Len = 1;
-		move_forward();
-
-		while ( ctx->left && ( char_is_alphanumeric((* ctx->scanner)) || (* ctx->scanner) == '_' ) )
-		{
-			move_forward();
-			name.Text.Len++;
-		}
-
-		if ( ctx->left && (* ctx->scanner) == '(' )
-		{
-			move_forward();
-			name.Text.Len++;
-		}
-
-		array_append( _ctx->Lexer_Tokens, name );
-
-		u64 key = crc32( name.Text.Ptr, name.Text.Len );
-		hashtable_set(ctx->defines, key, tok_to_str(name) );
+		u32 result = lex_preprocessor_define(ctx); // handles: #define <name>( <params> ) - define's content handled later on within this scope.
+		if (result != Lex_Continue)
+			return Lex_ReturnNull;
 	}
 
 	Token preprocess_content = { { ctx->scanner, 0 }, Tok_Preprocess_Content, ctx->line, ctx->column, TF_Preprocess };
@@ -18948,7 +19433,7 @@ s32 lex_preprocessor_directive( LexContext* ctx )
 	s32 within_string = false;
 	s32 within_char   = false;
 
-	// SkipWhitespace();
+	// Consume preprocess content
 	while ( ctx->left )
 	{
 		if ( (* ctx->scanner) == '"' && ! within_char )
@@ -18984,6 +19469,7 @@ s32 lex_preprocessor_directive( LexContext* ctx )
 					, (* ctx->scanner), ctx->line, ctx->column
 					, directive_str, preprocess_content.Line, preprocess_content.Column
 					, content_str );
+				return Lex_ReturnNull;
 				break;
 			}
 		}
@@ -19011,30 +19497,24 @@ s32 lex_preprocessor_directive( LexContext* ctx )
 forceinline
 void lex_found_token( LexContext* ctx )
 {
-	if ( ctx->token.Type != Tok_Invalid )
-	{
+	if ( ctx->token.Type != Tok_Invalid ) {
 		array_append( _ctx->Lexer_Tokens, ctx->token );
 		return;
 	}
 
 	TokType type = str_to_toktype( tok_to_str(ctx->token) );
 
-	if (type <= Tok_Access_Public && type >= Tok_Access_Private )
-	{
+	if (type <= Tok_Access_Public && type >= Tok_Access_Private ) {
 		ctx->token.Flags |= TF_AccessSpecifier;
 	}
-
-	if ( type > Tok___Attributes_Start )
-	{
+	if ( type > Tok___Attributes_Start ) {
 		ctx->token.Flags |= TF_Attribute;
 	}
-
 	if ( type == Tok_Decl_Extern_Linkage )
 	{
 		skip_whitespace();
 
-		if ( (* ctx->scanner) != '"' )
-		{
+		if ( (* ctx->scanner) != '"' ) {
 			type         = Tok_Spec_Extern;
 			ctx->token.Flags |= TF_Specifier;
 		}
@@ -19043,7 +19523,6 @@ void lex_found_token( LexContext* ctx )
 		array_append( _ctx->Lexer_Tokens, ctx->token );
 		return;
 	}
-
 	if ( ( type <= Tok_Star && type >= Tok_Spec_Alignas)
 			|| type == Tok_Ampersand
 			|| type == Tok_Ampersand_DBL )
@@ -19053,8 +19532,6 @@ void lex_found_token( LexContext* ctx )
 		array_append( _ctx->Lexer_Tokens, ctx->token );
 		return;
 	}
-
-
 	if ( type != Tok_Invalid )
 	{
 		ctx->token.Type = type;
@@ -19062,38 +19539,40 @@ void lex_found_token( LexContext* ctx )
 		return;
 	}
 
-	u64 key = 0;
-	if ( (* ctx->scanner) == '(')
-		key = crc32( ctx->token.Text.Ptr, ctx->token.Text.Len + 1 );
-	else
-		key = crc32( ctx->token.Text.Ptr, ctx->token.Text.Len );
-
-	Str* define = hashtable_get(ctx->defines, key );
-	if ( define )
+	Macro* macro = lookup_macro( ctx->token.Text );
+	b32 has_args          = ctx->left && (* ctx->scanner) == '(';
+	b32 resolved_to_macro = false;
+	if (macro) {
+		ctx->token.Type   = macrotype_to_toktype(macro->Type);
+		b32 is_functional = macro_is_functional(* macro);
+		resolved_to_macro = has_args ? is_functional : ! is_functional;
+	}
+	if ( resolved_to_macro )
 	{
-		ctx->token.Type = Tok_Preprocess_Macro;
-
+		// TODO(Ed): When we introduce a macro AST (and expression support), we'll properly lex this section.
 		// Want to ignore any arguments the define may have as they can be execution expressions.
-		if ( ctx->left && (* ctx->scanner) == '(' )
+		if ( has_args )
 		{
-			move_forward();
-			ctx->token.Text.Len++;
+			ctx->token.Flags |= TF_Macro_Functional;
 
-			s32 level = 0;
-			while ( ctx->left && ((* ctx->scanner) != ')' || level > 0) )
-			{
-				if ( (* ctx->scanner) == '(' )
-					level++;
+			// move_forward();
+			// ctx->token.Text.Len++;
 
-				else if ( (* ctx->scanner) == ')' && level > 0 )
-					level--;
+			// s32 level = 0;
+			// while ( ctx->left && ((* ctx->scanner) != ')' || level > 0) )
+			// {
+			// 	if ( (* ctx->scanner) == '(' )
+			// 		level++;
 
-				move_forward();
-				ctx->token.Text.Len++;
-			}
+			// 	else if ( (* ctx->scanner) == ')' && level > 0 )
+			// 		level--;
 
-			move_forward();
-			ctx->token.Text.Len++;
+			// 	move_forward();
+			// 	ctx->token.Text.Len++;
+			// }
+
+			// move_forward();
+			// ctx->token.Text.Len++;
 		}
 
 		//if ( (* ctx->scanner) == '\r' && ctx->scanner[1] == '\n' )
@@ -19115,6 +19594,7 @@ void lex_found_token( LexContext* ctx )
 	array_append( _ctx->Lexer_Tokens, ctx->token );
 }
 
+// TODO(Ed): We need to to attempt to recover from a lex failure?
 neverinline
 // TokArray lex( Array<Token> tokens, Str content )
 TokArray lex( Str content )
@@ -19123,7 +19603,6 @@ TokArray lex( Str content )
 	c.content = content;
 	c.left    = content.Len;
 	c.scanner = content.Ptr;
-	c.defines = _ctx->Lexer_defines;
 
 	char const* word        = c.scanner;
 	s32         word_length = 0;
@@ -19139,25 +19618,9 @@ TokArray lex( Str content )
 		return null_array;
 	}
 
-	for ( StrCached* entry = array_begin(_ctx->PreprocessorDefines); entry != array_end(_ctx->PreprocessorDefines); entry = array_next(_ctx->PreprocessorDefines, entry))
-	{
-		s32         length  = 0;
-		char const* entry_scanner = (*entry).Ptr;
-		while ( entry->Len > length && (char_is_alphanumeric( *entry_scanner ) || *entry_scanner == '_') )
-		{
-			entry_scanner++;
-			length ++;
-		}
-		if ( entry_scanner[0] == '(' )
-		{
-			length++;
-		}
-
-		u64 key = crc32( entry->Ptr, length );
-		hashtable_set(c.defines, key, * entry );
-	}
-
 	array_clear(_ctx->Lexer_Tokens);
+
+	b32 preprocess_args = true;
 
 	while (c.left )
 	{
@@ -19600,7 +20063,7 @@ TokArray lex( Str content )
 				goto FoundToken;
 			}
 
-			// Dash is unfortunatlly a bit more complicated...
+			// Dash is unfortunately a bit more complicated...
 			case '-':
 			{
 				Str text = { c.scanner, 1 };
@@ -19737,8 +20200,7 @@ TokArray lex( Str content )
 			c.token.Text = text;
 			move_forward();
 
-			while ( c.left && ( char_is_alphanumeric((* ctx->scanner)) || (* ctx->scanner) == '_' ) )
-			{
+			while ( c.left && ( char_is_alphanumeric((* ctx->scanner)) || (* ctx->scanner) == '_' ) ) {
 				move_forward();
 				c.token.Text.Len++;
 			}
@@ -19764,8 +20226,7 @@ TokArray lex( Str content )
 				move_forward();
 				c.token.Text.Len++;
 
-				while ( c.left && char_is_hex_digit((* ctx->scanner)) )
-				{
+				while ( c.left && char_is_hex_digit((* ctx->scanner)) ) {
 					move_forward();
 					c.token.Text.Len++;
 				}
@@ -19773,8 +20234,7 @@ TokArray lex( Str content )
 				goto FoundToken;
 			}
 
-			while ( c.left && char_is_digit((* ctx->scanner)) )
-			{
+			while ( c.left && char_is_digit((* ctx->scanner)) ) {
 				move_forward();
 				c.token.Text.Len++;
 			}
@@ -19784,8 +20244,7 @@ TokArray lex( Str content )
 				move_forward();
 				c.token.Text.Len++;
 
-				while ( c.left && char_is_digit((* ctx->scanner)) )
-				{
+				while ( c.left && char_is_digit((* ctx->scanner)) ) {
 					move_forward();
 					c.token.Text.Len++;
 				}
@@ -19803,8 +20262,7 @@ TokArray lex( Str content )
 					c.token.Text.Len++;
 
 					// Handle 'll'/'LL' as a special case when we just processed an 'l'/'L'
-					if (c.left && (prev == 'l' || prev == 'L') && ((* ctx->scanner) == 'l' || (* ctx->scanner) == 'L'))
-					{
+					if (c.left && (prev == 'l' || prev == 'L') && ((* ctx->scanner) == 'l' || (* ctx->scanner) == 'L')) {
 						move_forward();
 						c.token.Text.Len++;
 					}
@@ -19830,8 +20288,7 @@ TokArray lex( Str content )
 			log_failure( "Failed to lex token '%c' (%d, %d)\n%s", (* ctx->scanner), c.line, c.column, context_str );
 
 			// Skip to next whitespace since we can't know if anything else is valid until then.
-			while ( c.left && ! char_is_space( (* ctx->scanner) ) )
-			{
+			while ( c.left && ! char_is_space( (* ctx->scanner) ) ) {
 				move_forward();
 			}
 		}
@@ -19840,17 +20297,15 @@ TokArray lex( Str content )
 		{
 			lex_found_token( ctx );
 			TokType last_type = array_back(_ctx->Lexer_Tokens)->Type;
-			if ( last_type == Tok_Preprocess_Macro )
+			if ( last_type == Tok_Preprocess_Macro_Stmt || last_type == Tok_Preprocess_Macro_Expr )
 			{
 				Token thanks_c = { { c.scanner, 0 }, Tok_Invalid, c.line, c.column, TF_Null };
 				c.token = thanks_c;
-				if ( (* ctx->scanner) == '\r')
-				{
+				if ( (* ctx->scanner) == '\r') {
 					move_forward();
 					c.token.Text.Len = 1;
 				}
-
-				if ( (* ctx->scanner) == '\n' )
+				if ( (* ctx->scanner) == '\n' ) 
 				{
 					c.token.Type = Tok_NewLine;
 					c.token.Text.Len++;
@@ -19863,23 +20318,124 @@ TokArray lex( Str content )
 		}
 	}
 
-	if ( array_num(_ctx->Lexer_Tokens) == 0 )
-	{
+	if ( array_num(_ctx->Lexer_Tokens) == 0 ) {
 		log_failure( "Failed to lex any tokens" );
-		{
-			TokArray tok_array =  {};
-			return tok_array;
-		}
+		TokArray tok_array =  {};
+		return tok_array;
 	}
 
-	hashtable_clear(_ctx->Lexer_defines);
-	// defines_map_arena.free();
 	TokArray result = { _ctx->Lexer_Tokens, 0 };
 	return result;
 }
+
 #undef move_forward
 #undef skip_whitespace
 #undef end_line
+// These macros are used in the swtich cases within parser.cpp
+
+#define GEN_PARSER_CLASS_STRUCT_BODY_ALLOWED_MEMBER_TOK_SPECIFIERS_CASES \
+case Tok_Spec_Consteval:   \
+case Tok_Spec_Constexpr:   \
+case Tok_Spec_Constinit:   \
+case Tok_Spec_Explicit:    \
+case Tok_Spec_ForceInline: \
+case Tok_Spec_Inline:      \
+case Tok_Spec_Mutable:     \
+case Tok_Spec_NeverInline: \
+case Tok_Spec_Static:      \
+case Tok_Spec_Volatile:    \
+case Tok_Spec_Virtual
+
+#define GEN_PARSER_CLASS_STRUCT_BODY_ALLOWED_MEMBER_SPECIFIERS_CASES \
+case Spec_Constexpr:   \
+case Spec_Constinit:   \
+case Spec_Explicit:    \
+case Spec_Inline:      \
+case Spec_ForceInline: \
+case Spec_Mutable:     \
+case Spec_NeverInline: \
+case Spec_Static:      \
+case Spec_Volatile:    \
+case Spec_Virtual
+
+#define GEN_PARSER_CLASS_GLOBAL_NSPACE_ALLOWED_MEMBER_TOK_SPECIFIER_CASES \
+case Tok_Spec_Consteval:        \
+case Tok_Spec_Constexpr:        \
+case Tok_Spec_Constinit:        \
+case Tok_Spec_Extern:           \
+case Tok_Spec_ForceInline:      \
+case Tok_Spec_Global:           \
+case Tok_Spec_Inline:           \
+case Tok_Spec_Internal_Linkage: \
+case Tok_Spec_NeverInline:      \
+case Tok_Spec_Static
+
+#define GEN_PARSER_CLASS_GLOBAL_NSPACE_ALLOWED_MEMBER_SPECIFIER_CASES \
+case Spec_Constexpr:        \
+case Spec_Constinit:        \
+case Spec_ForceInline:      \
+case Spec_Global:           \
+case Spec_External_Linkage: \
+case Spec_Internal_Linkage: \
+case Spec_Inline:           \
+case Spec_Mutable:          \
+case Spec_NeverInline:      \
+case Spec_Static:           \
+case Spec_Volatile
+
+#define GEN_PARSER_FRIEND_ALLOWED_SPECIFIERS_CASES \
+case Spec_Const:       \
+case Spec_Inline:      \
+case Spec_ForceInline
+
+#define GEN_PARSER_FUNCTION_ALLOWED_SPECIFIERS_CASES \
+case Spec_Const:            \
+case Spec_Consteval:        \
+case Spec_Constexpr:        \
+case Spec_External_Linkage: \
+case Spec_Internal_Linkage: \
+case Spec_ForceInline:      \
+case Spec_Inline:           \
+case Spec_NeverInline:      \
+case Spec_Static
+
+#define GEN_PARSER_OPERATOR_ALLOWED_SPECIFIERS_CASES \
+case Spec_Const:       \
+case Spec_Constexpr:   \
+case Spec_ForceInline: \
+case Spec_Inline:      \
+case Spec_NeverInline: \
+case Spec_Static
+
+#define GEN_PARSER_TEMPLATE_ALLOWED_SPECIFIERS_CASES \
+case Spec_Const:            \
+case Spec_Constexpr:        \
+case Spec_Constinit:        \
+case Spec_External_Linkage: \
+case Spec_Global:           \
+case Spec_Inline:           \
+case Spec_ForceInline:      \
+case Spec_Local_Persist:    \
+case Spec_Mutable:          \
+case Spec_Static:           \
+case Spec_Thread_Local:     \
+case Spec_Volatile
+
+#define GEN_PARSER_VARIABLE_ALLOWED_SPECIFIER_CASES \
+case Spec_Const:            \
+case Spec_Constexpr:        \
+case Spec_Constinit:        \
+case Spec_External_Linkage: \
+case Spec_Global:           \
+case Spec_Inline:           \
+case Spec_Local_Persist:    \
+case Spec_Mutable:          \
+case Spec_Static:           \
+case Spec_Thread_Local:     \
+case Spec_Volatile
+
+
+
 
 // TODO(Ed) : Rename ETok_Capture_Start, ETok_Capture_End to Open_Parenthesis adn Close_Parenthesis
 
@@ -19939,12 +20495,10 @@ StrBuilder parser_to_strbuilder(ParseContext ctx)
 	s32 level = 0;
 	do
 	{
-		if ( curr_scope->Name.Ptr )
-		{
+		if ( curr_scope->Name.Ptr ) {
 			strbuilder_append_fmt(& result, "\t%d: %s, AST Name: %.*s\n", level, curr_scope->ProcName.Ptr, curr_scope->Name.Len, curr_scope->Name.Ptr );
 		}
-		else
-		{
+		else {
 			strbuilder_append_fmt(& result, "\t%d: %s\n", level, curr_scope->ProcName.Ptr );
 		}
 
@@ -19957,8 +20511,7 @@ StrBuilder parser_to_strbuilder(ParseContext ctx)
 
 bool lex__eat(TokArray* self, TokType type )
 {
-	if ( array_num(self->Arr) - self->Idx <= 0 )
-	{
+	if ( array_num(self->Arr) - self->Idx <= 0 ) {
 		log_failure( "No tokens left.\n%s", parser_to_strbuilder(_ctx->parser) );
 		return false;
 	}
@@ -19971,7 +20524,15 @@ bool lex__eat(TokArray* self, TokType type )
 		self->Idx ++;
 	}
 
-	if ( at_idx.Type != type )
+	b32 not_accepted  = at_idx.Type != type;
+	b32 is_identifier = at_idx.Type == Tok_Identifier;
+	if ( not_accepted )
+	{
+		Macro* macro = lookup_macro(at_idx.Text);
+		b32 accept_as_identifier = macro && bitfield_is_set(MacroFlags, macro->Flags, MF_Allow_As_Identifier );
+		not_accepted             = type == Tok_Identifier && accept_as_identifier ? false : true;
+	}
+	if ( not_accepted )
 	{
 		Token tok = * lex_current( self, lex_skip_formatting );
 		log_failure( "Parse Error, TokArray::eat, Expected: ' %s ' not ' %.*s ' (%d, %d)`\n%s"
@@ -19996,11 +20557,7 @@ bool lex__eat(TokArray* self, TokType type )
 internal
 void parser_init()
 {
-	_ctx->Lexer_Tokens = array_init_reserve(Token, arena_allocator_info( & _ctx->LexArena)
-		, ( _ctx->InitSize_LexArena - sizeof( ArrayHeader ) ) / sizeof(Token)
-	);
-
-	_ctx->Lexer_defines = hashtable_init_reserve(Str, _ctx->Allocator_DyanmicContainers, 256 );
+	_ctx->Lexer_Tokens = array_init_reserve(Token, _ctx->Allocator_DyanmicContainers, _ctx->InitSize_LexerTokens );
 }
 
 internal
@@ -20070,7 +20627,6 @@ internal CodeComment        parse_comment                      ();
 internal Code               parse_complicated_definition       ( TokType which );
 internal CodeBody           parse_class_struct_body            ( TokType which, Token name );
 internal Code               parse_class_struct                 ( TokType which, bool inplace_def );
-internal CodeDefine         parse_define                       ();
 internal Code               parse_expression                   ();
 internal Code               parse_forward_or_definition        ( TokType which, bool is_inplace );
 internal CodeFn             parse_function_after_name          ( ModuleFlag mflags, CodeAttributes attributes, CodeSpecifiers specifiers, CodeTypename ret_type, Token name );
@@ -20084,14 +20640,15 @@ internal Code               parse_operator_function_or_variable( bool expects_fu
 internal CodePragma         parse_pragma                       ();
 internal CodeParams         parse_params                       ( bool use_template_capture );
 internal CodePreprocessCond parse_preprocess_cond              ();
-internal Code               parse_simple_preprocess            ( TokType which, bool dont_consume_braces );
+internal Code               parse_simple_preprocess            ( TokType which  );
 internal Code               parse_static_assert                ();
 internal void               parse_template_args                ( Token* token );
 internal CodeVar            parse_variable_after_name          ( ModuleFlag mflags, CodeAttributes attributes, CodeSpecifiers specifiers, CodeTypename type, Str name );
 internal CodeVar            parse_variable_declaration_list    ();
 
-internal CodeClass       parser_parse_class    ( bool inplace_def );
+internal CodeClass       parser_parse_class           ( bool inplace_def );
 internal CodeConstructor parser_parse_constructor     ( CodeSpecifiers specifiers );
+internal CodeDefine      parser_parse_define          ();
 internal CodeDestructor  parser_parse_destructor      ( CodeSpecifiers specifiers );
 internal CodeEnum        parser_parse_enum            ( bool inplace_def );
 internal CodeBody        parser_parse_export_body     ();
@@ -20141,8 +20698,7 @@ StrBuilder parser_strip_formatting( Str raw_text, bool preserve_newlines )
 	sptr        last_cut = 0;
 	char const* scanner  = raw_text.Ptr;
 
-	if ( scanner[0] == ' ' )
-	{
+	if ( scanner[0] == ' ' ) {
 		move_fwd();
 		last_cut = 1;
 	}
@@ -20352,8 +20908,7 @@ StrBuilder parser_strip_formatting( Str raw_text, bool preserve_newlines )
 		move_fwd();
 	}
 
-	if ( last_cut < raw_text.Len )
-	{
+	if ( last_cut < raw_text.Len ) {
 		strbuilder_append_c_str_len( & content,  cut_ptr, raw_text.Len - last_cut );
 	}
 
@@ -20559,8 +21114,7 @@ CodeAttributes parse_attributes()
 internal
 Code parse_class_struct( TokType which, bool inplace_def )
 {
-	if ( which != Tok_Decl_Class && which != Tok_Decl_Struct )
-	{
+	if ( which != Tok_Decl_Class && which != Tok_Decl_Struct ) {
 		log_failure( "Error, expected class or struct, not %s\n%s", toktype_to_str( which ), parser_to_strbuilder(_ctx->parser) );
 		return InvalidCode;
 	}
@@ -20575,8 +21129,7 @@ Code parse_class_struct( TokType which, bool inplace_def )
 
 	Code result = InvalidCode;
 
-	if ( check(Tok_Module_Export) )
-	{
+	if ( check(Tok_Module_Export) ) {
 		mflags = ModuleFlag_Export;
 		eat( Tok_Module_Export );
 	}
@@ -20588,8 +21141,7 @@ Code parse_class_struct( TokType which, bool inplace_def )
 	attributes = parse_attributes();
 	// <ModuleFlags> <class/struct> <Attributes>
 
-	if ( check( Tok_Identifier ) )
-	{
+	if ( check( Tok_Identifier ) ) {
 		name = parse_identifier(nullptr);
 		_ctx->parser.Scope->Name = name.Text;
 	}
@@ -20608,8 +21160,7 @@ Code parse_class_struct( TokType which, bool inplace_def )
 		eat( Tok_Assign_Classifer );
 		// <ModuleFlags> <class/struct> <Attributes> <Name> :
 
-		if ( tok_is_access_specifier(currtok) )
-		{
+		if ( tok_is_access_specifier(currtok) ) {
 			access = tok_to_access_specifier(currtok);
 			// <ModuleFlags> <class/struct> <Attributes> <Name> : <Access Specifier>
 			eat( currtok.Type );
@@ -20624,8 +21175,7 @@ Code parse_class_struct( TokType which, bool inplace_def )
 			eat( Tok_Comma );
 			// <ModuleFlags> <class/struct> <Attributes> <Name> : <Access Specifier> <Name>,
 
-			if ( tok_is_access_specifier(currtok) )
-			{
+			if ( tok_is_access_specifier(currtok) ) {
 				eat(currtok.Type);
 			}
 			Token interface_tok = parse_identifier(nullptr);
@@ -20635,8 +21185,7 @@ Code parse_class_struct( TokType which, bool inplace_def )
 		}
 	}
 
-	if ( check( Tok_BraceCurly_Open ) )
-	{
+	if ( check( Tok_BraceCurly_Open ) ) {
 		body = parse_class_struct_body( which, name );
 	}
 	// <ModuleFlags> <class/struct> <Attributes> <Name> : <Access Specifier> <Name>, ... { <Body> }
@@ -20696,93 +21245,91 @@ CodeBody parse_class_struct_body( TokType which, Token name )
 		if ( currtok_noskip.Type == Tok_Preprocess_Hash )
 			eat( Tok_Preprocess_Hash );
 
-		b32 macro_found = true;
-
 		switch ( currtok_noskip.Type )
 		{
-			case Tok_Statement_End:
-			{
+			case Tok_Statement_End: {
 				// TODO(Ed): Convert this to a general warning procedure
 				log_fmt("Dangling end statement found %SB\n", tok_to_strbuilder(currtok_noskip));
 				eat( Tok_Statement_End );
 				continue;
 			}
-			case Tok_NewLine:
+			case Tok_NewLine: {
 				member = fmt_newline;
 				eat( Tok_NewLine );
-			break;
-
-			case Tok_Comment:
+				break;
+			}
+			case Tok_Comment: {
 				member = cast(Code, parse_comment());
-			break;
-
-			case Tok_Access_Public:
+				break;
+			}
+			case Tok_Access_Public: {
 				member = access_public;
 				eat( Tok_Access_Public );
 				eat( Tok_Assign_Classifer );
 				// public:
-			break;
-
-			case Tok_Access_Protected:
+				break;
+			}
+			case Tok_Access_Protected: {
 				member = access_protected;
 				eat( Tok_Access_Protected );
 				eat( Tok_Assign_Classifer );
 				// protected:
-			break;
-
-			case Tok_Access_Private:
+				break;
+			}
+			case Tok_Access_Private: {
 				member = access_private;
 				eat( Tok_Access_Private );
 				eat( Tok_Assign_Classifer );
 				// private:
-			break;
-
-			case Tok_Decl_Class:
+				break;
+			}
+			case Tok_Decl_Class: {
 				member = parse_complicated_definition( Tok_Decl_Class );
 				// class
-			break;
-
-			case Tok_Decl_Enum:
+				break;
+			}
+			case Tok_Decl_Enum: {
 				member = parse_complicated_definition( Tok_Decl_Enum );
 				// enum
-			break;
-
-			case Tok_Decl_Friend:
+				break;
+			}
+			case Tok_Decl_Friend: {
 				member = cast(Code, parser_parse_friend());
 				// friend
-			break;
-
-			case Tok_Decl_Operator:
+				break;
+			}
+			case Tok_Decl_Operator: {
 				member = cast(Code, parser_parse_operator_cast(NullCode));
 				// operator <Type>()
-			break;
-
-			case Tok_Decl_Struct:
+				break;
+			}
+			case Tok_Decl_Struct: {
 				member = parse_complicated_definition( Tok_Decl_Struct );
 				// struct
-			break;
-
-			case Tok_Decl_Template:
+				break;
+			}
+			case Tok_Decl_Template: {
 				member = cast(Code, parser_parse_template());
 				// template< ... >
-			break;
-
-			case Tok_Decl_Typedef:
+				break;
+			}
+			case Tok_Decl_Typedef: {
 				member = cast(Code, parser_parse_typedef());
 				// typedef
-			break;
-
-			case Tok_Decl_Union:
+				break;
+			}
+			case Tok_Decl_Union: {
 				member = parse_complicated_definition( Tok_Decl_Union );
 				// union
-			break;
-
-			case Tok_Decl_Using:
+				break;
+			}
+			case Tok_Decl_Using: {
 				member = cast(Code, parser_parse_using());
 				// using
-			break;
-
+				break;
+			}
 			case Tok_Operator:
+			{
 				//if ( currtok.Text[0] != '~' )
 				//{
 				//	log_failure( "Operator token found in global body but not destructor unary negation\n%s", to_strbuilder(_ctx->parser) );
@@ -20791,17 +21338,19 @@ CodeBody parse_class_struct_body( TokType which, Token name )
 
 				member = cast(Code, parser_parse_destructor(NullCode));
 				// ~<Name>()
-			break;
-
-			case Tok_Preprocess_Define:
-				member = cast(Code, parse_define());
+				break;
+			}
+			case Tok_Preprocess_Define: {
+				member = cast(Code, parser_parse_define());
 				// #define
-			break;
-
+				break;
+			}
 			case Tok_Preprocess_Include:
+			{
 				member = cast(Code, parse_include());
 				// #include
-			break;
+				break;
+			}
 
 			case Tok_Preprocess_If:
 			case Tok_Preprocess_IfDef:
@@ -20811,38 +21360,51 @@ CodeBody parse_class_struct_body( TokType which, Token name )
 				// #<Condition>
 			break;
 
-			case Tok_Preprocess_Else:
+			case Tok_Preprocess_Else: {
 				member = cast(Code, preprocess_else);
 				eat( Tok_Preprocess_Else );
 				// #else
-			break;
-
-			case Tok_Preprocess_EndIf:
+				break;
+			}
+			case Tok_Preprocess_EndIf: {
 				member = cast(Code, preprocess_endif);
 				eat( Tok_Preprocess_EndIf );
 				// #endif
-			break;
+				break;
+			}
 
-			case Tok_Preprocess_Macro:
-				// <Macro>
-				macro_found = true;
-				goto Preprocess_Macro_Bare_In_Body;
-			break;
+			case Tok_Preprocess_Macro_Stmt: {
+				member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Macro_Stmt ));
+				break;
+			}
+			case Tok_Preprocess_Macro_Expr: {
+				log_failure("Unbounded macro expression residing in class/struct body\n%S", parser_to_strbuilder(_ctx->parser));
+				return InvalidCode;
+			}
 
-			case Tok_Preprocess_Pragma:
+			// case Tok_Preprocess_Macro:
+			// 	// <Macro>
+			// 	macro_found = true;
+			// 	goto Preprocess_Macro_Bare_In_Body;
+			// break;
+
+			case Tok_Preprocess_Pragma: {
 				member = cast(Code, parse_pragma());
 				// #pragma
-			break;
+				break;
+			}
 
-			case Tok_Preprocess_Unsupported:
-				member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Unsupported, parser_consume_braces ));
+			case Tok_Preprocess_Unsupported: {
+				member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Unsupported ));
 				// #<UNKNOWN>
-			break;
+				break;
+			}
 
-			case Tok_StaticAssert:
+			case Tok_StaticAssert: {
 				member = parse_static_assert();
 				// static_assert
-			break;
+				break;
+			}
 
 			case Tok_Attribute_Open:
 			case Tok_Decl_GNU_Attribute:
@@ -20855,17 +21417,7 @@ CodeBody parse_class_struct_body( TokType which, Token name )
 				// <Attributes>
 			}
 			//! Fallthrough intended
-			case Tok_Spec_Consteval:
-			case Tok_Spec_Constexpr:
-			case Tok_Spec_Constinit:
-			case Tok_Spec_Explicit:
-			case Tok_Spec_ForceInline:
-			case Tok_Spec_Inline:
-			case Tok_Spec_Mutable:
-			case Tok_Spec_NeverInline:
-			case Tok_Spec_Static:
-			case Tok_Spec_Volatile:
-			case Tok_Spec_Virtual:
+			GEN_PARSER_CLASS_STRUCT_BODY_ALLOWED_MEMBER_TOK_SPECIFIERS_CASES:
 			{
 				Specifier specs_found[16] = { Spec_NumSpecifiers };
 				s32        NumSpecifiers = 0;
@@ -20878,16 +21430,7 @@ CodeBody parse_class_struct_body( TokType which, Token name )
 
 					switch ( spec )
 					{
-						case Spec_Constexpr:
-						case Spec_Constinit:
-						case Spec_Explicit:
-						case Spec_Inline:
-						case Spec_ForceInline:
-						case Spec_Mutable:
-						case Spec_NeverInline:
-						case Spec_Static:
-						case Spec_Volatile:
-						case Spec_Virtual:
+						GEN_PARSER_CLASS_STRUCT_BODY_ALLOWED_MEMBER_SPECIFIERS_CASES:
 						break;
 
 						case Spec_Consteval:
@@ -20899,7 +21442,7 @@ CodeBody parse_class_struct_body( TokType which, Token name )
 						break;
 
 						default:
-							log_failure( "Invalid specifier %S for variable\n%S", spec_to_str(spec), strbuilder_to_str( parser_to_strbuilder(_ctx->parser)) );
+							log_failure( "Invalid specifier %S for class/struct member\n%S", spec_to_str(spec), strbuilder_to_str( parser_to_strbuilder(_ctx->parser)) );
 							parser_pop(& _ctx->parser);
 							return InvalidCode;
 					}
@@ -20954,6 +21497,7 @@ CodeBody parse_class_struct_body( TokType which, Token name )
 			}
 			//! Fallthrough intentional
 			case Tok_Identifier:
+			case Tok_Preprocess_Macro_Typename:
 			case Tok_Spec_Const:
 			case Tok_Type_Unsigned:
 			case Tok_Type_Signed:
@@ -20974,28 +21518,6 @@ CodeBody parse_class_struct_body( TokType which, Token name )
 					}
 				}
 
-				if (macro_found)
-				{
-				Preprocess_Macro_Bare_In_Body:
-					b32 lone_macro = nexttok.Type == Tok_Statement_End || nexttok_noskip.Type == Tok_NewLine;
-					if (lone_macro)
-					{
-						member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Macro, parser_consume_braces ));
-						// <Macro>;
-
-						if ( member == Code_Invalid )
-						{
-							log_failure( "Failed to parse member\n%s", parser_to_strbuilder(_ctx->parser) );
-							parser_pop(& _ctx->parser);
-							return InvalidCode;
-						}
-						continue;
-					}
-
-					// We have a macro but its most likely behaving as a typename
-					// <Macro ...
-				}
-
 				member = parse_operator_function_or_variable( expects_function, attributes, specifiers );
 				// <Attributes> <Specifiers> operator <Op> ...
 				// or
@@ -21005,13 +21527,11 @@ CodeBody parse_class_struct_body( TokType which, Token name )
 
 			default:
 				Token untyped_tok = currtok;
-
 				while ( left && currtok.Type != Tok_BraceCurly_Close )
 				{
 					untyped_tok.Text.Len = ( (sptr)currtok.Text.Ptr + currtok.Text.Len ) - (sptr)untyped_tok.Text.Ptr;
 					eat( currtok.Type );
 				}
-
 				member = untyped_str( tok_to_str(untyped_tok) );
 				// Something unknown
 			break;
@@ -21023,7 +21543,6 @@ CodeBody parse_class_struct_body( TokType which, Token name )
 			parser_pop(& _ctx->parser);
 			return InvalidCode;
 		}
-
 		body_append(result, member );
 	}
 
@@ -21203,54 +21722,6 @@ Code parse_complicated_definition( TokType which )
 		parser_pop(& _ctx->parser);
 		return InvalidCode;
 	}
-}
-
-internal inline
-CodeDefine parse_define()
-{
-	push_scope();
-	eat( Tok_Preprocess_Define );
-	// #define
-
-	CodeDefine
-	define = (CodeDefine) make_code();
-	define->Type = CT_Preprocess_Define;
-
-	if ( ! check( Tok_Identifier ) )
-	{
-		log_failure( "Error, expected identifier after #define\n%s", parser_to_strbuilder(_ctx->parser) );
-		parser_pop(& _ctx->parser);
-		return InvalidCode;
-	}
-
-	_ctx->parser.Scope->Name = currtok.Text;
-	define->Name = cache_str( tok_to_str(currtok) );
-	eat( Tok_Identifier );
-	// #define <Name>
-
-	if ( ! check( Tok_Preprocess_Content ))
-	{
-		log_failure( "Error, expected content after #define %s\n%s", define->Name, parser_to_strbuilder(_ctx->parser) );
-		parser_pop(& _ctx->parser);
-		return InvalidCode;
-	}
-
-	if ( currtok.Text.Len == 0 )
-	{
-		define->Content = cache_str( tok_to_str(currtok) );
-		eat( Tok_Preprocess_Content );
-		// #define <Name> <Content>
-
-		parser_pop(& _ctx->parser);
-		return define;
-	}
-
-	define->Content = cache_str( strbuilder_to_str( parser_strip_formatting( tok_to_str(currtok), parser_strip_formatting_dont_preserve_newlines )) );
-	eat( Tok_Preprocess_Content );
-	// #define <Name> <Content>
-
-	parser_pop(& _ctx->parser);
-	return define;
 }
 
 internal inline
@@ -21588,7 +22059,7 @@ CodeBody parse_global_nspace( CodeType which )
 			break;
 
 			case Tok_Preprocess_Define:
-				member = cast(Code, parse_define());
+				member = cast(Code, parser_parse_define());
 				// #define ...
 			break;
 
@@ -21617,12 +22088,14 @@ CodeBody parse_global_nspace( CodeType which )
 				// #endif
 			break;
 
-			case Tok_Preprocess_Macro: {
-				// <Macro>
-				macro_found = true;
-				goto Preprocess_Macro_Bare_In_Body;
+			case Tok_Preprocess_Macro_Stmt: {
+				member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Macro_Stmt ));
+				break;
 			}
-			break;
+			case Tok_Preprocess_Macro_Expr: {
+				log_failure("Unbounded macro expression residing in class/struct body\n%S", parser_to_strbuilder(_ctx->parser));
+				return InvalidCode;
+			}
 
 			case Tok_Preprocess_Pragma: {
 				member = cast(Code, parse_pragma());
@@ -21631,7 +22104,7 @@ CodeBody parse_global_nspace( CodeType which )
 			break;
 
 			case Tok_Preprocess_Unsupported: {
-				member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Unsupported, parser_consume_braces ));
+				member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Unsupported ));
 				// #<UNSUPPORTED> ...
 			}
 			break;
@@ -21668,16 +22141,7 @@ CodeBody parse_global_nspace( CodeType which )
 				// <Attributes>
 			}
 			//! Fallthrough intentional
-			case Tok_Spec_Consteval:
-			case Tok_Spec_Constexpr:
-			case Tok_Spec_Constinit:
-			case Tok_Spec_Extern:
-			case Tok_Spec_ForceInline:
-			case Tok_Spec_Global:
-			case Tok_Spec_Inline:
-			case Tok_Spec_Internal_Linkage:
-			case Tok_Spec_NeverInline:
-			case Tok_Spec_Static:
+			GEN_PARSER_CLASS_GLOBAL_NSPACE_ALLOWED_MEMBER_TOK_SPECIFIER_CASES:
 			{
 				Specifier specs_found[16] = { Spec_NumSpecifiers };
 				s32        NumSpecifiers = 0;
@@ -21690,17 +22154,7 @@ CodeBody parse_global_nspace( CodeType which )
 
 					switch ( spec )
 					{
-						case Spec_Constexpr:
-						case Spec_Constinit:
-						case Spec_ForceInline:
-						case Spec_Global:
-						case Spec_External_Linkage:
-						case Spec_Internal_Linkage:
-						case Spec_Inline:
-						case Spec_Mutable:
-						case Spec_NeverInline:
-						case Spec_Static:
-						case Spec_Volatile:
+						GEN_PARSER_CLASS_GLOBAL_NSPACE_ALLOWED_MEMBER_SPECIFIER_CASES:
 						break;
 
 						case Spec_Consteval:
@@ -21735,6 +22189,7 @@ CodeBody parse_global_nspace( CodeType which )
 			}
 			//! Fallthrough intentional
 			case Tok_Identifier:
+			case Tok_Preprocess_Macro_Typename:
 			case Tok_Spec_Const:
 			case Tok_Type_Long:
 			case Tok_Type_Short:
@@ -21786,34 +22241,11 @@ CodeBody parse_global_nspace( CodeType which )
 					}
 				}
 
-				if (macro_found)
-				{
-				Preprocess_Macro_Bare_In_Body:
-					b32 lone_macro = nexttok.Type == Tok_Statement_End || nexttok_noskip.Type == Tok_NewLine;
-					if (lone_macro)
-					{
-						member = parse_simple_preprocess( Tok_Preprocess_Macro, parser_consume_braces );
-						// <Macro>;
-
-						if ( member == Code_Invalid )
-						{
-							log_failure( "Failed to parse member\n%s", parser_to_strbuilder(_ctx->parser) );
-							parser_pop(& _ctx->parser);
-							return InvalidCode;
-						}
-						goto Member_Resolved_To_Lone_Macro;
-					}
-
-					// We have a macro but its most likely behaving as a typename
-					// <Macro ...
-				}
-
 				member = parse_operator_function_or_variable( expects_function, attributes, specifiers );
 				// <Attributes> <Specifiers> ...
 			}
 		}
 
-	Member_Resolved_To_Lone_Macro:
 		if ( member == Code_Invalid )
 		{
 			log_failure( "Failed to parse member\nToken: %SB\nContext:\n%SB", tok_to_strbuilder(currtok_noskip), parser_to_strbuilder(_ctx->parser) );
@@ -22433,24 +22865,10 @@ Code parse_operator_function_or_variable( bool expects_function, CodeAttributes 
 
 	Code result = InvalidCode;
 
-#ifndef GEN_PARSER_DISABLE_MACRO_FUNCTION_SIGNATURES
-	b32 lone_macro = false;
-
-	if ( currtok.Type == Tok_Preprocess_Macro && nexttok.Type == Tok_Statement_End )
-	{
-		// Were dealing with a lone macro after attributes/specifiers, there was a end statement ';' after.
-		result = parse_simple_preprocess( Tok_Preprocess_Macro, parser_consume_braces );
-		parser_pop(& _ctx->parser);
-		return result;
-		// <Attributes> <Specifiers> <Macro>
-	}
-#endif
-
 	CodeTypename type = parser_parse_type( parser_not_from_template, nullptr );
 	// <Attributes> <Specifiers> <ReturnType/ValueType>
 
-	if ( type == InvalidCode )
-	{
+	if ( type == InvalidCode ) {
 		parser_pop(& _ctx->parser);
 		return InvalidCode;
 	}
@@ -22496,7 +22914,7 @@ Code parse_operator_function_or_variable( bool expects_function, CodeAttributes 
 		// Example : <Capture_Start> <Value> <Comma>
 		//                 idx         +1      +2
 		bool detected_comma = _ctx->parser.Tokens.Arr[ _ctx->parser.Tokens.Idx + 2 ].Type == Tok_Comma;
-		if ( detected_capture && ! detected_comma )
+		if ( detected_capture && ! detected_comma ) 
 		{
 			// Dealing with a function
 			result = cast(Code, parse_function_after_name( ModuleFlag_None, attributes, specifiers, type, name ));
@@ -22504,13 +22922,11 @@ Code parse_operator_function_or_variable( bool expects_function, CodeAttributes 
 		}
 		else
 		{
-			if ( expects_function )
-			{
+			if ( expects_function ) {
 				log_failure( "Expected function declaration (consteval was used)\n%s", parser_to_strbuilder(_ctx->parser) );
 				parser_pop(& _ctx->parser);
 				return InvalidCode;
 			}
-
 			// Dealing with a variable
 			result = cast(Code, parse_variable_after_name( ModuleFlag_None, attributes, specifiers, type, tok_to_str(name) ));
 			// <Attributes> <Specifiers> <ValueType> <Name> ...
@@ -22532,8 +22948,7 @@ CodePragma parse_pragma()
 	eat( Tok_Preprocess_Pragma );
 	// #pragma
 
-	if ( ! check( Tok_Preprocess_Content ))
-	{
+	if ( ! check( Tok_Preprocess_Content )) {
 		log_failure( "Error, expected content after #pragma\n%s", parser_to_strbuilder(_ctx->parser) );
 		parser_pop(& _ctx->parser);
 		return InvalidCode;
@@ -22554,15 +22969,14 @@ CodeParams parse_params( bool use_template_capture )
 {
 	push_scope();
 
-	if ( ! use_template_capture )
+	if ( ! use_template_capture ) {
 		eat( Tok_Capture_Start );
-	// (
-
-	else
-	{
+		// (
+	}
+	else {
 		if ( check( Tok_Operator ) && currtok.Text.Ptr[ 0 ] == '<' )
 			eat( Tok_Operator );
-		// <
+			// <
 	}
 
 	if ( ! use_template_capture && check( Tok_Capture_End ) )
@@ -22572,7 +22986,7 @@ CodeParams parse_params( bool use_template_capture )
 		parser_pop(& _ctx->parser);
 		return NullCode;
 	}
-	else if ( check( Tok_Operator ) && currtok.Text.Ptr[ 0 ] == '>' )
+	else if ( check( Tok_Operator ) && currtok.Text.Ptr[ 0 ] == '>' ) 
 	{
 		eat( Tok_Operator );
 		// >
@@ -22600,13 +23014,14 @@ CodeParams parse_params( bool use_template_capture )
 	#define CheckEndParams() \
 		(use_template_capture ? (currtok.Text.Ptr[ 0 ] != '>') : (currtok.Type != Tok_Capture_End))
 
+	// TODO(Ed): Use expression macros or this? macro as attribute?
 	// Ex: Unreal has this type of macro:                 vvvvvvvvv
 	// COREUOBJECT_API void CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function );
 	// and:                 vvvv
 	// AddComponentByClass(UPARAM(meta = (AllowAbstract = "false")) TSubclassOf<UActorComponent> Class, bool bManualAttachment, ...
-	if ( check(Tok_Preprocess_Macro))
+	if ( check(Tok_Preprocess_Macro_Expr))
 	{
-		macro = parse_simple_preprocess(Tok_Preprocess_Macro, parser_consume_braces);
+		macro = parse_simple_preprocess(Tok_Preprocess_Macro_Expr);
 		// ( <Macro>
 	}
 	if ( currtok.Type != Tok_Comma )
@@ -22626,27 +23041,28 @@ CodeParams parse_params( bool use_template_capture )
 			// ( <Macro> <ValueType> <Name>
 		}
 
+		// TODO(Ed): Use expression macro for this?
 		// Unreal has yet another type of macro:
 		// template<class T UE_REQUIRES(TPointerIsConvertibleFromTo<T, UInterface>::Value)>
 		// class T ... and then ^this^ UE_REQUIRES shows up
 		// So we need to consume that.
-		if ( check( Tok_Preprocess_Macro ))
+		if ( check( Tok_Preprocess_Macro_Expr ))
 		{
-			post_name_macro = parse_simple_preprocess( Tok_Preprocess_Macro, parser_consume_braces );
+			post_name_macro = parse_simple_preprocess( Tok_Preprocess_Macro_Expr );
+			// ( <Macro> <ValueType> <Name> <PostNameMacro>
 		}
 
 		// In template captures you can have a typename have direct assignment without a name
 		// typename = typename ...
 		// Which would result in a static value type from a struct expansion (traditionally)
-		if ( ( name.Text.Ptr || use_template_capture ) && bitfield_is_equal( u32, currtok.Flags, TF_Assign ) )
+		if ( ( name.Text.Ptr || use_template_capture ) && bitfield_is_set( u32, currtok.Flags, TF_Assign ) )
 		{
 			eat( Tok_Operator );
-			// ( <Macro> <ValueType> <Name> =
+			// ( <Macro> <ValueType> <Name>  =
 
 			Token value_tok = currtok;
 
-			if ( currtok.Type == Tok_Comma )
-			{
+			if ( currtok.Type == Tok_Comma ) {
 				log_failure( "Expected value after assignment operator\n%s.", parser_to_strbuilder(_ctx->parser) );
 				parser_pop(& _ctx->parser);
 				return InvalidCode;
@@ -22714,10 +23130,10 @@ CodeParams parse_params( bool use_template_capture )
 		// COREUOBJECT_API void CallFunction( FFrame& Stack, RESULT_DECL, UFunction* Function );
 		// and:                 vvvv
 		// AddComponentByClass(UPARAM(meta = (AllowAbstract = "false")) TSubclassOf<UActorComponent> Class, bool bManualAttachment, ...
-		if ( check(Tok_Preprocess_Macro))
+		if ( check(Tok_Preprocess_Macro_Expr))
 		{
-			macro = parse_simple_preprocess(Tok_Preprocess_Macro, parser_dont_consume_braces);
-			// ( <Macro>
+			macro = parse_simple_preprocess(Tok_Preprocess_Macro_Expr);
+			// ( <Macro> <ValueType> <Name> = <Expression>, <Macro>
 		}
 		if ( currtok.Type != Tok_Comma )
 		{
@@ -22742,23 +23158,22 @@ CodeParams parse_params( bool use_template_capture )
 			// template<class T UE_REQUIRES(TPointerIsConvertibleFromTo<T, UInterface>::Value)>
 			// class T ... and then ^this^ UE_REQUIRES shows up
 			// So we need to consume that.
-			if ( check( Tok_Preprocess_Macro ))
-			{
-				post_name_macro = parse_simple_preprocess( Tok_Preprocess_Macro, parser_dont_consume_braces );
+			if ( check( Tok_Preprocess_Macro_Expr )) {
+				post_name_macro = parse_simple_preprocess( Tok_Preprocess_Macro_Expr );
+				// ( <Macro> <ValueType> <Name> = <Expression>, <Macro> <ValueType> <PostNameMacro>
 			}
 
 			// In template captures you can have a typename have direct assignment without a name
 			// typename = typename ...
 			// Which would result in a static value type from a struct expansion (traditionally)
-			if ( ( name.Text.Ptr || use_template_capture ) && bitfield_is_equal( u32, currtok.Flags, TF_Assign ) )
+			if ( ( name.Text.Ptr || use_template_capture ) && bitfield_is_set( u32, currtok.Flags, TF_Assign ) )
 			{
 				eat( Tok_Operator );
-				// ( <Macro> <ValueType> <Name> = <Expression>, <Macro> <ValueType> <Name> =
+				// ( <Macro> <ValueType> <Name> = <Expression>, <Macro> <ValueType> <Name> <PostNameMacro> =
 
 				Token value_tok = currtok;
 
-				if ( currtok.Type == Tok_Comma )
-				{
+				if ( currtok.Type == Tok_Comma ) {
 					log_failure( "Expected value after assignment operator\n%s", parser_to_strbuilder(_ctx->parser) );
 					parser_pop(& _ctx->parser);
 					return InvalidCode;
@@ -22790,9 +23205,9 @@ CodeParams parse_params( bool use_template_capture )
 				}
 
 				value = untyped_str( strbuilder_to_str(parser_strip_formatting( tok_to_str(value_tok), parser_strip_formatting_dont_preserve_newlines )) );
-				// ( <Macro> <ValueType> <Name> = <Expression>, <Macro> <ValueType> <Name> = <Expression>
+				// ( <Macro> <ValueType> <Name> = <Expression>, <Macro> <ValueType> <Name> <PostNameMacro> = <Expression>
 			}
-			// ( <Macro> <ValueType> <Name> = <Expression>, <Macro> <ValueType> <Name> = <Expression>, ..
+			// ( <Macro> <ValueType> <Name> = <Expression>, <Macro> <ValueType> <Name> <PostNameMacro> = <Expression>, ..
 		}
 
 		CodeParams param = ( CodeParams )make_code();
@@ -22813,21 +23228,20 @@ CodeParams parse_params( bool use_template_capture )
 	}
 
 	if ( ! use_template_capture )
+	{
 		eat( Tok_Capture_End );
-	// ( <Macro> <ValueType> <Name> = <Expression>, <Macro> <ValueType> <Name> = <Expression>, .. )
-
+		// ( <Macro> <ValueType> <Name> <PostNameMacro> = <Expression>, <Macro> <ValueType> <Name> <PostNameMacro> = <Expression>, .. )
+	}
 	else
 	{
-		if ( ! check( Tok_Operator ) || currtok.Text.Ptr[ 0 ] != '>' )
-		{
+		if ( ! check( Tok_Operator ) || currtok.Text.Ptr[ 0 ] != '>' ) {
 			log_failure( "Expected '<' after 'template' keyword\n%s", parser_to_strbuilder(_ctx->parser) );
 			parser_pop(& _ctx->parser);
 			return InvalidCode;
 		}
 		eat( Tok_Operator );
-		// < <Macro> <ValueType> <Name> = <Expression>, <Macro> <ValueType> <Name> = <Expression>, .. >
+		// < <Macro> <ValueType> <Name> <PostNameMacro> = <Expression>, <Macro> <ValueType> <Name> <PostNameMacro> = <Expression>, .. >
 	}
-
 	parser_pop(& _ctx->parser);
 	return result;
 #undef context
@@ -22868,18 +23282,46 @@ CodePreprocessCond parse_preprocess_cond()
 }
 
 internal
-Code parse_simple_preprocess( TokType which, bool dont_consume_braces )
+Code parse_simple_preprocess( TokType which )
 {
 	// TODO(Ed): We can handle a macro a bit better than this. It's AST can be made more robust..
 	// Make an AST_Macro, it should have an Name be the macro itself, with the function body being an optional function body node.
 	// If we want it to terminate or have an inline comment we can possbily use its parent typedef for that info...
 	push_scope();
 
-	Token tok = currtok;
+	Token full_macro = currtok;
 	eat( which );
 	// <Macro>
 
-	if ( ! dont_consume_braces && peektok.Type == Tok_BraceCurly_Open )
+	Macro* macro = lookup_macro( full_macro.Text );
+	if ( which != Tok_Preprocess_Unsupported && macro == nullptr ) {
+		log_failure("Expected the macro %S to be registered\n%S", full_macro,  parser_to_strbuilder(_ctx->parser));
+		return NullCode;
+	}
+
+	// TODO(Ed) : Parse this properly later (expression and statement support)
+	if ( macro && macro_is_functional(* macro) )
+	{
+		eat( Tok_Capture_Start );
+
+		s32 level = 0;
+		while ( left && ( currtok.Type != Tok_Capture_End || level > 0 ) )
+		{
+			if ( currtok.Type == Tok_Capture_Start )
+				level++;
+
+			else if ( currtok.Type == Tok_Capture_End && level > 0 )
+				level--;
+
+			eat( currtok.Type );
+		}
+		eat( Tok_Capture_End );
+		// <Macro> ( <params> )
+
+		full_macro.Text.Len = ( (sptr)prevtok.Text.Ptr + prevtok.Text.Len ) - (sptr)full_macro.Text.Ptr;
+	}
+
+	if ( macro && macro_expects_body(* macro) && peektok.Type == Tok_BraceCurly_Open )
 	{
 		// Eat the block scope right after the macro. Were assuming the macro defines a function definition's signature
 		eat( Tok_BraceCurly_Open );
@@ -22900,8 +23342,9 @@ Code parse_simple_preprocess( TokType which, bool dont_consume_braces )
 		eat( Tok_BraceCurly_Close );
 		// <Macro> { <Body> }
 
+		// TODO(Ed): Review this?
 		Str prev_proc = _ctx->parser.Scope->Prev->ProcName;
-		if ( c_str_compare_len( prev_proc.Ptr, "parser_parse_typedef", prev_proc.Len ) != 0 )
+		if ( macro->Type == MT_Typename && c_str_compare_len( prev_proc.Ptr, "parser_parse_typedef", prev_proc.Len ) != 0 )
 		{
 			if ( check( Tok_Statement_End ))
 			{
@@ -22915,7 +23358,7 @@ Code parse_simple_preprocess( TokType which, bool dont_consume_braces )
 			}
 		}
 
-		tok.Text.Len = ( (sptr)prevtok.Text.Ptr + prevtok.Text.Len ) - (sptr)tok.Text.Ptr;
+		full_macro.Text.Len = ( (sptr)prevtok.Text.Ptr + prevtok.Text.Len ) - (sptr)full_macro.Text.Ptr;
 	}
 	else
 	{
@@ -22928,16 +23371,15 @@ Code parse_simple_preprocess( TokType which, bool dont_consume_braces )
 			// Do nothing
 			goto Leave_Scope_Early;
 		}
-		else if (str_contains(_ctx->parser.Scope->Prev->ProcName, txt("parser_parse_typedef")))
+		else if (macro && macro->Type == MT_Typename && str_contains(_ctx->parser.Scope->Prev->ProcName, txt("parser_parse_typedef")))
 		{
-			// TODO(Ed): Reveiw the context for this?
 			if ( peektok.Type == Tok_Statement_End )
 			{
 				Token stmt_end = currtok;
 				eat( Tok_Statement_End );
 				// <Macro>;
 
-				tok.Text.Len += prevtok.Text.Len;
+				full_macro.Text.Len += prevtok.Text.Len;
 
 				// TODO(Ed): Reveiw the context for this? (ESPECIALLY THIS)
 				if ( currtok_noskip.Type == Tok_Comment && currtok_noskip.Line == stmt_end.Line )
@@ -22945,7 +23387,7 @@ Code parse_simple_preprocess( TokType which, bool dont_consume_braces )
 					eat( Tok_Comment );
 					// <Macro>; <InlineCmt>
 
-					tok.Text.Len += prevtok.Text.Len;
+					full_macro.Text.Len += prevtok.Text.Len;
 				}
 			}
 		}
@@ -22959,19 +23401,14 @@ Code parse_simple_preprocess( TokType which, bool dont_consume_braces )
 				Token stmt_end = currtok;
 				eat( Tok_Statement_End );
 				// <Macro>;
-				tok.Text.Len += prevtok.Text.Len;
+				full_macro.Text.Len += prevtok.Text.Len;
 			}
-
 		}
-		// tok.Length = ( (sptr)prevtok.Text + prevtok.Length ) - (sptr)tok.Text;
 	}
 
 Leave_Scope_Early:
-
-	char const* content = c_str_fmt_buf( "%.*s ", tok.Text.Len, tok.Text.Ptr );
-
-	Code result = untyped_str( to_str_from_c_str(content) );
-	_ctx->parser.Scope->Name = tok.Text;
+	Code result = untyped_str( full_macro.Text );
+	_ctx->parser.Scope->Name = full_macro.Text;
 
 	parser_pop(& _ctx->parser);
 	return result;
@@ -23066,19 +23503,18 @@ CodeVar parse_variable_after_name(
 	, CodeAttributes    attributes
 	, CodeSpecifiers    specifiers
 	, CodeTypename      type
-	, Str              name
+	, Str               name
 )
 {
 	push_scope();
 
 	Code array_expr    = parse_array_decl();
-	Code expr          = { nullptr };
-	Code bitfield_expr = { nullptr };
+	Code expr          = NullCode;
+	Code bitfield_expr = NullCode;
 
 	b32 using_constructor_initializer = false;
 
-	if ( bitfield_is_equal( u32, currtok.Flags, TF_Assign ) )
-	{
+	if ( bitfield_is_set( u32, currtok.Flags, TF_Assign ) ) {
 		// <Attributes> <Specifiers> <ValueType> <Name> = <Expression>
 		expr = parse_assignment_expression();
 	}
@@ -23142,15 +23578,13 @@ CodeVar parse_variable_after_name(
 
 		Token expr_tok = currtok;
 
-		if ( currtok.Type == Tok_Statement_End )
-		{
+		if ( currtok.Type == Tok_Statement_End ) {
 			log_failure( "Expected expression after bitfield \n%SB", parser_to_strbuilder(_ctx->parser) );
 			parser_pop(& _ctx->parser);
 			return InvalidCode;
 		}
 
-		while ( left && currtok.Type != Tok_Statement_End )
-		{
+		while ( left && currtok.Type != Tok_Statement_End ) {
 			eat( currtok.Type );
 		}
 
@@ -23164,8 +23598,7 @@ CodeVar parse_variable_after_name(
 	CodeComment inline_cmt = NullCode;
 	if ( type )
 	{
-		if ( currtok.Type == Tok_Comma )
-		{
+		if ( currtok.Type == Tok_Comma ) {
 			// Were dealing with a statement with more than one declaration
 			// This is only handled this way if its the first declaration
 			// Otherwise its looped through in parse_variable_declaration_list
@@ -23184,8 +23617,7 @@ CodeVar parse_variable_after_name(
 		// <Attributes> <Specifiers> <ValueType> <Name> { <Expression> }, ...;
 
 		// Check for inline comment : <type> <identifier> = <expression>; // <inline comment>
-		if ( left && ( currtok_noskip.Type == Tok_Comment ) && currtok_noskip.Line == stmt_end.Line )
-		{
+		if ( left && ( currtok_noskip.Type == Tok_Comment ) && currtok_noskip.Line == stmt_end.Line ) {
 			inline_cmt = parse_comment();
 			// <Attributes> <Specifiers> <ValueType> <Name> : <Expression>, ...; <InlineCmt>
 			// <Attributes> <Specifiers> <ValueType> <Name> = <Expression>, ...; <InlineCmt>
@@ -23198,35 +23630,20 @@ CodeVar parse_variable_after_name(
 	result->Type        = CT_Variable;
 	result->Name        = cache_str( name );
 	result->ModuleFlags = mflags;
+	result->ValueType    = type;
+	result->BitfieldSize = bitfield_expr;
+	result->Attributes   = attributes;
+	result->Specs        = specifiers;
+	result->Value        = expr;
+	result->InlineCmt    = inline_cmt;
 
-	// Type can be null if we're dealing with a declaration from a variable declaration-list
-	if ( type )
-		result->ValueType = type;
-
-	if (array_expr )
+	if (array_expr)
 		type->ArrExpr = array_expr;
 
-	if ( bitfield_expr )
-		result->BitfieldSize = bitfield_expr;
-
-	if ( attributes )
-		result->Attributes = attributes;
-
-	if ( specifiers )
-		result->Specs = specifiers;
-
-	if ( expr )
-		result->Value = expr;
-
-	if ( inline_cmt )
-		result->InlineCmt = inline_cmt;
-
-	if ( next_var )
-	{
+	if ( next_var ) {
 		result->NextVar         = next_var;
 		result->NextVar->Parent = cast(Code, result);
 	}
-
 	result->VarParenthesizedInit = using_constructor_initializer;
 
 	parser_pop(& _ctx->parser);
@@ -23415,6 +23832,93 @@ CodeConstructor parser_parse_constructor( CodeSpecifiers specifiers )
 	return result;
 }
 
+internal inline
+CodeDefine parser_parse_define()
+{
+	push_scope();
+	if ( check(Tok_Preprocess_Hash)) {
+		// If parse_define is called by the user the hash reach here.
+		eat(Tok_Preprocess_Hash);
+	}
+
+	eat( Tok_Preprocess_Define );
+	// #define
+
+	CodeDefine
+	define = (CodeDefine) make_code();
+	define->Type = CT_Preprocess_Define;
+	if ( ! check( Tok_Identifier ) ) {
+		log_failure( "Error, expected identifier after #define\n%s", parser_to_strbuilder(_ctx->parser) );
+		parser_pop(& _ctx->parser);
+		return InvalidCode;
+	}
+	_ctx->parser.Scope->Name = currtok.Text;
+	define->Name = cache_str( tok_to_str(currtok) );
+	eat( Tok_Identifier );
+	// #define <Name>
+
+	Macro* macro = lookup_macro(define->Name);
+	if (macro_is_functional(* macro)) {
+		eat( Tok_Capture_Start );
+		// #define <Name> (
+
+		// We provide the define params even if empty to make sure '()' are serialized.
+		CodeDefineParams
+		params = (CodeDefineParams) make_code();
+		params->Type = CT_Parameters_Define;
+
+		if ( left && currtok.Type != Tok_Capture_End ) {
+			params->Name = currtok.Text;
+			params->NumEntries ++;
+
+			eat( Tok_Preprocess_Define_Param );
+			// #define <Name> ( <param>
+		}
+		
+		while( left && currtok.Type != Tok_Capture_End ) {
+			eat( Tok_Comma );
+			// #define <Name> ( <param>, 
+
+			CodeDefineParams next_param = (CodeDefineParams) make_code();
+			next_param->Type = CT_Parameters_Define;
+			next_param->Name = currtok.Text;
+			define_params_append(params, next_param);
+
+			// #define  <Name> (  <param>, <next_param> ...
+			eat( Tok_Preprocess_Define_Param );
+		}
+
+		eat( Tok_Capture_End );
+		// #define <Name> ( <params> )
+
+		define->Params = params;
+	}
+
+	if ( ! check( Tok_Preprocess_Content ))
+	{
+		log_failure( "Error, expected content after #define %s\n%s", define->Name, parser_to_strbuilder(_ctx->parser) );
+		parser_pop(& _ctx->parser);
+		return InvalidCode;
+	}
+
+	if ( currtok.Text.Len == 0 )
+	{
+		define->Body = untyped_str( txt("\n") );
+		eat( Tok_Preprocess_Content );
+		// #define <Name> ( <params> ) <Content>
+
+		parser_pop(& _ctx->parser);
+		return define;
+	}
+
+	define->Body = untyped_str( strbuilder_to_str( parser_strip_formatting( tok_to_str(currtok), parser_strip_formatting_dont_preserve_newlines )) );
+	eat( Tok_Preprocess_Content );
+	// #define <Name> ( <params> ) <Content>
+
+	parser_pop(& _ctx->parser);
+	return define;
+}
+
 internal
 CodeDestructor parser_parse_destructor( CodeSpecifiers specifiers )
 {
@@ -23472,7 +23976,7 @@ CodeDestructor parser_parse_destructor( CodeSpecifiers specifiers )
 
 			specifiers_append(specifiers, Spec_Pure );
 		}
-		else if ( left && c_str_compare_len( upcoming.Text.Ptr, "default", sizeof("default") - 1 ) == 0)
+		else if ( left && c_str_compare_len( upcoming.Text.Ptr, "default", sizeof("default") - 1 ) == 0) 
 		{
 			body = cast(CodeBody, parse_assignment_expression());
 			// <Virtual Specifier> ~<
@@ -23488,8 +23992,10 @@ CodeDestructor parser_parse_destructor( CodeSpecifiers specifiers )
 	}
 
 	if ( ! pure_virtual && check( Tok_BraceCurly_Open ) )
+	{
 		body = cast(CodeBody, parse_function_body());
-	// <Virtual Specifier> ~<Name>() { ... }
+		// <Virtual Specifier> ~<Name>() { ... }
+	}
 	else
 	{
 		Token stmt_end = currtok;
@@ -23503,8 +24009,7 @@ CodeDestructor parser_parse_destructor( CodeSpecifiers specifiers )
 
 	CodeDestructor result = ( CodeDestructor )make_code();
 
-	if ( tok_is_valid(prefix_identifier) )
-	{
+	if ( tok_is_valid(prefix_identifier) ) {
 		prefix_identifier.Text.Len += 1 + identifier.Text.Len;
 		result->Name = cache_str( tok_to_str(prefix_identifier) );
 	}
@@ -23512,8 +24017,7 @@ CodeDestructor parser_parse_destructor( CodeSpecifiers specifiers )
 	if ( specifiers )
 		result->Specs = specifiers;
 
-	if ( body && body->Type == CT_Function_Body )
-	{
+	if ( body && body->Type == CT_Function_Body ) {
 		result->Body = cast(Code, body);
 		result->Type = CT_Destructor;
 	}
@@ -23583,13 +24087,13 @@ CodeEnum parser_parse_enum( bool inplace_def )
 		}
 		// enum <class> <Attributes> <Name> : <UnderlyingType>
 	}
-	else if ( currtok.Type == Tok_Preprocess_Macro )
+	else if ( currtok.Type == Tok_Preprocess_Macro_Expr )
 	{
 		// We'll support the enum_underlying macro
-		if ( str_contains( tok_to_str(currtok), enum_underlying_sig) )
+		if ( str_contains( tok_to_str(currtok), enum_underlying_macro.Name) )
 		{
 			use_macro_underlying = true;
-			underlying_macro     = parse_simple_preprocess( Tok_Preprocess_Macro, parser_dont_consume_braces );
+			underlying_macro     = parse_simple_preprocess( Tok_Preprocess_Macro_Expr );
 		}
 	}
 
@@ -23630,7 +24134,7 @@ CodeEnum parser_parse_enum( bool inplace_def )
 				break;
 
 				case Tok_Preprocess_Define:
-					member = cast(Code, parse_define());
+					member = cast(Code, parser_parse_define());
 					// #define
 				break;
 
@@ -23652,10 +24156,11 @@ CodeEnum parser_parse_enum( bool inplace_def )
 					eat( Tok_Preprocess_EndIf );
 				break;
 
-				case Tok_Preprocess_Macro:
-					member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Macro, parser_consume_braces));
+				case Tok_Preprocess_Macro_Stmt: {
+					member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Macro_Stmt ));
 					// <Macro>
-				break;
+					break;
+				}
 
 				case Tok_Preprocess_Pragma:
 					member = cast(Code, parse_pragma());
@@ -23663,11 +24168,12 @@ CodeEnum parser_parse_enum( bool inplace_def )
 				break;
 
 				case Tok_Preprocess_Unsupported:
-					member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Unsupported, parser_consume_braces ));
+					member = cast(Code, parse_simple_preprocess( Tok_Preprocess_Unsupported ));
 					// #<UNSUPPORTED>
 				break;
 
 				default:
+				{
 					Token entry = currtok;
 
 					eat( Tok_Identifier);
@@ -23678,17 +24184,15 @@ CodeEnum parser_parse_enum( bool inplace_def )
 						eat( Tok_Operator );
 						// <Name> =
 
-						while ( currtok.Type != Tok_Comma && currtok.Type != Tok_BraceCurly_Close )
-						{
+						while ( currtok.Type != Tok_Comma && currtok.Type != Tok_BraceCurly_Close ) {
 							eat( currtok.Type );
 						}
 					}
 					// <Name> = <Expression>
 
 					// Unreal UMETA macro support
-					if ( currtok.Type == Tok_Preprocess_Macro )
-					{
-						eat( Tok_Preprocess_Macro );
+					if ( currtok.Type == Tok_Preprocess_Macro_Expr ) {
+						eat( Tok_Preprocess_Macro_Expr );
 						// <Name> = <Expression> <Macro>
 					}
 
@@ -23712,11 +24216,11 @@ CodeEnum parser_parse_enum( bool inplace_def )
 					entry.Text.Len = ( (sptr)prev.Text.Ptr + prev.Text.Len ) - (sptr)entry.Text.Ptr;
 
 					member = untyped_str( tok_to_str(entry) );
+				}
 				break;
 			}
 
-			if ( member == Code_Invalid )
-			{
+			if ( member == Code_Invalid ) {
 				log_failure( "Failed to parse member\n%s", parser_to_strbuilder(_ctx->parser) );
 				parser_pop(& _ctx->parser);
 				return InvalidCode;
@@ -23847,10 +24351,8 @@ CodeFriend parser_parse_friend()
 
 			switch ( spec )
 			{
-				case Spec_Const :
-				case Spec_Inline :
-				case Spec_ForceInline :
-					break;
+				GEN_PARSER_FRIEND_ALLOWED_SPECIFIERS_CASES:
+				break;
 
 				default :
 					log_failure( "Invalid specifier %S for friend definition\n%S", spec_to_str( spec ), strbuilder_to_str( parser_to_strbuilder(_ctx->parser)) );
@@ -23867,8 +24369,7 @@ CodeFriend parser_parse_friend()
 			eat( currtok.Type );
 		}
 
-		if ( NumSpecifiers )
-		{
+		if ( NumSpecifiers ) {
 			specifiers = def_specifiers( NumSpecifiers, specs_found );
 		}
 		// <friend> <specifiers>
@@ -23876,8 +24377,7 @@ CodeFriend parser_parse_friend()
 
 	// Type declaration or return type
 	CodeTypename type = parser_parse_type(parser_not_from_template, nullptr);
-	if ( cast(Code, type) == Code_Invalid )
-	{
+	if ( cast(Code, type) == Code_Invalid ) {
 		parser_pop(& _ctx->parser);
 		return InvalidCode;
 	}
@@ -23907,8 +24407,7 @@ CodeFriend parser_parse_friend()
 	}
 
 	// Operator declaration or definition
-	if ( currtok.Type == Tok_Decl_Operator )
-	{
+	if ( currtok.Type == Tok_Decl_Operator ) {
 		op = parse_operator_after_ret_type( ModuleFlag_None, NullCode, specifiers, type );
 	}
 
@@ -23955,8 +24454,7 @@ CodeFn parser_parse_function()
 	CodeSpecifiers specifiers = { nullptr };
 	ModuleFlag     mflags     = ModuleFlag_None;
 
-	if ( check(Tok_Module_Export) )
-	{
+	if ( check(Tok_Module_Export) ) {
 		mflags = ModuleFlag_Export;
 		eat( Tok_Module_Export );
 	}
@@ -23971,14 +24469,7 @@ CodeFn parser_parse_function()
 
 		switch ( spec )
 		{
-			case Spec_Const:
-			case Spec_Consteval:
-			case Spec_Constexpr:
-			case Spec_External_Linkage:
-			case Spec_ForceInline:
-			case Spec_Inline:
-			case Spec_NeverInline:
-			case Spec_Static:
+			GEN_PARSER_FUNCTION_ALLOWED_SPECIFIERS_CASES:
 			break;
 
 			default:
@@ -23995,15 +24486,13 @@ CodeFn parser_parse_function()
 		eat( currtok.Type );
 	}
 
-	if ( NumSpecifiers )
-	{
+	if ( NumSpecifiers ) {
 		specifiers = def_specifiers( NumSpecifiers, specs_found );
 	}
 	// <export> <Attributes> <Specifiers>
 
 	CodeTypename ret_type = parser_parse_type(parser_not_from_template, nullptr);
-	if ( cast(Code, ret_type) == Code_Invalid )
-	{
+	if ( cast(Code, ret_type) == Code_Invalid ) {
 		parser_pop(& _ctx->parser);
 		return InvalidCode;
 	}
@@ -24011,8 +24500,7 @@ CodeFn parser_parse_function()
 
 	Token name = parse_identifier(nullptr);
 	_ctx->parser.Scope->Name = name.Text;
-	if ( ! tok_is_valid(name) )
-	{
+	if ( ! tok_is_valid(name) ) {
 		parser_pop(& _ctx->parser);
 		return InvalidCode;
 	}
@@ -24038,8 +24526,7 @@ CodeNS parser_parse_namespace()
 	// namespace <Name>
 
 	CodeBody body = parse_global_nspace( CT_Namespace_Body );
-	if ( cast(Code, body) == Code_Invalid )
-	{
+	if ( cast(Code, body) == Code_Invalid ) {
 		parser_pop(& _ctx->parser);
 		return InvalidCode;
 	}
@@ -24068,8 +24555,7 @@ CodeOperator parser_parse_operator()
 	Specifier specs_found[16] = { Spec_NumSpecifiers };
 	s32        NumSpecifiers = 0;
 
-	if ( check(Tok_Module_Export) )
-	{
+	if ( check(Tok_Module_Export) ) {
 		mflags = ModuleFlag_Export;
 		eat( Tok_Module_Export );
 	}
@@ -24084,12 +24570,7 @@ CodeOperator parser_parse_operator()
 
 		switch ( spec )
 		{
-			case Spec_Const:
-			case Spec_Constexpr:
-			case Spec_ForceInline:
-			case Spec_Inline:
-			case Spec_NeverInline:
-			case Spec_Static:
+			GEN_PARSER_OPERATOR_ALLOWED_SPECIFIERS_CASES:
 			break;
 
 			default:
@@ -24106,8 +24587,7 @@ CodeOperator parser_parse_operator()
 		eat( currtok.Type );
 	}
 
-	if ( NumSpecifiers )
-	{
+	if ( NumSpecifiers ) {
 		specifiers = def_specifiers( NumSpecifiers, specs_found );
 	}
 	// <export> <Attributes> <Specifiers>
@@ -24218,13 +24698,11 @@ CodeOpCast parser_parse_operator_cast( CodeSpecifiers specifiers )
 	if ( tok_is_valid(name) )
 		result->Name = cache_str( tok_to_str(name) );
 
-	if (body)
-	{
+	if (body) {
 		result->Type = CT_Operator_Cast;
 		result->Body = cast(CodeBody, body);
 	}
-	else
-	{
+	else {
 		result->Type = CT_Operator_Cast_Fwd;
 	}
 
@@ -24255,8 +24733,7 @@ CodeTemplate parser_parse_template()
 
 	ModuleFlag mflags = ModuleFlag_None;
 
-	if ( check( Tok_Module_Export ) )
-	{
+	if ( check( Tok_Module_Export ) ) {
 		mflags = ModuleFlag_Export;
 		eat( Tok_Module_Export );
 	}
@@ -24266,8 +24743,7 @@ CodeTemplate parser_parse_template()
 	// <export> template
 
 	CodeParams params = parse_params( UseTemplateCapture );
-	if ( cast(Code, params) == Code_Invalid )
-	{
+	if ( cast(Code, params) == Code_Invalid ) {
 		parser_pop(& _ctx->parser);
 		return InvalidCode;
 	}
@@ -24327,19 +24803,8 @@ CodeTemplate parser_parse_template()
 
 				switch ( spec )
 				{
-					case Spec_Const :
-					case Spec_Constexpr :
-					case Spec_Constinit :
-					case Spec_External_Linkage :
-					case Spec_Global :
-					case Spec_Inline :
-					case Spec_ForceInline :
-					case Spec_Local_Persist :
-					case Spec_Mutable :
-					case Spec_Static :
-					case Spec_Thread_Local :
-					case Spec_Volatile :
-						break;
+					GEN_PARSER_TEMPLATE_ALLOWED_SPECIFIERS_CASES:
+					break;
 
 					case Spec_Consteval :
 						expects_function = true;
@@ -24360,8 +24825,7 @@ CodeTemplate parser_parse_template()
 				eat( currtok.Type );
 			}
 
-			if ( NumSpecifiers )
-			{
+			if ( NumSpecifiers ) {
 				specifiers = def_specifiers( NumSpecifiers, specs_found );
 			}
 			// <export> template< <Parameters> > <Attributes> <Specifiers>
@@ -24374,7 +24838,7 @@ CodeTemplate parser_parse_template()
 		if (is_in_global_nspace)
 		{
 			Code constructor_destructor = parse_global_nspace_constructor_destructor( specifiers );
-			if ( constructor_destructor )
+			if ( constructor_destructor ) 
 			{
 				definition = constructor_destructor;
 				// <Attributes> <Specifiers> <Name> :: <Name> <Type> () { ... }
@@ -24408,8 +24872,7 @@ CodeTemplate parser_parse_template()
 				break;
 			}
 
-			if ( found_operator_cast_outside_class_implmentation )
-			{
+			if ( found_operator_cast_outside_class_implmentation ) {
 				definition = cast(Code, parser_parse_operator_cast( specifiers ));
 				// <Attributes> <Specifiers> <Name> :: operator <Type> () { ... }
 				break;
@@ -24468,8 +24931,7 @@ CodeTypename parser_parse_type( bool from_template, bool* typedef_is_function )
 	{
 		Specifier spec = str_to_specifier( tok_to_str(currtok) );
 
-		if ( spec != Spec_Const )
-		{
+		if ( spec != Spec_Const ) {
 			log_failure( "Error, invalid specifier used in type definition: %S\n%SB", tok_to_str(currtok), parser_to_strbuilder(_ctx->parser) );
 			parser_pop(& _ctx->parser);
 			return InvalidCode;
@@ -24481,8 +24943,7 @@ CodeTypename parser_parse_type( bool from_template, bool* typedef_is_function )
 	}
 	// <Attributes> <Specifiers>
 
-	if ( left == 0 )
-	{
+	if ( left == 0 ) {
 		log_failure( "Error, unexpected end of type definition\n%SB", parser_to_strbuilder(_ctx->parser) );
 		parser_pop(& _ctx->parser);
 		return InvalidCode;
@@ -24581,16 +25042,17 @@ else if ( currtok.Type == Tok_DeclType )
 			}
 		}
 	}
-	else if ( currtok.Type == Tok_Preprocess_Macro ) {
+	// TODO(Ed): This needs updating
+	else if ( currtok.Type == Tok_Preprocess_Macro_Typename ) {
 		// Typename is a macro
 		name = currtok;
-		eat(Tok_Preprocess_Macro);
+		eat(Tok_Preprocess_Macro_Typename);
 	}
 
 	// The usual Identifier type signature that may have namespace qualifiers
 	else
 	{
-		name                = parse_identifier(nullptr);
+		name = parse_identifier(nullptr);
 		_ctx->parser.Scope->Name = name.Text;
 		if ( ! tok_is_valid(name) )
 		{
@@ -24924,25 +25386,37 @@ CodeTypedef parser_parse_typedef()
 
 	const bool from_typedef = true;
 
+	// TODO(Ed): UPDATE MACRO USAGE HERE
 #if GEN_PARSER_DISABLE_MACRO_TYPEDEF
 	if ( false )
 #else
-	if ( check( Tok_Preprocess_Macro ))
+	b32 valid_macro = false;
+	valid_macro |= left && currtok.Type == Tok_Preprocess_Macro_Typename;
+	valid_macro |= left && currtok.Type == Tok_Preprocess_Macro_Stmt;
+	// if (currtok.Type == Tok_Preprocess_Macro_Stmt)
+	// {
+		// PreprocessMacro* macro = lookup_macro(currtok.Text);
+		// valid_macro |= macro && macro_expects_body(* macro));
+	// }
+
+	Code macro;
+	if ( valid_macro )
 #endif
 	{
-		type = cast(Code, t_empty);
-		name = currtok;
+		type          = cast(Code, t_empty);
+		name          = currtok;
+		Code macro    = parse_simple_preprocess(currtok.Type);
+		name.Text.Len = macro->Content.Len;
 		_ctx->parser.Scope->Name = name.Text;
-		eat( Tok_Preprocess_Macro );
 		// <ModuleFalgs> typedef <Preprocessed_Macro>
 
 		if ( currtok.Type == Tok_Identifier )
 		{
-			type = untyped_str(name.Text);
+			type = macro;
 			name = currtok;
 			eat(Tok_Identifier);
+			// <ModuleFalgs> typedef <Preprocessed_Macro> <Identifier>
 		}
-		// <ModuleFalgs> typedef <Preprocessed_Macro> <Identifier>
 	}
 	else
 	{
@@ -25136,7 +25610,7 @@ CodeUnion parser_parse_union( bool inplace_def )
 
 	Str name = { nullptr, 0 };
 	if ( check( Tok_Identifier ) )
-{
+	{
 		name = tok_to_str(currtok);
 		_ctx->parser.Scope->Name = currtok.Text;
 		eat( Tok_Identifier );
@@ -25189,7 +25663,7 @@ CodeUnion parser_parse_union( bool inplace_def )
 				break;
 
 				case Tok_Preprocess_Define:
-					member = cast(Code, parse_define());
+					member = cast(Code, parser_parse_define());
 				break;
 
 				case Tok_Preprocess_If:
@@ -25209,14 +25683,13 @@ CodeUnion parser_parse_union( bool inplace_def )
 					eat( Tok_Preprocess_EndIf );
 				break;
 
-				case Tok_Preprocess_Macro:
-					if ( nexttok.Type == Tok_Identifier ) {
-						// Its a variable with a macro typename
-						member = cast(Code, parser_parse_variable());
-						break;
-					}
+				case Tok_Preprocess_Macro_Typename:
+					// Its a variable with a macro typename
+					member = cast(Code, parser_parse_variable());
+				break;
 
-					member = parse_simple_preprocess( Tok_Preprocess_Macro, parser_consume_braces );
+				case Tok_Preprocess_Macro_Stmt:
+					member = parse_simple_preprocess( Tok_Preprocess_Macro_Stmt );
 				break;
 
 				case Tok_Preprocess_Pragma:
@@ -25224,7 +25697,7 @@ CodeUnion parser_parse_union( bool inplace_def )
 				break;
 
 				case Tok_Preprocess_Unsupported:
-					member = parse_simple_preprocess( Tok_Preprocess_Unsupported, parser_consume_braces );
+					member = parse_simple_preprocess( Tok_Preprocess_Unsupported );
 				break;
 
 				default:
@@ -25287,7 +25760,7 @@ CodeUsing parser_parse_using()
 	eat( Tok_Decl_Using );
 	// <ModuleFlags> using
 
-	if ( currtok.Type == Tok_Decl_Namespace )
+	if ( currtok.Type == Tok_Decl_Namespace ) 
 	{
 		is_namespace = true;
 		eat( Tok_Decl_Namespace );
@@ -25301,7 +25774,7 @@ CodeUsing parser_parse_using()
 
 	if ( ! is_namespace )
 	{
-		if ( bitfield_is_equal( u32, currtok.Flags, TF_Assign ) )
+		if ( bitfield_is_set( u32, currtok.Flags, TF_Assign ) )
 		{
 			attributes = parse_attributes();
 			// <ModuleFlags> using <Name> <Attributes>
@@ -25322,8 +25795,7 @@ CodeUsing parser_parse_using()
 	// <ModuleFlags> using <namespace> <Attributes> <Name> = <UnderlyingType>;
 
 	CodeComment inline_cmt = NullCode;
-	if ( currtok_noskip.Type == Tok_Comment && currtok_noskip.Line == stmt_end.Line )
-	{
+	if ( currtok_noskip.Type == Tok_Comment && currtok_noskip.Line == stmt_end.Line ) {
 		inline_cmt = parse_comment();
 	}
 	// <ModuleFlags> using <namespace> <Attributes> <Name> = <UnderlyingType>; <InlineCmt>
@@ -25370,8 +25842,7 @@ CodeVar parser_parse_variable()
 	CodeAttributes attributes = { nullptr };
 	CodeSpecifiers specifiers = { nullptr };
 
-	if ( check(Tok_Module_Export) )
-	{
+	if ( check(Tok_Module_Export) ) {
 		mflags = ModuleFlag_Export;
 		eat( Tok_Module_Export );
 	}
@@ -25385,17 +25856,7 @@ CodeVar parser_parse_variable()
 		Specifier spec = str_to_specifier( tok_to_str(currtok) );
 		switch  ( spec )
 		{
-			case Spec_Const:
-			case Spec_Constexpr:
-			case Spec_Constinit:
-			case Spec_External_Linkage:
-			case Spec_Global:
-			case Spec_Inline:
-			case Spec_Local_Persist:
-			case Spec_Mutable:
-			case Spec_Static:
-			case Spec_Thread_Local:
-			case Spec_Volatile:
+			GEN_PARSER_VARIABLE_ALLOWED_SPECIFIER_CASES:
 			break;
 
 			default:
@@ -25413,8 +25874,7 @@ CodeVar parser_parse_variable()
 		eat( currtok.Type );
 	}
 
-	if ( NumSpecifiers )
-	{
+	if ( NumSpecifiers ) {
 		specifiers = def_specifiers( NumSpecifiers, specs_found );
 	}
 	// <ModuleFlags> <Attributes> <Specifiers>
@@ -25519,6 +25979,21 @@ CodeConstructor parse_constructor( Str def )
 
 	_ctx->parser.Tokens         = toks;
 	CodeConstructor result = parser_parse_constructor( specifiers );
+	return result;
+}
+
+CodeDefine parse_define( Str def )
+{
+	check_parse_args( def );
+
+	TokArray toks = lex( def );
+	if ( toks.Arr == nullptr )
+		return InvalidCode;
+
+	_ctx->parser.Tokens = toks;
+	push_scope();
+	CodeDefine result = parser_parse_define();
+	parser_pop(& _ctx->parser);
 	return result;
 }
 
